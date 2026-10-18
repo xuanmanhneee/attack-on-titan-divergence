@@ -71,6 +71,14 @@ public class PlayerCombat : MonoBehaviour
         if (GameInput.GetKeyDown(KeyCode.F) || GameInput.GetMouseButtonDown(2)) Slash();
     }
 
+    // Gọi khi tới điểm tiếp tế: đầy kiếm và đủ kiếm dự phòng
+    public void Restock()
+    {
+        Durability = 100f;
+        spareBlades = 3;
+        IsReloading = false;
+    }
+
     void StartReload()
     {
         if (Durability >= 99f) return;

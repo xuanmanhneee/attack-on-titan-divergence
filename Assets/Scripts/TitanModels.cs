@@ -66,6 +66,12 @@ public static class TitanModels
         return ok;
     }
 
+    public static TitanModelDef Get(string name)
+    {
+        foreach (var d in All) if (d.name == name && IsAvailable(d)) return d;
+        return null;
+    }
+
     // Chọn ngẫu nhiên theo trọng số trong các model tải được. Trả null nếu không có model nào (dùng placeholder).
     public static TitanModelDef PickRandom()
     {
