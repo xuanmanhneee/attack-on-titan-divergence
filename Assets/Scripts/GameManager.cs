@@ -261,7 +261,7 @@ public class GameManager : MonoBehaviour
 
         // Gợi ý phím
         GUI.Label(new Rect(Screen.width / 2f - 450 * s, Screen.height - 50 * s, 900 * s, 36 * s),
-                  "F: chém   R: thay kiếm   Q/E: móc   Space: thu dây   Shift: gas   Esc: tạm dừng",
+                  "F: chém (xa thì lướt tới gáy)   R: thay kiếm   Q/E: móc   Space: thu dây   Shift: gas   Esc: tạm dừng",
                   new GUIStyle(label) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(20 * s) });
     }
 
