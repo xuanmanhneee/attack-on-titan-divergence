@@ -125,7 +125,9 @@ public class GameManager : MonoBehaviour
         var terr = Terrain.activeTerrain;
         p.y = terr != null ? terr.SampleHeight(p) + terr.transform.position.y : odm.transform.position.y - 1f;
 
-        Titan.Create(p, Random.Range(minTitanHeight, maxTitanHeight), odm.transform);
+        var def = TitanModels.PickRandom(); // null nếu chưa có model nào => titan placeholder
+        float h = Random.Range(minTitanHeight, maxTitanHeight) * (def != null ? def.heightMultiplier : 1f);
+        Titan.Create(p, h, odm.transform, def);
     }
 
     void OnTitanKilled(Titan t)
