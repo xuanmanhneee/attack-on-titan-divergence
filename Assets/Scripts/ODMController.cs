@@ -64,6 +64,11 @@ public class ODMController : MonoBehaviour
     public float autoReleaseMinSpeed = 10f;
     public float autoReleaseBehindDot = -0.2f; // điểm neo nằm sau lưng tới mức này thì nhả (âm = sau lưng)
 
+    [Header("Smart Assist - Dễ chơi hơn")]
+    public bool reelOnlyWhenApproaching = true;   // Space không kéo khi bạn đang bay ra xa điểm neo (không bị hãm đà)
+    public float reelAwayThreshold = 2f;          // bay ra xa nhanh hơn mức này (m/s) thì Space ngừng kéo
+    public bool autoReleaseWhileReeling = true;   // vẫn tự nhả dây khi vượt qua điểm neo kể cả đang giữ Space
+
     [Header("Gas")]
     public float gasForce = 32f;
     public float steerRate = 130f;
@@ -351,6 +356,9 @@ public class ODMController : MonoBehaviour
             float look = Vector3.Dot(cameraTransform.forward, dir);
             intensity = Mathf.InverseLerp(autoReelLookDot, 0.97f, look) * autoReelStrength;
         }
+        // Đang bay ra xa điểm neo (đã vượt qua nó): Space không hãm lại, giữ nguyên đà
+        if (reelOnlyWhenApproaching && Vector3.Dot(velocity, dir) < -reelAwayThreshold) intensity = 0f;
+
         if (intensity <= 0f) return;
 
         if (dist <= attachDistance)
@@ -463,7 +471,7 @@ public class ODMController : MonoBehaviour
     void AutoReleaseCheck(HookState hook)
     {
         if (!autoRelease || !hook.active || hook.attached) return;
-        if (GameInput.GetKey(KeyCode.Space)) return; // đang chủ động thu dây thì không nhả
+        if (!autoReleaseWhileReeling && GameInput.GetKey(KeyCode.Space)) return; // tùy chọn: đang chủ động thu dây thì không nhả
         if (velocity.magnitude < autoReleaseMinSpeed || velocity.y <= 0.5f) return;
 
         Vector3 toAnchor = hook.anchorPoint - transform.position;
