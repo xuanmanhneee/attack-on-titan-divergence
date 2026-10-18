@@ -9,15 +9,21 @@ using UnityEngine;
 public class PlayerCombat : MonoBehaviour
 {
     [Header("Tầm và góc chém")]
-    public float napeReach = 7f;
+    public float napeReach = 10f;
     public float bodyReach = 5f;
-    public float slashAngle = 65f;
+    public float slashAngle = 80f;
 
     [Header("Sát thương")]
-    public float killSpeed = 12f;        // tốc độ tối thiểu để chém gáy hạ gục ngay
+    public float killSpeed = 9f;        // tốc độ tối thiểu để chém gáy hạ gục ngay
     public float napeWeakDamage = 40f;   // chém gáy nhưng chưa đủ tốc độ
     public float bodyDamage = 8f;
     public float bodyMinSpeed = 6f;
+
+    [Header("Hỗ trợ lướt (aim assist)")]
+    public bool lungeAssist = true;      // bấm chém khi gáy còn xa: lao tới gáy thay vì chém hụt
+    public float lungeRange = 35f;
+    public float lungeAngle = 45f;
+    public float lungeSpeed = 16f;
 
     [Header("Kiếm")]
     public float slashCooldown = 0.45f;
@@ -82,6 +88,8 @@ public class PlayerCombat : MonoBehaviour
         Transform cam = odm.cameraTransform;
         float speed = odm.Speed;
 
+        if (lungeAssist && TryLunge(cam)) return;
+
         foreach (Titan t in Titan.All.ToArray())
         {
             if (t == null || t.IsDead) continue;
@@ -122,5 +130,34 @@ public class PlayerCombat : MonoBehaviour
 
         Durability = Mathf.Max(0f, Durability);
         if (Durability <= 0f) Feedback?.Invoke("Kiếm gãy! Nhấn R để thay");
+    }
+
+    // Gáy trong tầm nhìn nhưng chưa tới tầm chém: lướt thẳng về phía gáy gần nhất.
+    // Bấm F lần nữa khi đã tới gần sẽ chém thật.
+    bool TryLunge(Transform cam)
+    {
+        bool anyInReach = false;
+        Titan best = null;
+        float bestDist = float.MaxValue;
+
+        foreach (Titan t in Titan.All)
+        {
+            if (t == null || t.IsDead) continue;
+            Vector3 to = t.Nape.position - cam.position;
+            float d = to.magnitude;
+            if (d <= napeReach && Vector3.Angle(cam.forward, to) <= slashAngle) anyInReach = true;
+            if (d > napeReach && d <= lungeRange && Vector3.Angle(cam.forward, to) <= lungeAngle && d < bestDist)
+            {
+                best = t; bestDist = d;
+            }
+        }
+
+        if (anyInReach || best == null) return false;
+
+        Vector3 dir = (best.Nape.position - cam.position).normalized;
+        odm.AddVelocity(dir * lungeSpeed);
+        cooldown = slashCooldown;
+        Feedback?.Invoke("Lướt tới gáy!");
+        return true;
     }
 }

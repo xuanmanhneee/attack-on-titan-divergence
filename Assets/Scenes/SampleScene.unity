@@ -990,21 +990,21 @@ MonoBehaviour:
   groundGasDrainFactor: 0.5
   groundAccel: 30
   gravity: -12
-  airControl: 8
-  airControlMaxSpeed: 8
+  airControl: 14
+  airControlMaxSpeed: 12
   hookableLayer:
     serializedVersion: 2
     m_Bits: 8
   maxHookRange: 50
-  assistRadius: 1.5
-  ropeDamping: 0.995
+  assistRadius: 2.5
+  ropeDamping: 0.998
   constraintIterations: 3
-  reelForce: 25
-  reelMaxSpeed: 12
+  reelForce: 35
+  reelMaxSpeed: 18
   attachDistance: 1.2
   requireReelToAttach: 1
   smartAim: 1
-  smartAimAngle: 25
+  smartAimAngle: 35
   smartAimRings: 2
   smartAimSamples: 8
   minHookDistance: 4
@@ -1013,13 +1013,13 @@ MonoBehaviour:
   aimMomentumWeight: 0.5
   autoTakeUpSlack: 1
   autoReel: 1
-  autoReelStrength: 0.4
-  autoReelLookDot: 0.7
-  autoRelease: 0
+  autoReelStrength: 0.6
+  autoReelLookDot: 0.6
+  autoRelease: 1
   autoReleaseMinSpeed: 10
   autoReleaseBehindDot: -0.2
-  gasForce: 25
-  steerRate: 70
+  gasForce: 32
+  steerRate: 130
   maxSpeed: 45
   maxGas: 100
   gasDrain: 25

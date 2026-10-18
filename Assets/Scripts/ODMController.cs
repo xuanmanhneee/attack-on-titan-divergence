@@ -29,25 +29,25 @@ public class ODMController : MonoBehaviour
     public float gravity = -20f;
 
     [Header("Air")]
-    public float airControl = 8f;
-    public float airControlMaxSpeed = 8f;
+    public float airControl = 14f;
+    public float airControlMaxSpeed = 12f;
 
     [Header("Hook")]
     public LayerMask hookableLayer;
     public float maxHookRange = 40f;
-    public float assistRadius = 1.5f;
-    public float ropeDamping = 0.995f;
+    public float assistRadius = 2.5f;
+    public float ropeDamping = 0.998f;
     public int constraintIterations = 3;
 
     [Header("Reel")]
-    public float reelForce = 25f;
-    public float reelMaxSpeed = 12f;
+    public float reelForce = 35f;
+    public float reelMaxSpeed = 18f;
     public float attachDistance = 1.2f;
     public bool requireReelToAttach = true;
 
     [Header("Smart Assist - Aim")]
     public bool smartAim = true;           // tia thẳng trượt thì quét hình nón tìm điểm tốt nhất
-    public float smartAimAngle = 25f;      // nửa góc của nón quét (độ)
+    public float smartAimAngle = 35f;      // nửa góc của nón quét (độ)
     public int smartAimRings = 2;          // số vòng quét
     public int smartAimSamples = 8;        // số tia mỗi vòng (tổng tia = rings * samples)
     public float minHookDistance = 4f;     // bỏ qua điểm quá gần (móc vào đó vô ích)
@@ -58,15 +58,15 @@ public class ODMController : MonoBehaviour
     [Header("Smart Assist - Rope")]
     public bool autoTakeUpSlack = true;    // dây tự rút theo khoảng cách ngắn nhất đã đạt, không bao giờ chùng
     public bool autoReel = true;           // nhìn về phía móc thì dây tự kéo nhẹ
-    public float autoReelStrength = 0.4f;  // 0..1, so với kéo mạnh bằng Space
-    public float autoReelLookDot = 0.7f;   // dot(hướng nhìn, hướng tới móc) bắt đầu kéo từ mức này
-    public bool autoRelease = false;       // tự nhả khi đã vượt qua điểm neo và đang bay lên (mặc định tắt)
+    public float autoReelStrength = 0.6f;  // 0..1, so với kéo mạnh bằng Space
+    public float autoReelLookDot = 0.6f;   // dot(hướng nhìn, hướng tới móc) bắt đầu kéo từ mức này
+    public bool autoRelease = true;       // tự nhả khi đã vượt qua điểm neo và đang bay lên (mặc định tắt)
     public float autoReleaseMinSpeed = 10f;
     public float autoReleaseBehindDot = -0.2f; // điểm neo nằm sau lưng tới mức này thì nhả (âm = sau lưng)
 
     [Header("Gas")]
-    public float gasForce = 25f;
-    public float steerRate = 70f;
+    public float gasForce = 32f;
+    public float steerRate = 130f;
     public float maxSpeed = 45f;
     public float maxGas = 100f;
     public float gasDrain = 25f;
@@ -86,6 +86,9 @@ public class ODMController : MonoBehaviour
     public bool AimHasTarget { get; private set; }
     public float GasNormalized => gas / maxGas;
     public float Speed => velocity.magnitude;
+
+    // Cho hệ thống chiến đấu (lướt tới gáy titan) cộng thêm vận tốc
+    public void AddVelocity(Vector3 v) { velocity += v; }
 
     private CharacterController controller;
     private Camera cam;
