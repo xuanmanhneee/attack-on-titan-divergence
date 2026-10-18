@@ -13,7 +13,10 @@ public class Titan : MonoBehaviour
     public static event Action<Titan> Killed;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-    static void ClearStatics() { All.Clear(); Killed = null; }
+    static void ClearStatics() { All.Clear(); Killed = null; ObstacleMask = 0; }
+
+    // Layer của công trình mà titan phải tránh (đặt bởi bản đồ). 0 = không tránh.
+    public static int ObstacleMask;
 
     public static void ResetAll() { All.Clear(); }
 
@@ -338,7 +341,21 @@ public class Titan : MonoBehaviour
         dir.y = 0f;
         if (dir.sqrMagnitude < 0.01f) return;
 
-        Quaternion want = Quaternion.LookRotation(dir.normalized, Vector3.up);
+        Vector3 dirN = dir.normalized;
+
+        // Né công trình: có nhà chắn phía trước thì trượt dọc theo mặt nhà
+        if (ObstacleMask != 0)
+        {
+            Vector3 o = transform.position + Vector3.up * (3f * k);
+            if (Physics.SphereCast(o, 1.2f * k, dirN, out RaycastHit hit, 6f * k, ObstacleMask, QueryTriggerInteraction.Ignore))
+            {
+                Vector3 slide = Vector3.ProjectOnPlane(dirN, hit.normal);
+                slide.y = 0f;
+                dirN = slide.sqrMagnitude > 0.01f ? slide.normalized : Vector3.Cross(Vector3.up, hit.normal).normalized;
+            }
+        }
+
+        Quaternion want = Quaternion.LookRotation(dirN, Vector3.up);
         transform.rotation = Quaternion.RotateTowards(transform.rotation, want, turnSpeed * dt);
 
         if (dir.magnitude < 2f) return; // đã sát mục tiêu, không đi xuyên qua
