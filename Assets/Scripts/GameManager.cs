@@ -101,6 +101,7 @@ public class GameManager : MonoBehaviour
 
         var map = TrostCity.Build(odm.transform.position, layer);
         Titan.ObstacleMask = 1 << layer;
+        Titan.GroundSampler = p => map.groundY;
 
         mission = gameObject.AddComponent<TrostMission>();
         mission.Init(this, odm, combat, map);
