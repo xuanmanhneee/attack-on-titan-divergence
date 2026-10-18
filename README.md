@@ -10,6 +10,10 @@ A work-in-progress Unity fan game exploring fast, momentum-based ODM gear moveme
 - Gas-powered acceleration and steering
 - Smart aim, automatic slack take-up, and optional assisted release
 - Dynamic crosshair feedback for valid hook targets
+- Titan placeholder (dựng bằng code) với AI đuổi và đập, điểm yếu ở gáy
+- Chém bằng kiếm: chém gáy khi đủ tốc độ để hạ gục, kiếm bị mòn và phải thay
+- Đợt titan, máu người chơi, thắng/thua, tạm dừng
+- HUD: máu, gas, tốc độ, độ bền kiếm
 - Universal Render Pipeline (URP)
 
 ## Controls
@@ -20,6 +24,10 @@ A work-in-progress Unity fan game exploring fast, momentum-based ODM gear moveme
 | `E` | Fire/hold the right hook |
 | `Space` | Reel the rope in strongly |
 | `Shift` | Use gas while airborne or attached |
+| `F` / chuột giữa | Chém |
+| `R` | Thay kiếm |
+| `Esc` | Tạm dừng |
+| `Shift` (khi đang bám tường) | Bật ra khỏi tường theo hướng nhìn |
 
 Controls and movement values are still being tuned during development.
 

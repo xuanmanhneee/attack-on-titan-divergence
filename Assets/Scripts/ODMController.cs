@@ -72,6 +72,10 @@ public class ODMController : MonoBehaviour
     public float gasDrain = 25f;
     public float gasRegen = 40f;
 
+    [Header("Wall Launch")]
+    public float wallLaunchSpeed = 16f;    // tốc độ bật ra khỏi tường khi nhấn Shift lúc đang bám
+    public float wallLaunchGasCost = 10f;
+
     [Header("Rope Visual")]
     public Material ropeMaterial;
     public float ropeWidth = 0.03f;
@@ -242,6 +246,15 @@ public class ODMController : MonoBehaviour
     {
         if (hooked && (IsAttached(hookLeft) || IsAttached(hookRight)))
         {
+            // Đang bám tường: nhấn Shift để bật ra theo hướng nhìn (thoát trạng thái dính tường)
+            if (GameInput.GetKeyDown(KeyCode.LeftShift) && gas > 0f)
+            {
+                hookLeft.attached = false;
+                hookRight.attached = false;
+                velocity = cameraTransform.forward * wallLaunchSpeed;
+                gas = Mathf.Max(0f, gas - wallLaunchGasCost);
+                return;
+            }
             velocity = Vector3.zero;
             return;
         }
