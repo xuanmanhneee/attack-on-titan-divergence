@@ -18,6 +18,22 @@ public class TrostMap
     {
         return groundY;
     }
+
+    // Phạm vi sàn khu phố (x,z). Ngoài sàn thì mặt đất là Terrain.
+    public Rect floorRect;
+
+    // Độ cao mặt đất thật tại một vị trí: trên sàn là groundY, ngoài sàn theo Terrain (nếu có), không thì groundY.
+    public float GroundAt(Vector3 p)
+    {
+        if (floorRect.Contains(new Vector2(p.x, p.z))) return groundY;
+
+        var terr = Terrain.activeTerrain;
+        if (terr == null) return groundY;
+        Vector3 tp = terr.transform.position;
+        Vector3 size = terr.terrainData.size;
+        if (p.x < tp.x || p.z < tp.z || p.x > tp.x + size.x || p.z > tp.z + size.z) return groundY;
+        return terr.SampleHeight(p) + tp.y;
+    }
 }
 
 // Dựng khu phố kiểu Trost bằng code (hộp màu): lưới nhà cao thấp xen kẽ, tường lớn ở phía bắc
@@ -121,6 +137,7 @@ public static class TrostCity
             float fz = (wallZ + (origin.z - 40f)) / 2f;
             float flen = wallZ - (origin.z - 40f) + 60f;
             Box(tr, new Vector3(origin.x, y0 - 2f + 0.05f, fz), new Vector3(totalW + 60f, 4f, flen), Mat(new Color(0.46f, 0.43f, 0.40f)), 0).name = "CityFloor";
+            map.floorRect = new Rect(origin.x - (totalW + 60f) / 2f, fz - flen / 2f, totalW + 60f, flen);
         }
 
         // ----- Tường bắc có lỗ hổng -----
