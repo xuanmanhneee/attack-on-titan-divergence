@@ -26,6 +26,7 @@ A work-in-progress Unity fan game exploring fast, momentum-based ODM gear moveme
 | `Shift` | Use gas while airborne or attached |
 | `F` / chuột giữa | Chém |
 | `R` | Thay kiếm |
+| `T` | Bật/tắt làm chậm thời gian khi ở trên không |
 | `Esc` | Tạm dừng |
 | `Shift` (khi đang bám tường) | Bật ra khỏi tường theo hướng nhìn |
 

@@ -86,6 +86,7 @@ public class ODMController : MonoBehaviour
     public bool AimHasTarget { get; private set; }
     public float GasNormalized => gas / maxGas;
     public float Speed => velocity.magnitude;
+    public bool IsGrounded => isGrounded;
 
     // Cho hệ thống chiến đấu (lướt tới gáy titan) cộng thêm vận tốc
     public void AddVelocity(Vector3 v) { velocity += v; }
