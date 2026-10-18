@@ -27,6 +27,7 @@ public static class GameInput
             case KeyCode.Return: return Key.Enter;
             case KeyCode.R: return Key.R;
             case KeyCode.F: return Key.F;
+            case KeyCode.T: return Key.T;
             default: return Key.None;
         }
     }

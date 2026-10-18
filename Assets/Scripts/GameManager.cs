@@ -57,6 +57,8 @@ public class GameManager : MonoBehaviour
         combat = odm.GetComponent<PlayerCombat>();
         if (combat == null) combat = odm.gameObject.AddComponent<PlayerCombat>();
 
+        if (odm.GetComponent<TimeFocus>() == null) odm.gameObject.AddComponent<TimeFocus>();
+
         playerHealth = odm.GetComponent<Health>();
         if (playerHealth == null) playerHealth = odm.gameObject.AddComponent<Health>();
         playerHealth.Init(playerMaxHealth);
@@ -230,6 +232,9 @@ public class GameManager : MonoBehaviour
         Color old = label.normal.textColor;
         label.normal.textColor = combat.CanKillNow ? new Color(1f, 0.9f, 0.2f) : new Color(1f, 1f, 1f, 0.7f);
         GUI.Label(new Rect(30 * s, 134 * s, 800 * s, 36 * s), speedMsg, label);
+        var focus = odm.GetComponent<TimeFocus>();
+        if (focus != null && focus.Active)
+            GUI.Label(new Rect(30 * s, 168 * s, 800 * s, 36 * s), "TẬP TRUNG (thời gian chậm)", label);
         label.normal.textColor = old;
 
         // Chấm đỏ đánh dấu gáy titan
@@ -261,7 +266,7 @@ public class GameManager : MonoBehaviour
 
         // Gợi ý phím
         GUI.Label(new Rect(Screen.width / 2f - 450 * s, Screen.height - 50 * s, 900 * s, 36 * s),
-                  "F: chém (xa thì lướt tới gáy)   R: thay kiếm   Q/E: móc   Space: thu dây   Shift: gas   Esc: tạm dừng",
+                  "F: chém (xa thì lướt tới gáy)   R: thay kiếm   Q/E: móc   Space: thu dây   Shift: gas   T: bật/tắt làm chậm thời gian   Esc: tạm dừng",
                   new GUIStyle(label) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(20 * s) });
     }
 
