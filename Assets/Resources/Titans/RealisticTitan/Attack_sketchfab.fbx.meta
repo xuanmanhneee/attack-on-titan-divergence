@@ -87,7 +87,32 @@ ModelImporter:
   humanDescription:
     serializedVersion: 3
     human: []
-    skeleton: []
+    skeleton:
+    - name: Attack_sketchfab(Clone)
+      parentName: 
+      position: {x: 0, y: 0, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    - name: Body Remeshed
+      parentName: Attack_sketchfab(Clone)
+      position: {x: -0.21182136, y: 22.201006, z: 2.7135494}
+      rotation: {x: -0.7071068, y: 0, z: -0, w: 0.7071067}
+      scale: {x: 208.73083, y: 211.4835, z: 211.4835}
+    - name: Eyes Remeshed
+      parentName: Attack_sketchfab(Clone)
+      position: {x: -0.21182136, y: 22.201006, z: 2.7135494}
+      rotation: {x: -0.7071068, y: 0, z: -0, w: 0.7071067}
+      scale: {x: 208.73083, y: 211.4835, z: 211.4835}
+    - name: Hair Remeshed
+      parentName: Attack_sketchfab(Clone)
+      position: {x: -0.21182136, y: 22.201008, z: 2.7135494}
+      rotation: {x: 0.58882725, y: 0.58882713, z: 0.3915131, w: 0.39151317}
+      scale: {x: 255.07071, y: 192.691, z: 208.29884}
+    - name: Teeth Remeshed
+      parentName: Attack_sketchfab(Clone)
+      position: {x: -0.21182136, y: 22.201006, z: 2.7135494}
+      rotation: {x: -0.7071068, y: 0, z: -0, w: 0.7071067}
+      scale: {x: 208.73083, y: 211.4835, z: 211.4835}
     armTwist: 0.5
     foreArmTwist: 0.5
     upperLegTwist: 0.5
@@ -102,9 +127,9 @@ ModelImporter:
     skeletonHasParents: 1
   lastHumanDescriptionAvatarSource: {instanceID: 0}
   autoGenerateAvatarMappingIfUnspecified: 1
-  animationType: 2
+  animationType: 3
   humanoidOversampling: 1
-  avatarSetup: 0
+  avatarSetup: 1
   addHumanoidExtraRootOnlyWhenUsingAvatar: 1
   importBlendShapeDeformPercent: 1
   remapMaterialsIfMaterialImportModeIsNone: 0
