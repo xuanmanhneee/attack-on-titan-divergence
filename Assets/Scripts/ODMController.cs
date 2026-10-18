@@ -146,7 +146,7 @@ public class ODMController : MonoBehaviour
         // Đang đứng trên đất: mặt đất đỡ người, dây không được phép kéo lê như con lắc.
         // Chỉ chuyển sang chế độ dây (AirMovement) khi: đang thu dây bằng Space, hoặc đã bám vào bề mặt.
         bool standing = isGrounded && velocity.y <= 0.1f;
-        bool ropeTakesOver = hooked && (Input.GetKey(KeyCode.Space) || IsAttached(hookLeft) || IsAttached(hookRight));
+        bool ropeTakesOver = hooked && (GameInput.GetKey(KeyCode.Space) || IsAttached(hookLeft) || IsAttached(hookRight));
 
         if (standing && !ropeTakesOver)
         {
@@ -166,8 +166,8 @@ public class ODMController : MonoBehaviour
     // ================= LOOK =================
     void HandleLook()
     {
-        yaw += Input.GetAxis("Mouse X") * mouseSensitivity;
-        pitch -= Input.GetAxis("Mouse Y") * mouseSensitivity;
+        yaw += GameInput.GetAxis("Mouse X") * mouseSensitivity;
+        pitch -= GameInput.GetAxis("Mouse Y") * mouseSensitivity;
         pitch = Mathf.Clamp(pitch, -80f, 80f);
 
         transform.rotation = Quaternion.Euler(0f, yaw, 0f);
@@ -211,7 +211,7 @@ public class ODMController : MonoBehaviour
     void GroundMovement(float dt)
     {
         Vector3 wishDir = GetWishDirection();
-        bool boosting = Input.GetKey(KeyCode.LeftShift) && gas > 0f && wishDir.sqrMagnitude > 0.0001f;
+        bool boosting = GameInput.GetKey(KeyCode.LeftShift) && gas > 0f && wishDir.sqrMagnitude > 0.0001f;
         float speed = boosting ? groundBoostSpeed : walkSpeed;
 
         Vector3 flat = new Vector3(velocity.x, 0f, velocity.z);
@@ -257,7 +257,7 @@ public class ODMController : MonoBehaviour
             velocity += wishDir * add;
         }
 
-        if (Input.GetKey(KeyCode.LeftShift) && gas > 0f)
+        if (GameInput.GetKey(KeyCode.LeftShift) && gas > 0f)
         {
             float currentSpeed = velocity.magnitude;
             if (currentSpeed > 0.5f)
@@ -283,7 +283,7 @@ public class ODMController : MonoBehaviour
         }
 
         // Thu dây: Space = kéo mạnh; không bấm thì kéo nhẹ nếu đang nhìn về phía móc
-        bool strong = Input.GetKey(KeyCode.Space);
+        bool strong = GameInput.GetKey(KeyCode.Space);
         ReelPull(hookLeft, dt, strong);
         ReelPull(hookRight, dt, strong);
 
@@ -357,8 +357,8 @@ public class ODMController : MonoBehaviour
 
     Vector3 GetWishDirection()
     {
-        float h = Input.GetAxis("Horizontal");
-        float v = Input.GetAxis("Vertical");
+        float h = GameInput.GetAxis("Horizontal");
+        float v = GameInput.GetAxis("Vertical");
         Vector3 fwd = Vector3.ProjectOnPlane(cameraTransform.forward, Vector3.up).normalized;
         Vector3 right = Vector3.ProjectOnPlane(cameraTransform.right, Vector3.up).normalized;
         Vector3 dir = fwd * v + right * h;
@@ -368,7 +368,7 @@ public class ODMController : MonoBehaviour
     void OnControllerColliderHit(ControllerColliderHit hit)
     {
         bool hooked = hookLeft.active || hookRight.active;
-        bool wantsAttach = !requireReelToAttach || Input.GetKey(KeyCode.Space);
+        bool wantsAttach = !requireReelToAttach || GameInput.GetKey(KeyCode.Space);
         bool hookableSurface = ((1 << hit.gameObject.layer) & hookableLayer.value) != 0;
 
         if (hooked && wantsAttach && hookableSurface && hit.normal.y < 0.7f)
@@ -384,10 +384,10 @@ public class ODMController : MonoBehaviour
     // ================= HOOK INPUT =================
     void HandleHookInput()
     {
-        bool leftDown  = Input.GetKeyDown(KeyCode.Q) || Input.GetMouseButtonDown(0);
-        bool leftUp    = Input.GetKeyUp(KeyCode.Q)   || Input.GetMouseButtonUp(0);
-        bool rightDown = Input.GetKeyDown(KeyCode.E) || Input.GetMouseButtonDown(1);
-        bool rightUp   = Input.GetKeyUp(KeyCode.E)   || Input.GetMouseButtonUp(1);
+        bool leftDown  = GameInput.GetKeyDown(KeyCode.Q) || GameInput.GetMouseButtonDown(0);
+        bool leftUp    = GameInput.GetKeyUp(KeyCode.Q)   || GameInput.GetMouseButtonUp(0);
+        bool rightDown = GameInput.GetKeyDown(KeyCode.E) || GameInput.GetMouseButtonDown(1);
+        bool rightUp   = GameInput.GetKeyUp(KeyCode.E)   || GameInput.GetMouseButtonUp(1);
 
         if (leftDown)  TryFireHook(hookLeft, hipOriginLeft);
         if (leftUp)    hookLeft.active = false;
@@ -404,7 +404,7 @@ public class ODMController : MonoBehaviour
     void AutoReleaseCheck(HookState hook)
     {
         if (!autoRelease || !hook.active || hook.attached) return;
-        if (Input.GetKey(KeyCode.Space)) return; // đang chủ động thu dây thì không nhả
+        if (GameInput.GetKey(KeyCode.Space)) return; // đang chủ động thu dây thì không nhả
         if (velocity.magnitude < autoReleaseMinSpeed || velocity.y <= 0.5f) return;
 
         Vector3 toAnchor = hook.anchorPoint - transform.position;
