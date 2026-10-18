@@ -78,7 +78,7 @@ public class TrostMission : MonoBehaviour
             if (spawned >= clearTitans) break;
             Vector3 d = p - odm.transform.position; d.y = 0f;
             if (d.magnitude < minSpawnDistance) continue;
-            Spawn(p, TitanModels.PickRandom(), Random.Range(9f, 16f));
+            Spawn(p, TitanModels.PickRandom(), Random.Range(12f, 20f));
             spawned++;
         }
     }
@@ -96,7 +96,7 @@ public class TrostMission : MonoBehaviour
         for (int i = 0; i < reinforceTitans; i++)
         {
             bool boss = (i == 0 && armored != null);
-            Spawn(GatePoint(), boss ? armored : TitanModels.PickRandom(), boss ? Random.Range(15f, 19f) : Random.Range(9f, 16f));
+            Spawn(GatePoint(), boss ? armored : TitanModels.PickRandom(), boss ? Random.Range(20f, 24f) : Random.Range(12f, 20f));
         }
     }
 
@@ -159,7 +159,7 @@ public class TrostMission : MonoBehaviour
         if (respawnTimer <= 0f && Titan.All.Count < 5)
         {
             respawnTimer = 10f;
-            for (int i = 0; i < 2; i++) Spawn(GatePoint(), TitanModels.PickRandom(), Random.Range(9f, 15f));
+            for (int i = 0; i < 2; i++) Spawn(GatePoint(), TitanModels.PickRandom(), Random.Range(12f, 18f));
         }
 
         if (sealProgress >= sealSeconds)

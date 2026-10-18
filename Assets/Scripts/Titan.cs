@@ -13,10 +13,13 @@ public class Titan : MonoBehaviour
     public static event Action<Titan> Killed;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-    static void ClearStatics() { All.Clear(); Killed = null; ObstacleMask = 0; }
+    static void ClearStatics() { All.Clear(); Killed = null; ObstacleMask = 0; GroundSampler = null; }
 
     // Layer của công trình mà titan phải tránh (đặt bởi bản đồ). 0 = không tránh.
     public static int ObstacleMask;
+
+    // Hàm cho biết độ cao mặt đất tại một vị trí (đặt bởi bản đồ). null = dùng Terrain.
+    public static Func<Vector3, float> GroundSampler;
 
     public static void ResetAll() { All.Clear(); }
 
@@ -374,6 +377,14 @@ public class Titan : MonoBehaviour
 
     void SnapToGround(float dt)
     {
+        if (GroundSampler != null)
+        {
+            Vector3 q = transform.position;
+            q.y = Mathf.Lerp(q.y, GroundSampler(q), 10f * dt);
+            transform.position = q;
+            return;
+        }
+
         var terr = Terrain.activeTerrain;
         if (terr == null) return;
         Vector3 p = transform.position;

@@ -12,11 +12,11 @@ public class TrostMap
     public readonly List<Vector3> intersections = new List<Vector3>();
     public int buildingLayer;
     public float halfWidth, length;
+    public float groundY; // mặt đường phẳng của khu phố (có sàn riêng, không phụ thuộc Terrain)
 
     public float GroundY(float x, float z, float fallback)
     {
-        var t = Terrain.activeTerrain;
-        return t != null ? t.SampleHeight(new Vector3(x, 0f, z)) + t.transform.position.y : fallback;
+        return groundY;
     }
 }
 
@@ -27,7 +27,7 @@ public static class TrostCity
 {
     const int Nx = 8, Nz = 9;
     const float Pitch = 48f, Block = 34f, StartZ = 60f;
-    const float WallHeight = 85f, WallThickness = 26f, GateWidth = 30f;
+    const float WallHeight = 60f, WallThickness = 26f, GateWidth = 30f;
 
     static readonly Color[] WallColors =
     {
@@ -81,7 +81,11 @@ public static class TrostCity
         stoneMat = Mat(new Color(0.55f, 0.55f, 0.57f));
         rubbleMat = Mat(new Color(0.38f, 0.35f, 0.33f));
 
-        float fb = origin.y - 1f; // độ cao dự phòng nếu không có Terrain
+        // Mặt đường: độ cao Terrain tại chỗ người chơi đứng. Khu phố có sàn riêng nên không phụ thuộc kích thước Terrain.
+        var terr = Terrain.activeTerrain;
+        float y0 = terr != null ? terr.SampleHeight(new Vector3(origin.x, 0f, origin.z)) + terr.transform.position.y : origin.y - 1f;
+        map.groundY = y0;
+        float fb = y0;
 
         // ----- Nhà -----
         for (int i = 0; i < Nx; i++)
@@ -103,14 +107,21 @@ public static class TrostCity
                 }
                 foreach (var c in cells)
                 {
-                    float h = 14f + (float)rng.NextDouble() * 22f;
-                    if (rng.NextDouble() < 0.12) h += 16f; // tháp cao
+                    float h = 9f + (float)rng.NextDouble() * 11f;   // nhà 9–20 m: thấp hơn titan
+                    if (rng.NextDouble() < 0.12) h += 8f;          // một vài tháp chuông cao hơn
                     Building(tr, c.x, c.y, c.z, c.w, h, layer, rng, map, fb);
                 }
             }
 
         float totalW = Nx * Pitch + 80f;
         float wallZ = origin.z + StartZ + (Nz - 1) * Pitch + Block / 2f + 36f;
+
+        // ----- Sàn khu phố (phủ cả phần ngoài Terrain) -----
+        {
+            float fz = (wallZ + (origin.z - 40f)) / 2f;
+            float flen = wallZ - (origin.z - 40f) + 60f;
+            Box(tr, new Vector3(origin.x, y0 - 2f + 0.05f, fz), new Vector3(totalW + 60f, 4f, flen), Mat(new Color(0.46f, 0.43f, 0.40f)), 0).name = "CityFloor";
+        }
 
         // ----- Tường bắc có lỗ hổng -----
         float segW = (totalW - GateWidth) / 2f;
@@ -127,12 +138,12 @@ public static class TrostCity
         {
             float x = origin.x + side * (totalW / 2f + 10f);
             float g = map.GroundY(x, midZ, fb);
-            Box(tr, new Vector3(x, g + 30f, midZ), new Vector3(20f, 66f, len), stoneMat, layer);
+            Box(tr, new Vector3(x, g + 24f, midZ), new Vector3(20f, 50f, len), stoneMat, layer);
         }
         {
             float z = origin.z - 40f;
             float g = map.GroundY(origin.x, z, fb);
-            Box(tr, new Vector3(origin.x, g + 30f, z), new Vector3(totalW + 40f, 66f, 20f), stoneMat, layer);
+            Box(tr, new Vector3(origin.x, g + 24f, z), new Vector3(totalW + 40f, 50f, 20f), stoneMat, layer);
         }
 
         // Đống đổ nát quanh lỗ hổng
