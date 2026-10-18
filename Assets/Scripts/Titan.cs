@@ -56,6 +56,9 @@ public class Titan : MonoBehaviour
     Transform sway;           // pivot để lắc nhẹ khi dùng model thật chưa có animation
     TitanClipPlayer clips;    // animation (clip) nếu có
     TitanProceduralAnim proc; // animation bằng code cho rig Humanoid nếu không có clip
+    TitanFootGrounder feet;   // giữ chân chạm đất (rig Humanoid)
+    float bornTime;
+    bool logged;
 
     float AttackReach => 4.5f * k;
     float ArmHeight => 7.5f * k;
@@ -125,6 +128,76 @@ public class Titan : MonoBehaviour
         return b;
     }
 
+    static bool IsWeaponRenderer(Renderer r)
+    {
+        string n = r.name.ToLowerInvariant();
+        if (n.Contains("wiqi") || n.Contains("weapon")) return true;
+        foreach (var m in r.sharedMaterials)
+        {
+            if (m == null) continue;
+            string mn = m.name.ToLowerInvariant();
+            if (mn.Contains("wiqi") || mn.Contains("weapon")) return true;
+        }
+        return false;
+    }
+
+    // Đo chính xác từ đỉnh lưới (bake pose hiện tại), bỏ qua vũ khí.
+    // Bounds mặc định của SkinnedMeshRenderer hay sai (lấy từ animation) -> titan bị lơ lửng hoặc nhỏ hơn dự tính.
+    static Bounds ExactBounds(Renderer[] rs)
+    {
+        bool has = false;
+        Bounds b = new Bounds();
+        var tmp = new Mesh();
+        var verts = new List<Vector3>();
+
+        foreach (var r in rs)
+        {
+            if (IsWeaponRenderer(r)) continue;
+
+            var smr = r as SkinnedMeshRenderer;
+            if (smr != null && smr.sharedMesh != null)
+            {
+                smr.BakeMesh(tmp, false);
+                verts.Clear();
+                tmp.GetVertices(verts);
+                Matrix4x4 m = r.transform.localToWorldMatrix;
+                for (int i = 0; i < verts.Count; i++)
+                {
+                    Vector3 w = m.MultiplyPoint3x4(verts[i]);
+                    if (!has) { b = new Bounds(w, Vector3.zero); has = true; }
+                    else b.Encapsulate(w);
+                }
+            }
+            else
+            {
+                if (!has) { b = r.bounds; has = true; }
+                else b.Encapsulate(r.bounds);
+            }
+        }
+
+        Destroy(tmp);
+        return has ? b : CalcBounds(rs);
+    }
+
+    static readonly Dictionary<string, Bounds> boundsCache = new Dictionary<string, Bounds>();
+
+    // Kết quả đo được lưu lại theo model để các titan sinh sau không phải bake lại
+    Bounds MeasureModel(Renderer[] renderers)
+    {
+        string key = def.modelPath + "|" + def.yawOffset;
+        if (boundsCache.TryGetValue(key, out Bounds rel))
+            return new Bounds(rel.center + transform.position, rel.size);
+
+        Bounds exact = ExactBounds(renderers);
+        Bounds quick = CalcBounds(renderers);
+        Debug.Log("[Titan] " + def.name + ": bounds mặc định cao " + quick.size.y.ToString("F2") +
+                  ", đo chính xác cao " + exact.size.y.ToString("F2") +
+                  " (đáy lệch " + (exact.min.y - quick.min.y).ToString("F2") + ")");
+
+        boundsCache[key] = new Bounds(exact.center - transform.position, exact.size);
+        return exact;
+    }
+
     bool BuildFromModel()
     {
         var prefab = Resources.Load<GameObject>(def.modelPath);
@@ -149,7 +222,8 @@ public class Titan : MonoBehaviour
         }
 
         // Co giãn về cao 10 đơn vị, đặt chân chạm y=0 và căn giữa theo X/Z (root đang scale 1, chưa xoay)
-        Bounds b0 = CalcBounds(renderers);
+        Bounds b0 = MeasureModel(renderers);
+        if (b0.size.y < 0.0001f) b0 = CalcBounds(renderers);
         float s = 10f / b0.size.y;
         Vector3 centerRel = (b0.center - transform.position) * s;
         float minY = centerRel.y - b0.extents.y * s;
@@ -178,6 +252,7 @@ public class Titan : MonoBehaviour
         sway = visual;
         clips = TitanClipPlayer.TryCreate(model, def.modelPath);
         if (clips == null) proc = TitanProceduralAnim.TryCreate(model);
+        feet = TitanFootGrounder.TryCreate(model, transform, visual);
         return true;
     }
 
@@ -265,6 +340,19 @@ public class Titan : MonoBehaviour
         if (IsDead || target == null) return;
         float dt = Time.deltaTime;
         moving = false;
+
+        if (!logged)
+        {
+            if (bornTime == 0f) bornTime = Time.time;
+            if (Time.time - bornTime > 2f)
+            {
+                logged = true;
+                Debug.Log("[Titan] " + (def != null ? def.name : "placeholder") + " cao " + Height.ToString("F1") +
+                          "m, y=" + transform.position.y.ToString("F2") +
+                          (GroundSampler != null ? ", mặt đất=" + GroundSampler(transform.position).ToString("F2") : "") +
+                          (feet != null ? ", dịch chân=" + feet.Shift.ToString("F2") : ", không có Humanoid"));
+            }
+        }
 
         Vector3 to = target.position - transform.position;
         to.y = 0f;
@@ -380,7 +468,8 @@ public class Titan : MonoBehaviour
         if (GroundSampler != null)
         {
             Vector3 q = transform.position;
-            q.y = Mathf.Lerp(q.y, GroundSampler(q), 10f * dt);
+            float gy = GroundSampler(q);
+            q.y = Mathf.Abs(q.y - gy) > 1f ? gy : Mathf.Lerp(q.y, gy, 10f * dt); // lệch nhiều thì đặt thẳng xuống đất, không trôi từ từ
             transform.position = q;
             return;
         }

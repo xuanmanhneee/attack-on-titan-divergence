@@ -83,10 +83,22 @@ public class TrostMission : MonoBehaviour
         }
     }
 
+    // Điểm sinh titan gần cổng: chọn ngã tư (luôn là đường trống) cách cổng 25–130 m, tuyệt đối không sinh trong nhà.
     Vector3 GatePoint()
     {
-        Vector3 p = map.sealPoint + new Vector3(Random.Range(-22f, 22f), 0f, -Random.Range(25f, 70f));
-        p.y = map.GroundY(p.x, p.z, map.sealPoint.y);
+        var cand = new List<Vector3>();
+        foreach (var ip in map.intersections)
+        {
+            float dz = map.sealPoint.z - ip.z;
+            if (dz < 25f || dz > 130f) continue;
+            Vector3 d = ip - odm.transform.position; d.y = 0f;
+            if (d.magnitude < 40f) continue;   // đừng sinh ngay sát người chơi
+            cand.Add(ip);
+        }
+        if (cand.Count == 0) cand.AddRange(map.intersections);
+
+        Vector3 p = cand[Random.Range(0, cand.Count)];
+        p.y = map.GroundAt(p);
         return p;
     }
 
