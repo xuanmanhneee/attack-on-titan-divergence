@@ -48,7 +48,8 @@ public class Titan : MonoBehaviour
     Transform armL, armR, legL, legR;
     TitanModelDef def;        // null = dùng placeholder dựng bằng khối
     Transform sway;           // pivot để lắc nhẹ khi dùng model thật chưa có animation
-    TitanClipPlayer clips;    // animation có sẵn trong FBX (nếu có)
+    TitanClipPlayer clips;    // animation (clip) nếu có
+    TitanProceduralAnim proc; // animation bằng code cho rig Humanoid nếu không có clip
 
     float AttackReach => 4.5f * k;
     float ArmHeight => 7.5f * k;
@@ -170,6 +171,7 @@ public class Titan : MonoBehaviour
 
         sway = visual;
         clips = TitanClipPlayer.TryCreate(model, def.modelPath);
+        if (clips == null) proc = TitanProceduralAnim.TryCreate(model);
         return true;
     }
 
@@ -370,6 +372,15 @@ public class Titan : MonoBehaviour
         {
             float speed = state == State.Chase ? runSpeed : walkSpeed;
             walkPhase += speed * dt * 0.9f / Mathf.Max(0.3f, k);
+        }
+
+        if (proc != null)
+        {
+            proc.walkPhase = walkPhase;
+            proc.moveAmount = moving ? 1f : 0f;
+            proc.attackRaise = state == State.Windup ? 1f - Mathf.Clamp01(stateTimer / windupTime) : 0f;
+            proc.attackSlam = state == State.Recover ? Mathf.Clamp01(stateTimer / recoverTime) : 0f;
+            return;
         }
 
         // Model thật: nếu không có animation riêng thì lắc nhẹ cả thân (bước nặng nề, ngả người khi đập)

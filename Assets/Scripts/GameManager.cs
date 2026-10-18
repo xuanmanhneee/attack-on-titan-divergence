@@ -38,7 +38,18 @@ public class GameManager : MonoBehaviour
     GUIStyle label, title, button;
     float styleScale = -1f;
 
+    // RuntimeInitializeOnLoadMethod chỉ chạy một lần khi mở game, nên phải nghe sceneLoaded
+    // để tạo lại GameManager sau khi "Chơi lại" (load lại scene).
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+    static void Hook()
+    {
+        SceneManager.sceneLoaded -= OnSceneLoaded;
+        SceneManager.sceneLoaded += OnSceneLoaded;
+        AutoCreate();
+    }
+
+    static void OnSceneLoaded(Scene scene, LoadSceneMode mode) { AutoCreate(); }
+
     static void AutoCreate()
     {
         if (FindFirstObjectByType<GameManager>() != null) return;

@@ -14,6 +14,15 @@ public class GasHUD : MonoBehaviour
     static readonly Color Low = new Color(1f, 0.35f, 0.2f, 0.95f);
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+    static void Hook()
+    {
+        UnityEngine.SceneManagement.SceneManager.sceneLoaded -= OnSceneLoaded;
+        UnityEngine.SceneManagement.SceneManager.sceneLoaded += OnSceneLoaded;
+        AutoCreate();
+    }
+
+    static void OnSceneLoaded(UnityEngine.SceneManagement.Scene scene, UnityEngine.SceneManagement.LoadSceneMode mode) { AutoCreate(); }
+
     static void AutoCreate()
     {
         if (FindFirstObjectByType<GasHUD>() != null) return;

@@ -21,42 +21,66 @@ public class TitanClipPlayer : MonoBehaviour
 
     static readonly string[][] Keywords =
     {
-        new[] { "idle", "stand", "wait" },
+        new[] { "idle", "stand", "wait", "breath" },
         new[] { "walk", "run", "move" },
-        new[] { "attack", "punch", "smash", "hit" },
+        new[] { "attack", "punch", "smash", "slam", "swipe", "slash" },
     };
+
+    // Quy ước: bỏ file animation (FBX Mixamo) vào Assets/Resources/Titans/Animations/ và đặt tên
+    // Idle, Walk (hoặc Run), Attack. Chỉ dùng được với model có Humanoid avatar.
+    static AnimationClip LoadExternal(string fileName)
+    {
+        foreach (var c in Resources.LoadAll<AnimationClip>("Titans/Animations/" + fileName))
+            if (c != null && !c.name.StartsWith("__preview__")) return c;
+        return null;
+    }
+
+    static AnimationClip Find(List<AnimationClip> pool, string[] keywords)
+    {
+        foreach (var c in pool)
+        {
+            string n = c.name.ToLowerInvariant();
+            foreach (var kw in keywords) if (n.Contains(kw)) return c;
+        }
+        return null;
+    }
 
     public static TitanClipPlayer TryCreate(GameObject model, string resourcePath)
     {
-        var all = Resources.LoadAll<AnimationClip>(resourcePath);
-        var usable = new List<AnimationClip>();
-        foreach (var c in all)
-            if (c != null && !c.name.StartsWith("__preview__")) usable.Add(c);
+        var animator = model.GetComponentInChildren<Animator>();
+        bool human = animator != null && animator.avatar != null && animator.avatar.isValid && animator.avatar.isHuman;
 
-        if (usable.Count == 0) return null;
-        Debug.Log("[Titan] " + model.name + " có " + usable.Count + " clip: " + string.Join(", ", usable.ConvertAll(c => c.name)));
-
-        var player = model.AddComponent<TitanClipPlayer>();
-        for (int role = 0; role < 3; role++)
-            foreach (var c in usable)
-            {
-                string n = c.name.ToLowerInvariant();
-                foreach (var kw in Keywords[role])
-                    if (n.Contains(kw)) { player.clips[role] = c; break; }
-                if (player.clips[role] != null) break;
-            }
-
-        // Thiếu vai trò nào thì mượn clip của vai trò gần nhất
-        if (player.clips[0] == null) player.clips[0] = player.clips[1];
-        if (player.clips[1] == null) player.clips[1] = player.clips[0];
-        if (player.clips[2] == null) player.clips[2] = player.clips[1] != null ? player.clips[1] : player.clips[0];
-
-        if (player.clips[0] == null && player.clips[1] == null)
+        var clips = new AnimationClip[3];
+        if (human)
         {
-            Destroy(player);
-            return null; // có clip nhưng không rõ là clip gì: không dùng
+            clips[0] = LoadExternal("Idle");
+            clips[1] = LoadExternal("Walk") ?? LoadExternal("Run");
+            clips[2] = LoadExternal("Attack");
         }
 
+        // Clip có sẵn trong FBX, chọn theo tên (attack trước để "Standing Attack" không bị nhận là idle)
+        var pool = new List<AnimationClip>();
+        foreach (var c in Resources.LoadAll<AnimationClip>(resourcePath))
+            if (c != null && !c.name.StartsWith("__preview__")) pool.Add(c);
+        if (pool.Count > 0)
+            Debug.Log("[Titan] " + model.name + " có " + pool.Count + " clip riêng: " + string.Join(", ", pool.ConvertAll(c => c.name)));
+
+        for (int role = 2; role >= 0; role--)
+        {
+            if (clips[role] != null) continue;
+            var found = Find(pool, Keywords[role]);
+            if (found != null) { clips[role] = found; pool.Remove(found); }
+        }
+
+        // Thiếu vai trò nào thì mượn clip gần nhất
+        if (clips[0] == null) clips[0] = clips[1];
+        if (clips[1] == null) clips[1] = clips[0];
+        if (clips[2] == null) clips[2] = clips[1] != null ? clips[1] : clips[0];
+        if (clips[0] == null) return null;
+
+        var player = model.AddComponent<TitanClipPlayer>();
+        for (int i = 0; i < 3; i++) player.clips[i] = clips[i];
+        Debug.Log("[Titan] " + model.name + " dùng clip - Idle: " + clips[0].name + ", Walk: " + clips[1].name + ", Attack: " + clips[2].name);
         player.Build(model);
         return player;
     }
