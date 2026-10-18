@@ -1021,8 +1021,8 @@ MonoBehaviour:
   gasForce: 32
   steerRate: 130
   maxSpeed: 45
-  maxGas: 100
-  gasDrain: 25
+  maxGas: 140
+  gasDrain: 12
   gasRegen: 40
   ropeMaterial: {fileID: 0}
   ropeWidth: 0.03

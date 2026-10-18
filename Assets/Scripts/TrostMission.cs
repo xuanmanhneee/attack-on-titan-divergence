@@ -25,7 +25,7 @@ public class TrostMission : MonoBehaviour
     public float minSpawnDistance = 90f;
 
     [Header("Tiếp tế")]
-    public float scarceGasRegen = 6f;   // hồi gas rất chậm ngoài điểm tiếp tế
+    public float scarceGasRegen = 14f;   // hồi gas rất chậm ngoài điểm tiếp tế
     public float depotStock = 150f;
     public float depotFillRate = 70f;
     public float depotRegen = 3f;
