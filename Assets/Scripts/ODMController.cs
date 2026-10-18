@@ -69,13 +69,26 @@ public class ODMController : MonoBehaviour
     public float reelAwayThreshold = 2f;          // bay ra xa nhanh hơn mức này (m/s) thì Space ngừng kéo
     public bool autoReleaseWhileReeling = true;   // vẫn tự nhả dây khi vượt qua điểm neo kể cả đang giữ Space
 
+    [Header("Smart Assist - Neo cao (đu được lên cao)")]
+    public bool liftAnchorToRoof = true;        // bắn trúng tường nhà thì điểm neo được nâng lên gần mái nhà
+    public float liftMaxHeight = 16f;           // nâng tối đa bao nhiêu mét so với chỗ ngắm trúng
+    public float liftRoofMargin = 0.6f;         // chừa cách mép mái
+    public float liftSkipIfAbovePlayer = 8f;   // điểm ngắm đã cao hơn người chơi mức này thì không nâng nữa
+    public float liftWallMaxNormalY = 0.35f;    // chỉ nâng khi trúng mặt tường (pháp tuyến gần nằm ngang)
+    public bool groundHookYank = true;          // bắn móc khi đang đứng đất: bị giật lên không ngay, khỏi phải nhấn Space
+    public float groundHookYankSpeed = 10f;
+    public float swingKeepSpeed = 14f;          // đu nhanh hơn mức này thì lướt sát đất không bị hãm như đang đi bộ
+
     [Header("Gas")]
     public float gasForce = 32f;
     public float steerRate = 130f;
     public float maxSpeed = 45f;
-    public float maxGas = 100f;
-    public float gasDrain = 25f;
+    public float maxGas = 140f;
+    public float gasDrain = 12f;
     public float gasRegen = 40f;
+    public float hookedGasDrainFactor = 0.6f;   // đang có dây móc thì Shift tốn gas ít hơn
+    public float airGasRegen = 5f;              // hồi gas chậm khi đang trên không mà không bấm Shift
+    public float gasRegenDelay = 1f;            // phải ngừng dùng Shift bấy nhiêu giây mới bắt đầu hồi
 
     [Header("Wall Collision")]
     public float bounceRestitution = 0.45f;   // 0 = trượt dọc tường, 1 = nảy lại nguyên tốc độ
@@ -117,6 +130,7 @@ public class ODMController : MonoBehaviour
     private float logTimer = 0f;
     private const float LOG_INTERVAL = 0.15f;
 
+    private float gasIdle = 0f;
     private float aimTimer = 0f;
     private const float AIM_INTERVAL = 0.05f; // cập nhật chấm ngắm 20 lần/giây cho nhẹ
 
@@ -167,7 +181,8 @@ public class ODMController : MonoBehaviour
         // Đang đứng trên đất: mặt đất đỡ người, dây không được phép kéo lê như con lắc.
         // Chỉ chuyển sang chế độ dây (AirMovement) khi: đang thu dây bằng Space, hoặc đã bám vào bề mặt.
         bool standing = isGrounded && velocity.y <= 0.1f;
-        bool ropeTakesOver = hooked && (GameInput.GetKey(KeyCode.Space) || IsAttached(hookLeft) || IsAttached(hookRight));
+        bool swingingFast = hooked && velocity.sqrMagnitude > swingKeepSpeed * swingKeepSpeed;
+        bool ropeTakesOver = hooked && (GameInput.GetKey(KeyCode.Space) || IsAttached(hookLeft) || IsAttached(hookRight) || swingingFast);
 
         if (standing && !ropeTakesOver)
         {
@@ -261,6 +276,14 @@ public class ODMController : MonoBehaviour
     // ================= AIR MOVEMENT =================
     void AirMovement(float dt, bool hooked)
     {
+        bool boosting = GameInput.GetKey(KeyCode.LeftShift) && gas > 0f;
+        if (boosting) gasIdle = 0f;
+        else
+        {
+            gasIdle += dt;
+            if (gasIdle >= gasRegenDelay) gas = Mathf.Min(maxGas, gas + airGasRegen * dt);
+        }
+
         if (hooked && (IsAttached(hookLeft) || IsAttached(hookRight)))
         {
             // Đang bám tường: nhấn Shift để bật ra theo hướng nhìn (thoát trạng thái dính tường)
@@ -297,7 +320,7 @@ public class ODMController : MonoBehaviour
             }
 
             velocity += cameraTransform.forward * gasForce * dt;
-            gas = Mathf.Max(0f, gas - gasDrain * dt);
+            gas = Mathf.Max(0f, gas - gasDrain * (hooked ? hookedGasDrainFactor : 1f) * dt);
 
             if (velocity.magnitude > maxSpeed)
                 velocity = velocity.normalized * maxSpeed;
@@ -489,10 +512,56 @@ public class ODMController : MonoBehaviour
     {
         if (!FindAnchor(hip, out RaycastHit hit)) return;
 
+        Vector3 anchor = LiftAnchor(hit);
+
         hook.active = true;
-        hook.anchorPoint = hit.point;
-        hook.ropeLength = Vector3.Distance(transform.position, hit.point);
+        hook.anchorPoint = anchor;
+        hook.ropeLength = Vector3.Distance(transform.position, anchor);
         hook.attached = false;
+
+        // Đang đứng đất: giật người lên không ngay lập tức (đỡ phải giữ Space mới rời đất được)
+        if (groundHookYank && isGrounded && velocity.y <= 0.1f)
+        {
+            Vector3 dir = (anchor - transform.position).normalized;
+            Vector3 yank = new Vector3(dir.x, Mathf.Max(dir.y, 0.35f), dir.z).normalized * groundHookYankSpeed;
+            velocity += yank;
+            isGrounded = false;
+        }
+    }
+
+    // Bắn trúng tường nhà thì nâng điểm neo lên gần mái: neo càng cao thì càng đu được lên cao và có chỗ để vung.
+    Vector3 LiftAnchor(RaycastHit hit)
+    {
+        if (!liftAnchorToRoof) return hit.point;
+        if (hit.normal.y > liftWallMaxNormalY) return hit.point;          // không phải mặt tường
+        if (hit.point.y - transform.position.y >= liftSkipIfAbovePlayer) return hit.point;
+
+        Collider c = hit.collider;
+        if (c == null || !SupportsClosestPoint(c)) return hit.point;
+
+        float topY = c.bounds.max.y - liftRoofMargin;
+        float wantY = Mathf.Min(topY, hit.point.y + liftMaxHeight);
+        wantY = Mathf.Min(wantY, transform.position.y + maxHookRange * 0.7f);
+        if (wantY <= hit.point.y + 0.75f) return hit.point;
+
+        Vector3 raised = new Vector3(hit.point.x, wantY, hit.point.z) + hit.normal * 0.5f;
+        Vector3 p = c.ClosestPoint(raised);
+
+        if (Vector3.Distance(transform.position, p) > maxHookRange * 1.1f) return hit.point;
+
+        // Dây không được xuyên qua nhà khác
+        Vector3 from = cameraTransform.position;
+        Vector3 to = p + hit.normal * 0.1f;
+        if (Physics.Linecast(from, to, hookableLayer, QueryTriggerInteraction.Ignore)) return hit.point;
+
+        return p;
+    }
+
+    static bool SupportsClosestPoint(Collider c)
+    {
+        if (c is BoxCollider || c is SphereCollider || c is CapsuleCollider) return true;
+        MeshCollider m = c as MeshCollider;
+        return m != null && m.convex;
     }
 
     // Ưu tiên tia thẳng/SphereCast từ tâm camera (tôn trọng ý định nhắm).
