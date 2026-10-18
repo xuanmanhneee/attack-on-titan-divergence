@@ -56,3 +56,6 @@ Desktop.ini
 .env.*
 !.env.example
 
+
+# Asset tạm / không dùng, giữ ngoài repo
+_unused_assets/

@@ -46,21 +46,25 @@ public class Titan : MonoBehaviour
     bool moving;
     float walkPhase;
     Transform armL, armR, legL, legR;
+    TitanModelDef def;        // null = dùng placeholder dựng bằng khối
+    Transform sway;           // pivot để lắc nhẹ khi dùng model thật chưa có animation
+    TitanClipPlayer clips;    // animation có sẵn trong FBX (nếu có)
 
     float AttackReach => 4.5f * k;
     float ArmHeight => 7.5f * k;
 
     // ================= TẠO TITAN =================
-    public static Titan Create(Vector3 groundPos, float heightMeters, Transform target)
+    public static Titan Create(Vector3 groundPos, float heightMeters, Transform target, TitanModelDef def = null)
     {
         var root = new GameObject("Titan");
         root.transform.position = groundPos;
-        root.transform.rotation = Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 360f), 0f);
 
         var t = root.AddComponent<Titan>();
         t.k = heightMeters / 10f;
         t.target = target;
+        t.def = def;
         t.BuildBody();
+        root.transform.rotation = Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 360f), 0f); // xoay sau khi dựng để tính bounds đúng
         root.transform.localScale = Vector3.one * t.k;
 
         // Layer "Ignore Raycast" (2): tia móc dây / raycast mặc định không trúng titan
@@ -70,7 +74,7 @@ public class Titan : MonoBehaviour
         rb.isKinematic = true;
 
         t.health = root.AddComponent<Health>();
-        t.health.Init(80f + heightMeters * 6f);
+        t.health.Init((80f + heightMeters * 6f) * (def != null ? def.healthMultiplier : 1f));
         t.health.Died += t.Die;
 
         All.Add(t);
@@ -79,6 +83,8 @@ public class Titan : MonoBehaviour
 
     void BuildBody()
     {
+        if (def != null && BuildFromModel()) return;
+
         Color skin = new Color(0.78f, 0.58f, 0.45f);
         Color dark = new Color(0.62f, 0.44f, 0.34f);
 
@@ -102,6 +108,114 @@ public class Titan : MonoBehaviour
                         new Color(1f, 0.15f, 0.1f), false);
         nape.name = "Nape";
         Nape = nape.transform;
+    }
+
+    // ================= MODEL THẬT (FBX trong Resources) =================
+    static Bounds CalcBounds(Renderer[] rs)
+    {
+        Bounds b = rs[0].bounds;
+        for (int i = 1; i < rs.Length; i++) b.Encapsulate(rs[i].bounds);
+        return b;
+    }
+
+    bool BuildFromModel()
+    {
+        var prefab = Resources.Load<GameObject>(def.modelPath);
+        if (prefab == null) return false;
+
+        var visual = new GameObject("Visual").transform;
+        visual.SetParent(transform, false);
+
+        var model = Instantiate(prefab, visual);
+        model.name = def.name;
+        model.transform.localPosition = Vector3.zero;
+        model.transform.localRotation = Quaternion.Euler(0f, def.yawOffset, 0f);
+        model.transform.localScale = Vector3.one;
+
+        foreach (var c in model.GetComponentsInChildren<Collider>()) Destroy(c);
+
+        var renderers = model.GetComponentsInChildren<Renderer>();
+        if (renderers.Length == 0 || CalcBounds(renderers).size.y < 0.0001f)
+        {
+            Destroy(visual.gameObject);
+            return false;
+        }
+
+        // Co giãn về cao 10 đơn vị, đặt chân chạm y=0 và căn giữa theo X/Z (root đang scale 1, chưa xoay)
+        Bounds b0 = CalcBounds(renderers);
+        float s = 10f / b0.size.y;
+        Vector3 centerRel = (b0.center - transform.position) * s;
+        float minY = centerRel.y - b0.extents.y * s;
+        model.transform.localScale = Vector3.one * s;
+        model.transform.localPosition = new Vector3(-centerRel.x, -minY, -centerRel.z);
+
+        ApplyMaterials(renderers);
+
+        // Va chạm đơn giản: một viên nang bao quanh thân
+        var colGo = new GameObject("BodyCollider");
+        colGo.transform.SetParent(transform, false);
+        colGo.transform.localPosition = new Vector3(0f, 5f, 0f);
+        var cap = colGo.AddComponent<CapsuleCollider>();
+        cap.direction = 1;
+        cap.height = 10f;
+        cap.radius = 1.3f;
+        BodyColliders.Add(cap);
+
+        // Điểm yếu ở gáy (quả cầu đỏ)
+        var nape = Part(PrimitiveType.Sphere, transform,
+                        new Vector3(0f, 10f * def.napeHeight, -def.napeBack), Vector3.one * 0.7f,
+                        new Color(1f, 0.15f, 0.1f), false);
+        nape.name = "Nape";
+        Nape = nape.transform;
+
+        sway = visual;
+        clips = TitanClipPlayer.TryCreate(model, def.modelPath);
+        return true;
+    }
+
+    void ApplyMaterials(Renderer[] renderers)
+    {
+        Shader lit = Shader.Find("Universal Render Pipeline/Lit");
+        var cache = new Dictionary<string, Texture2D>();
+        Texture2D Tex(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return null;
+            if (!cache.TryGetValue(path, out var t)) cache[path] = t = Resources.Load<Texture2D>(path);
+            return t;
+        }
+
+        foreach (var r in renderers)
+        {
+            var mats = r.sharedMaterials;
+            for (int i = 0; i < mats.Length; i++)
+            {
+                string n = mats[i] != null ? mats[i].name.ToLowerInvariant() : "";
+                string path = def.bodyTex;
+                if (n.Contains("hair") && !string.IsNullOrEmpty(def.hairTex)) path = def.hairTex;
+                else if ((n.Contains("face") || n.Contains("head")) && !string.IsNullOrEmpty(def.faceTex)) path = def.faceTex;
+                else if ((n.Contains("wiqi") || n.Contains("weapon")) && !string.IsNullOrEmpty(def.weaponTex)) path = def.weaponTex;
+
+                Material m = lit != null ? new Material(lit) : (mats[i] != null ? new Material(mats[i]) : new Material(Shader.Find("Standard")));
+                var tex = Tex(path);
+                if (tex != null)
+                {
+                    if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", tex);
+                    if (m.HasProperty("_MainTex")) m.SetTexture("_MainTex", tex);
+                    if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", Color.white);
+                }
+                if (n.Contains("hair") && m.HasProperty("_AlphaClip"))
+                {
+                    m.SetFloat("_AlphaClip", 1f);
+                    m.SetFloat("_Cutoff", 0.5f);
+                    m.SetFloat("_Cull", 0f);
+                    m.EnableKeyword("_ALPHATEST_ON");
+                }
+                if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.15f);
+                m.name = n;
+                mats[i] = m;
+            }
+            r.sharedMaterials = mats;
+        }
     }
 
     Transform Pivot(string n, Vector3 localPos)
@@ -198,6 +312,12 @@ public class Titan : MonoBehaviour
 
         SnapToGround(dt);
         AnimateLegs(dt);
+
+        if (clips != null)
+        {
+            bool attacking = state == State.Windup || state == State.Recover;
+            clips.SetRole(attacking ? TitanClipPlayer.Role.Attack : moving ? TitanClipPlayer.Role.Walk : TitanClipPlayer.Role.Idle);
+        }
     }
 
     void DoHit()
@@ -251,6 +371,22 @@ public class Titan : MonoBehaviour
             float speed = state == State.Chase ? runSpeed : walkSpeed;
             walkPhase += speed * dt * 0.9f / Mathf.Max(0.3f, k);
         }
+
+        // Model thật: nếu không có animation riêng thì lắc nhẹ cả thân (bước nặng nề, ngả người khi đập)
+        if (legL == null)
+        {
+            if (sway != null && clips == null)
+            {
+                float bob = moving ? Mathf.Abs(Mathf.Sin(walkPhase)) * 0.3f : 0f;
+                float roll = moving ? Mathf.Sin(walkPhase) * 4f : 0f;
+                float pitch = 0f;
+                if (state == State.Windup) pitch = -10f * (1f - Mathf.Clamp01(stateTimer / windupTime));
+                else if (state == State.Recover) pitch = Mathf.Lerp(0f, 20f, Mathf.Clamp01(stateTimer / recoverTime));
+                sway.localPosition = new Vector3(0f, bob, 0f);
+                sway.localRotation = Quaternion.Euler(pitch, 0f, roll);
+            }
+            return;
+        }
         float swing = moving ? Mathf.Sin(walkPhase) * 30f : 0f;
         legL.localRotation = Quaternion.Euler(swing, 0f, 0f);
         legR.localRotation = Quaternion.Euler(-swing, 0f, 0f);
@@ -258,6 +394,7 @@ public class Titan : MonoBehaviour
 
     void SetArms(float pitch)
     {
+        if (armL == null) return;
         float idle = moving ? -Mathf.Sin(walkPhase) * 20f : 0f;
         bool attacking = state == State.Windup || state == State.Recover;
         float p = attacking ? pitch : idle;
@@ -279,6 +416,7 @@ public class Titan : MonoBehaviour
     void Die()
     {
         state = State.Dead;
+        if (clips != null) clips.Stop();
         All.Remove(this);
         Killed?.Invoke(this);
         StartCoroutine(FallRoutine());
