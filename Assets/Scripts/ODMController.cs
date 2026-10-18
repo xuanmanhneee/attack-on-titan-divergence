@@ -72,6 +72,13 @@ public class ODMController : MonoBehaviour
     public float gasDrain = 25f;
     public float gasRegen = 40f;
 
+    [Header("Wall Collision")]
+    public float bounceRestitution = 0.45f;   // 0 = trượt dọc tường, 1 = nảy lại nguyên tốc độ
+    public float bounceMinSpeed = 4f;         // tốc độ văng ra tối thiểu khi va mạnh
+    public float hardImpactSpeed = 7f;        // va nhanh hơn mức này: nảy ra và nhả dây gần chỗ va
+    public float anchorReleaseRadius = 8f;    // nhả móc có điểm neo trong bán kính này quanh chỗ va
+    public float attachMaxImpactSpeed = 6f;   // chỉ bám tường khi chạm nhẹ (đang giữ Space)
+
     [Header("Wall Launch")]
     public float wallLaunchSpeed = 16f;    // tốc độ bật ra khỏi tường khi nhấn Shift lúc đang bám
     public float wallLaunchGasCost = 10f;
@@ -347,7 +354,7 @@ public class ODMController : MonoBehaviour
 
         if (dist <= attachDistance)
         {
-            hook.attached = true;
+            if (strong) hook.attached = true; // chỉ bám khi chủ động giữ Space
             return;
         }
 
@@ -388,14 +395,48 @@ public class ODMController : MonoBehaviour
         bool wantsAttach = !requireReelToAttach || GameInput.GetKey(KeyCode.Space);
         bool hookableSurface = ((1 << hit.gameObject.layer) & hookableLayer.value) != 0;
 
-        if (hooked && wantsAttach && hookableSurface && hit.normal.y < 0.7f)
+        bool wall = hit.normal.y < 0.7f; // tường hoặc trần; mặt gần nằm ngang coi là mặt đất/mái
+        float into = Vector3.Dot(velocity, hit.normal); // < 0: đang lao vào bề mặt
+        float impact = -into;
+
+        // Chạm nhẹ khi đang giữ Space: bám vào tường. Chạm mạnh: không bám mà nảy ra.
+        if (hooked && wantsAttach && hookableSurface && wall && impact <= attachMaxImpactSpeed)
         {
             hookLeft.attached = hookLeft.active;
             hookRight.attached = hookRight.active;
+            return;
         }
 
-        if (Vector3.Dot(velocity, hit.normal) < 0f)
-            velocity = Vector3.ProjectOnPlane(velocity, hit.normal);
+        if (into < 0f)
+        {
+            Vector3 along = Vector3.ProjectOnPlane(velocity, hit.normal);
+
+            if (wall && impact >= hardImpactSpeed)
+            {
+                // Va mạnh vào tường: nảy ra. Dây neo gần chỗ va phải nhả, nếu không dây căng sẽ kéo lại gây cảm giác "dính".
+                float away = Mathf.Max(impact * bounceRestitution, bounceMinSpeed);
+                velocity = along + hit.normal * away;
+                ReleaseHooksNear(hit.point);
+            }
+            else
+            {
+                velocity = along;
+            }
+        }
+    }
+
+    void ReleaseHooksNear(Vector3 point)
+    {
+        if (hookLeft.active && Vector3.Distance(hookLeft.anchorPoint, point) <= anchorReleaseRadius)
+        {
+            hookLeft.active = false;
+            hookLeft.attached = false;
+        }
+        if (hookRight.active && Vector3.Distance(hookRight.anchorPoint, point) <= anchorReleaseRadius)
+        {
+            hookRight.active = false;
+            hookRight.attached = false;
+        }
     }
 
     // ================= HOOK INPUT =================
