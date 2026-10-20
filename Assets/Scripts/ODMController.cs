@@ -147,6 +147,39 @@ public class ODMController : MonoBehaviour
     private LineRenderer lineLeft;
     private LineRenderer lineRight;
 
+    // Giá trị gốc (từ scene) để nhân / cộng với cài đặt của người chơi
+    private float defSens, defBaseFov, defMaxFov;
+
+    void Awake()
+    {
+        defSens = mouseSensitivity;
+        defBaseFov = baseFov;
+        defMaxFov = maxFov;
+    }
+
+    void OnEnable()
+    {
+        GameSettings.Changed += ApplySettings;
+        ApplySettings();
+    }
+
+    void OnDisable()
+    {
+        GameSettings.Changed -= ApplySettings;
+    }
+
+    // Cài đặt người chơi (menu Cài đặt) ghi đè lên các thông số trong Inspector
+    void ApplySettings()
+    {
+        mouseSensitivity = defSens * GameSettings.MouseSens;
+        baseFov = GameSettings.Fov;
+        maxFov = Mathf.Max(baseFov + 5f, defMaxFov + (GameSettings.Fov - defBaseFov));
+        smartAim = GameSettings.SmartAim;
+        autoReel = GameSettings.AutoReel;
+        autoRelease = GameSettings.AutoRelease;
+        liftAnchorToRoof = GameSettings.AnchorLift;
+    }
+
     void Start()
     {
         controller = GetComponent<CharacterController>();
@@ -203,7 +236,7 @@ public class ODMController : MonoBehaviour
     void HandleLook()
     {
         yaw += GameInput.GetAxis("Mouse X") * mouseSensitivity;
-        pitch -= GameInput.GetAxis("Mouse Y") * mouseSensitivity;
+        pitch -= GameInput.GetAxis("Mouse Y") * mouseSensitivity * (GameSettings.InvertY ? -1f : 1f);
         pitch = Mathf.Clamp(pitch, -80f, 80f);
 
         transform.rotation = Quaternion.Euler(0f, yaw, 0f);

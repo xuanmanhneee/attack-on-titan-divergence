@@ -28,13 +28,21 @@ public class TimeFocus : MonoBehaviour
         odm = GetComponent<ODMController>();
     }
 
+    void OnEnable()
+    {
+        GameSettings.Changed += SyncSettings;
+        SyncSettings();
+    }
+
+    void SyncSettings() { enabledEffect = GameSettings.SlowMo; }
+
     void Update()
     {
         if (gm == null) gm = FindFirstObjectByType<GameManager>();
         // Chỉ điều khiển thời gian khi đang chơi; pause/thắng/thua do GameManager quản lý
         if (gm != null && gm.Current != GameManager.State.Playing) { current = 1f; Active = false; return; }
 
-        if (GameInput.GetKeyDown(KeyCode.T)) enabledEffect = !enabledEffect;
+        if (GameInput.GetKeyDown(KeyCode.T)) { enabledEffect = !enabledEffect; GameSettings.SlowMo = enabledEffect; }
 
         airTime = odm.IsGrounded ? 0f : airTime + Time.unscaledDeltaTime;
 
@@ -53,7 +61,7 @@ public class TimeFocus : MonoBehaviour
         Transform cam = odm.cameraTransform;
         foreach (Titan t in Titan.All)
         {
-            if (t == null || t.IsDead) continue;
+            if (t == null || t.IsDead || t.Nape == null) continue;
             Vector3 to = t.Nape.position - cam.position;
             if (to.magnitude <= focusRange && Vector3.Angle(cam.forward, to) <= focusAngle) return true;
         }
@@ -62,6 +70,7 @@ public class TimeFocus : MonoBehaviour
 
     void OnDisable()
     {
+        GameSettings.Changed -= SyncSettings;
         Time.timeScale = 1f;
         Time.fixedDeltaTime = 0.02f;
     }
