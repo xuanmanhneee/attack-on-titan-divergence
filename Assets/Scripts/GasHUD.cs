@@ -10,8 +10,9 @@ public class GasHUD : MonoBehaviour
     Text label;
     Text speedText;
 
-    static readonly Color Full = new Color(0.3f, 0.9f, 1f, 0.95f);
-    static readonly Color Low = new Color(1f, 0.35f, 0.2f, 0.95f);
+    static readonly Color Green = new Color(0.2f, 0.9f, 0.3f, 0.95f);
+    static readonly Color Yellow = new Color(1f, 0.82f, 0.15f, 0.95f);
+    static readonly Color Red = new Color(1f, 0.2f, 0.12f, 0.95f);
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Hook()
@@ -49,7 +50,7 @@ public class GasHUD : MonoBehaviour
         bgRt.anchoredPosition = new Vector2(40, 40);
         bgRt.sizeDelta = new Vector2(360, 24);
 
-        fill = MakeImage("GasFill", bg.transform, Full);
+        fill = MakeImage("GasFill", bg.transform, Green);
         var fRt = fill.rectTransform;
         fRt.anchorMin = new Vector2(0, 0); fRt.anchorMax = new Vector2(1, 1);
         fRt.offsetMin = new Vector2(3, 3); fRt.offsetMax = new Vector2(-3, -3);
@@ -73,7 +74,9 @@ public class GasHUD : MonoBehaviour
         if (player == null) return;
         float g = player.GasNormalized;
         fill.fillAmount = g;
-        fill.color = Color.Lerp(Low, Full, Mathf.InverseLerp(0.1f, 0.4f, g));
+        fill.color = g >= 0.5f
+            ? Color.Lerp(Yellow, Green, Mathf.InverseLerp(0.5f, 1f, g))
+            : Color.Lerp(Red, Yellow, Mathf.InverseLerp(0.15f, 0.5f, g));
         label.text = "GAS " + Mathf.RoundToInt(g * 100f) + "%";
         speedText.text = player.Speed.ToString("F1") + " m/s";
     }

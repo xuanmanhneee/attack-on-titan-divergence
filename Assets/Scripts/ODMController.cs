@@ -27,8 +27,10 @@ public class ODMController : MonoBehaviour
     public float groundGasDrainFactor = 0.5f;
     public float groundAccel = 45f;
     public float gravity = -20f;
-    [Range(0f, 1f)] public float landingMomentumRetention = 0.45f;
+    [Range(0f, 1f)] public float landingMomentumRetention = 0.65f;
+    [Range(0f, 1f)] public float bracedLandingMomentumRetention = 0.25f;
     public float landingBrakeMinAirTime = 0.08f;
+    public float landingBrakeInputWindow = 0.2f;
 
     [Header("Air")]
     public float airControl = 6f;
@@ -94,12 +96,9 @@ public class ODMController : MonoBehaviour
     public float dualHookGasMultiplier = 1.3f;
     public float dualHookReelMultiplier = 1.25f;
     public float dualHookMaxSpeedMultiplier = 1.18f;
-    public float maxGas = 140f;
+    public float maxGas = 500f;
     public float gasDrain = 12f;
-    public float gasRegen = 40f;
     public float hookedGasDrainFactor = 0.6f;   // đang có dây móc thì Shift tốn gas ít hơn
-    public float airGasRegen = 5f;              // hồi gas chậm khi đang trên không mà không bấm Shift
-    public float gasRegenDelay = 1f;            // phải ngừng dùng Shift bấy nhiêu giây mới bắt đầu hồi
 
     [Header("Wall Collision")]
     public bool wallGlideAssist = true;
@@ -130,12 +129,13 @@ public class ODMController : MonoBehaviour
     private Vector3 velocity;
     private bool isGrounded;
     private float airborneTime;
+    private float landingBrakeWindow;
+    private bool landingBraceApplied;
     private float gas;
 
     private float pitch;
     private float yaw;
 
-    private float gasIdle = 0f;
     private float aimTimer = 0f;
     private const float AIM_INTERVAL = 0.05f; // cập nhật chấm ngắm 20 lần/giây cho nhẹ
     private readonly Collider[] groundHits = new Collider[16];
@@ -204,13 +204,33 @@ public class ODMController : MonoBehaviour
 
         if (!isGrounded)
         {
+            if (wasGrounded)
+            {
+                landingBrakeWindow = 0f;
+                landingBraceApplied = false;
+            }
             airborneTime += dt;
         }
         else
         {
             if (!wasGrounded && airborneTime >= landingBrakeMinAirTime)
-                ApplyLandingBrake();
+            {
+                bool braced = GameInput.GetAxis("Vertical") < -0.5f;
+                ApplyLandingBrake(braced);
+                landingBrakeWindow = landingBrakeInputWindow;
+                landingBraceApplied = braced;
+            }
             airborneTime = 0f;
+        }
+
+        if (isGrounded && landingBrakeWindow > 0f)
+        {
+            if (!landingBraceApplied && GameInput.GetAxis("Vertical") < -0.5f)
+            {
+                ApplyLateLandingBrace();
+                landingBraceApplied = true;
+            }
+            landingBrakeWindow = Mathf.Max(0f, landingBrakeWindow - dt);
         }
 
         bool hooked = hookLeft.active || hookRight.active;
@@ -229,7 +249,7 @@ public class ODMController : MonoBehaviour
             AirMovement(dt, hooked);
     }
 
-    void ApplyLandingBrake()
+    void ApplyLandingBrake(bool braced)
     {
         Vector3 flat = Vector3.ProjectOnPlane(velocity, Vector3.up);
         float speed = flat.magnitude;
@@ -238,10 +258,21 @@ public class ODMController : MonoBehaviour
         // Cú đáp chậm chỉ ghì nhẹ; cú đáp tốc độ ODM giữ ít đà hơn để không bị
         // hất văng khỏi mái ngay sau khi chân vừa chạm bề mặt.
         float impact = Mathf.InverseLerp(walkSpeed, maxSpeed, speed);
-        float retention = Mathf.Lerp(0.8f, landingMomentumRetention, impact);
+        float softRetention = braced ? 0.5f : 0.9f;
+        float hardRetention = braced ? bracedLandingMomentumRetention : landingMomentumRetention;
+        float retention = Mathf.Lerp(softRetention, hardRetention, impact);
         flat *= retention;
         velocity.x = flat.x;
         velocity.z = flat.z;
+    }
+
+    void ApplyLateLandingBrace()
+    {
+        // Đã ghì tự động một nhịp; S trong cửa sổ tiếp đất giảm phần đà còn lại
+        // xuống gần mức của một cú cuộn người chủ động.
+        float extraRetention = bracedLandingMomentumRetention / Mathf.Max(0.01f, landingMomentumRetention);
+        velocity.x *= extraRetention;
+        velocity.z *= extraRetention;
     }
 
     // ================= LOOK =================
@@ -305,7 +336,8 @@ public class ODMController : MonoBehaviour
     // ================= GROUND MOVEMENT =================
     void GroundMovement(float dt)
     {
-        Vector3 wishDir = GetWishDirection();
+        bool brakingLanding = landingBrakeWindow > 0f && GameInput.GetAxis("Vertical") < -0.5f;
+        Vector3 wishDir = GetWishDirection(brakingLanding);
         bool boosting = GameInput.GetKey(KeyCode.LeftShift) && gas > 0f && wishDir.sqrMagnitude > 0.0001f;
         float speed = boosting ? groundBoostSpeed : walkSpeed;
 
@@ -318,8 +350,6 @@ public class ODMController : MonoBehaviour
 
         if (boosting)
             gas = Mathf.Max(0f, gas - gasDrain * groundGasDrainFactor * dt);
-        else
-            gas = Mathf.Min(maxGas, gas + gasRegen * dt);
     }
 
     // ================= AIR MOVEMENT =================
@@ -328,12 +358,6 @@ public class ODMController : MonoBehaviour
         bool dualHooked = hookLeft.active && hookRight.active;
         float speedLimit = maxSpeed * (dualHooked ? dualHookMaxSpeedMultiplier : 1f);
         bool boosting = GameInput.GetKey(KeyCode.LeftShift) && gas > 0f;
-        if (boosting) gasIdle = 0f;
-        else
-        {
-            gasIdle += dt;
-            if (gasIdle >= gasRegenDelay) gas = Mathf.Min(maxGas, gas + airGasRegen * dt);
-        }
 
         velocity.y += gravity * dt;
 
@@ -491,10 +515,11 @@ public class ODMController : MonoBehaviour
         return false;
     }
 
-    Vector3 GetWishDirection()
+    Vector3 GetWishDirection(bool suppressBackward = false)
     {
         float h = GameInput.GetAxis("Horizontal");
         float v = GameInput.GetAxis("Vertical");
+        if (suppressBackward && v < 0f) v = 0f;
         Vector3 fwd = Vector3.ProjectOnPlane(cameraTransform.forward, Vector3.up).normalized;
         Vector3 right = Vector3.ProjectOnPlane(cameraTransform.right, Vector3.up).normalized;
         Vector3 dir = fwd * v + right * h;

@@ -5,7 +5,7 @@ using UnityEngine;
 //  1) Dọn titan đã lọt vào khu phố.
 //  2) Titan tràn qua lỗ hổng trên tường (có một Armored Titan).
 //  3) Tới cổng, trụ lại trong vùng cổng đủ lâu để chặn lỗ hổng trong khi titan tiếp tục kéo tới.
-// Gas gần như không hồi lại khi đứng yên: phải chạy tới điểm tiếp tế (cột sáng xanh) để nạp gas và kiếm.
+// Gas không tự hồi: phải chạy tới điểm tiếp tế (cột sáng xanh) để nạp gas và kiếm.
 public class TrostMission : MonoBehaviour
 {
     public enum Phase { Clear, Reinforce, Seal, Done }
@@ -25,10 +25,9 @@ public class TrostMission : MonoBehaviour
     public float minSpawnDistance = 90f;
 
     [Header("Tiếp tế")]
-    public float scarceGasRegen = 14f;   // hồi gas rất chậm ngoài điểm tiếp tế
-    public float depotStock = 150f;
-    public float depotFillRate = 70f;
-    public float depotRegen = 3f;
+    public float depotStock = 600f;
+    public float depotFillRate = 250f;
+    public float depotRegen = 30f;
     public float depotRadius = 9f;
 
     ODMController odm;
@@ -48,7 +47,6 @@ public class TrostMission : MonoBehaviour
     public void Init(GameManager manager, ODMController player, PlayerCombat pc, TrostMap trostMap)
     {
         gm = manager; odm = player; combat = pc; map = trostMap;
-        odm.gasRegen = scarceGasRegen;
         foreach (var p in map.depots) depots.Add(new Depot { pos = p, stock = depotStock });
 
         Titan.Killed += OnKilled;
