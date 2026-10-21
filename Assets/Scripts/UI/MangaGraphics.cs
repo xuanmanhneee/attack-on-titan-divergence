@@ -337,6 +337,7 @@ public static class MangaSfx
         slam = Resources.Load<AudioClip>("UI/Audio/slam") ?? Synth("slam", 0.7f, (t, p) =>
             Mathf.Sin(6.2832f * (110f - 70f * p) * t) * Mathf.Exp(-t * 6f) * 0.9f + (Hash(t) - 0.5f) * Mathf.Exp(-t * 18f) * 0.6f);
         musicClip = Resources.Load<AudioClip>("UI/Audio/menu_music");
+        if (musicClip == null) musicClip = GameAudio.MenuMusic(); // không có file thì dùng nhạc tổng hợp
         built = true;
     }
 

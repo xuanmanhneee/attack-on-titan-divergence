@@ -85,6 +85,7 @@ public class PlayerCombat : MonoBehaviour
         if (spareBlades <= 0) { Feedback?.Invoke("Hết kiếm dự phòng!"); return; }
         IsReloading = true;
         reloadTimer = reloadTime;
+        GameAudio.Play2D(Sfx.Reload, 0.8f);
     }
 
     void Slash()
@@ -92,6 +93,7 @@ public class PlayerCombat : MonoBehaviour
         if (cooldown > 0f) return;
         if (Durability <= 0f) { Feedback?.Invoke("Kiếm gãy! Nhấn R để thay"); return; }
         cooldown = slashCooldown;
+        GameAudio.Play2D(Sfx.Slash, 0.8f, UnityEngine.Random.Range(0.95f, 1.1f));
 
         Transform cam = odm.cameraTransform;
         float speed = odm.Speed;
@@ -109,12 +111,15 @@ public class PlayerCombat : MonoBehaviour
                 if (speed >= killSpeed)
                 {
                     t.KillByNape();
+                    GameAudio.Play2D(Sfx.SlashHit, 1f);
+                    GameVfx.Burst(t.Nape.position, new Color(1f, 1f, 1f, 0.85f), 18, 6f, 0.7f, 0.8f);
                     Durability -= durabilityOnNapeKill;
                     Feedback?.Invoke("CHÉM GÁY! Hạ gục titan");
                 }
                 else
                 {
                     t.Damage(napeWeakDamage);
+                    GameAudio.Play2D(Sfx.SlashHit, 0.7f);
                     Durability -= durabilityPerSlash;
                     Feedback?.Invoke("Trúng gáy nhưng chưa đủ tốc độ (" + speed.ToString("F0") + "/" + killSpeed.ToString("F0") + ")");
                 }
@@ -129,7 +134,7 @@ public class PlayerCombat : MonoBehaviour
                 Vector3 to = p - cam.position;
                 if (to.magnitude <= bodyReach && Vector3.Angle(cam.forward, to) <= slashAngle)
                 {
-                    if (speed >= bodyMinSpeed) t.Damage(bodyDamage);
+                    if (speed >= bodyMinSpeed) { t.Damage(bodyDamage); GameAudio.Play2D(Sfx.SlashHit, 0.5f, 0.85f); }
                     Durability -= durabilityPerSlash;
                     break;
                 }
@@ -164,6 +169,7 @@ public class PlayerCombat : MonoBehaviour
 
         Vector3 dir = (best.Nape.position - cam.position).normalized;
         odm.AddVelocity(dir * lungeSpeed);
+        GameAudio.Play2D(Sfx.GasBurst, 0.9f);
         cooldown = slashCooldown;
         Feedback?.Invoke("Lướt tới gáy!");
         return true;

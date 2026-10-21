@@ -366,7 +366,12 @@ public class Titan : MonoBehaviour
         switch (state)
         {
             case State.Wander:
-                if (dist < detectRange) { state = State.Chase; break; }
+                if (dist < detectRange)
+                {
+                    state = State.Chase;
+                    GameAudio.Play(Sfx.Roar, transform.position + Vector3.up * Height * 0.8f, Mathf.Clamp(Height / 12f, 0.5f, 1.3f), Mathf.Clamp(14f / Height, 0.7f, 1.3f));
+                    break;
+                }
                 wanderTimer -= dt;
                 Vector3 toPoint = wanderPoint - transform.position; toPoint.y = 0f;
                 if (wanderTimer <= 0f || toPoint.magnitude < 2f)
@@ -413,6 +418,17 @@ public class Titan : MonoBehaviour
         SnapToGround(dt);
         AnimateLegs(dt);
 
+        if (moving)
+        {
+            stepTimer -= dt * (state == State.Chase ? 1.8f : 1f);
+            if (stepTimer <= 0f)
+            {
+                stepTimer = 0.9f;
+                if (Camera.main != null && (Camera.main.transform.position - transform.position).sqrMagnitude < 150f * 150f)
+                    GameAudio.Play(Sfx.Footstep, transform.position, Mathf.Clamp(Height / 14f, 0.4f, 1.2f), Mathf.Clamp(14f / Height, 0.7f, 1.4f));
+            }
+        }
+
         if (clips != null)
         {
             bool attacking = state == State.Windup || state == State.Recover;
@@ -420,8 +436,11 @@ public class Titan : MonoBehaviour
         }
     }
 
+    float stepTimer;
+
     void DoHit()
     {
+        GameAudio.Play(Sfx.TitanSmash, transform.position + transform.forward * AttackReach, Mathf.Clamp(Height / 12f, 0.6f, 1.3f));
         Vector3 to = target.position - transform.position;
         float flat = new Vector2(to.x, to.z).magnitude;
         if (flat > AttackReach * 1.3f || target.position.y - transform.position.y > ArmHeight) return;
@@ -557,6 +576,8 @@ public class Titan : MonoBehaviour
         if (clips != null) clips.Stop();
         All.Remove(this);
         Killed?.Invoke(this);
+        GameAudio.Play(Sfx.Kill, transform.position + Vector3.up * Height * 0.8f, 1f);
+        GameVfx.Steam(transform.position + Vector3.up * Height * 0.5f, Height * 0.22f, 6f);
         StartCoroutine(FallRoutine());
     }
 
@@ -572,6 +593,8 @@ public class Titan : MonoBehaviour
             transform.rotation = Quaternion.Slerp(start, end, e * e);
             yield return null;
         }
+        GameAudio.Play(Sfx.Thud, transform.position, Mathf.Clamp(Height / 12f, 0.6f, 1.3f));
+        GameVfx.Burst(transform.position + Vector3.up * 0.5f, new Color(0.75f, 0.72f, 0.65f, 0.7f), 24, 7f, Height * 0.12f, 1.2f);
         yield return new WaitForSeconds(4f);
 
         Vector3 p0 = transform.position;
