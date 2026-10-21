@@ -188,6 +188,7 @@ public class ODMController : MonoBehaviour
 
         yaw = transform.eulerAngles.y;
         gas = maxGas;
+        controller.excludeLayers = 1 << 2; // titan (layer 2) không chặn/đẩy người chơi khi bay
 
         lineLeft = CreateRopeLine("RopeLine_Left");
         lineRight = CreateRopeLine("RopeLine_Right");
@@ -254,10 +255,11 @@ public class ODMController : MonoBehaviour
     // ================= GROUND CHECK =================
     void UpdateGrounded()
     {
-        Vector3 feet = transform.position + controller.center
-                     + Vector3.down * (controller.height * 0.5f - controller.radius + 0.1f);
-        isGrounded = Physics.CheckSphere(feet, controller.radius * 0.95f, groundLayer, QueryTriggerInteraction.Ignore)
-                     || controller.isGrounded;
+        // groundLayer có thể để trống trong scene -> dùng isGrounded của CharacterController + tia ngắn xuống chân
+        Vector3 c = transform.TransformPoint(controller.center);
+        float reach = controller.height * 0.5f * transform.lossyScale.y + 0.15f;
+        isGrounded = controller.isGrounded
+                     || (velocity.y <= 0.5f && Physics.Raycast(c, Vector3.down, reach, ~(1 << 2), QueryTriggerInteraction.Ignore));
     }
 
     // Khi đứng trên đất, dây tự nhả thêm theo khoảng cách (đi xa điểm neo thì dây dài ra).
@@ -517,6 +519,10 @@ public class ODMController : MonoBehaviour
 
         if (rightDown) TryFireHook(hookRight, hipOriginRight);
         if (rightUp)   hookRight.active = false;
+
+        // Nhả phím lúc đang tạm dừng thì sự kiện "nhả" bị bỏ lỡ -> kiểm tra theo trạng thái giữ phím
+        if (hookLeft.active && !(GameInput.GetKey(KeyCode.Q) || GameInput.GetMouseButton(0))) hookLeft.active = false;
+        if (hookRight.active && !(GameInput.GetKey(KeyCode.E) || GameInput.GetMouseButton(1))) hookRight.active = false;
 
         AutoReleaseCheck(hookLeft);
         AutoReleaseCheck(hookRight);

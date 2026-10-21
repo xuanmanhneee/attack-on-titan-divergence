@@ -13,7 +13,7 @@ public class Titan : MonoBehaviour
     public static event Action<Titan> Killed;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-    static void ClearStatics() { All.Clear(); Killed = null; ObstacleMask = 0; GroundSampler = null; }
+    static void ClearStatics() { All.Clear(); Killed = null; ObstacleMask = 0; GroundSampler = null; HasField = false; }
 
     // Layer của công trình mà titan phải tránh (đặt bởi bản đồ). 0 = không tránh.
     public static int ObstacleMask;
@@ -21,7 +21,11 @@ public class Titan : MonoBehaviour
     // Hàm cho biết độ cao mặt đất tại một vị trí (đặt bởi bản đồ). null = dùng Terrain.
     public static Func<Vector3, float> GroundSampler;
 
-    public static void ResetAll() { All.Clear(); }
+    // Vùng đi lại của titan (mặt phẳng XZ). Titan không được bước ra khỏi khu phố.
+    public static Rect Field;
+    public static bool HasField;
+
+    public static void ResetAll() { All.Clear(); ObstacleMask = 0; GroundSampler = null; HasField = false; }
 
     [Header("Movement")]
     public float walkSpeed = 2.5f;
@@ -450,7 +454,13 @@ public class Titan : MonoBehaviour
         transform.rotation = Quaternion.RotateTowards(transform.rotation, want, turnSpeed * dt);
 
         if (dir.magnitude < 2f) return; // đã sát mục tiêu, không đi xuyên qua
-        transform.position += transform.forward * speed * dt;
+        Vector3 np = transform.position + transform.forward * speed * dt;
+        if (HasField)
+        {
+            np.x = Mathf.Clamp(np.x, Field.xMin + 3f, Field.xMax - 3f);
+            np.z = Mathf.Clamp(np.z, Field.yMin + 3f, Field.yMax - 3f);
+        }
+        transform.position = np;
         moving = true;
     }
 

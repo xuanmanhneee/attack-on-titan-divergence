@@ -109,6 +109,8 @@ public class MangaMenu : MonoBehaviour
         briefStatus.text = "Sẵn sàng!";
     }
 
+    float inputLockUntil;
+
     public void ShowPause()
     {
         RefreshPauseKeys();
@@ -125,6 +127,7 @@ public class MangaMenu : MonoBehaviour
         int s = Mathf.RoundToInt(seconds);
         resultStats.text = "Titan hạ gục:  <color=" + RedHex + ">" + kills + "</color>\n" +
                            "Thời gian:  <color=" + RedHex + ">" + (s / 60).ToString("00") + ":" + (s % 60).ToString("00") + "</color>";
+        inputLockUntil = Time.unscaledTime + 0.7f; // chống bấm nhầm khi vừa chết/thắng
         ShowPage(Page.Result);
         MangaSfx.Slam();
     }
@@ -255,6 +258,7 @@ public class MangaMenu : MonoBehaviour
     {
         if (Current == Page.None) return;
         float dt = Time.unscaledDeltaTime;
+        if (Current == Page.Result && Time.unscaledTime < inputLockUntil) return;
 
         if (Current == Page.Briefing) { UpdateBriefing(dt); return; }
         if (capturing != null) { UpdateCapture(); return; }
@@ -352,6 +356,7 @@ public class MangaMenu : MonoBehaviour
     {
         GameSettings.Save();
         MangaSfx.Back();
+        if (returnPage == Page.Pause && pauseKeys != null) RefreshPauseKeys(); // phím vừa đổi phải hiện đúng
         ShowPage(returnPage);
     }
 

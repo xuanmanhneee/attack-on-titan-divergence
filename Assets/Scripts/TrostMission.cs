@@ -25,7 +25,7 @@ public class TrostMission : MonoBehaviour
     public float minSpawnDistance = 90f;
 
     [Header("Tiếp tế")]
-    public float scarceGasRegen = 14f;   // hồi gas rất chậm ngoài điểm tiếp tế
+    public float scarceGasRegen = 8f;    // hồi gas rất chậm ngoài điểm tiếp tế
     public float depotStock = 150f;
     public float depotFillRate = 70f;
     public float depotRegen = 3f;
@@ -36,6 +36,8 @@ public class TrostMission : MonoBehaviour
     GameManager gm;
     TrostMap map;
 
+    Health playerHealth;
+    public float depotHealRate = 15f;
     float delayTimer;
     bool waiting;
     float sealProgress;
@@ -206,6 +208,10 @@ public class TrostMission : MonoBehaviour
                 combat.Restock();
                 dep.restocked = true;
             }
+
+            // Điểm tiếp tế cũng băng bó: hồi dần máu khi đứng trong vùng
+            if (playerHealth == null) playerHealth = odm.GetComponent<Health>();
+            if (playerHealth != null && playerHealth.Current < playerHealth.maxHealth) playerHealth.Heal(depotHealRate * dt);
         }
     }
 

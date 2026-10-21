@@ -124,7 +124,11 @@ public class GameManager : MonoBehaviour
         yield return null;
         yield return null; // để màn hình chờ kịp hiện ra trước khi dựng (dựng thành phố gây khựng một nhịp)
 
-        if (trostMission) BuildTrost();
+        if (trostMission)
+        {
+            try { BuildTrost(); }
+            catch (System.Exception e) { Debug.LogError("[Trost] Dựng khu phố lỗi: " + e); }
+        }
         else StartWave(1);
         menu.SetProgress(0.75f, "Titan đang tiến vào khu phố...");
         yield return null;
@@ -161,7 +165,11 @@ public class GameManager : MonoBehaviour
         int mask = odm.hookableLayer.value;
         int layer = 3;
         for (int i = 0; i < 32; i++) if ((mask & (1 << i)) != 0) { layer = i; break; }
-        if (mask == 0) Debug.LogWarning("[Trost] hookableLayer đang trống, dùng layer 3.");
+        if (mask == 0)
+        {
+            Debug.LogWarning("[Trost] hookableLayer đang trống, dùng layer 3.");
+            odm.hookableLayer = 1 << layer; // để móc được nhà dù scene chưa gán layer
+        }
 
         // Tắt các khối thử nghiệm cũ trong scene
         foreach (var go in FindObjectsByType<GameObject>(FindObjectsSortMode.None))
@@ -171,6 +179,9 @@ public class GameManager : MonoBehaviour
         var map = TrostCity.Build(odm.transform.position, layer);
         Titan.ObstacleMask = 1 << layer;
         Titan.GroundSampler = p => map.GroundAt(p);
+        Titan.Field = map.floorRect;
+        Titan.HasField = true;
+        Physics.SyncTransforms(); // đăng ký collider nhà mới trước khi người chơi / titan quét vật lý
 
         mission = gameObject.AddComponent<TrostMission>();
         mission.Init(this, odm, combat, map);
@@ -286,6 +297,7 @@ public class GameManager : MonoBehaviour
     void ApplyState(bool stopped)
     {
         Time.timeScale = stopped ? 0f : 1f;
+        if (!stopped) Time.fixedDeltaTime = 0.02f; // TimeFocus có thể để lại fixedDeltaTime của chế độ làm chậm
         if (odm != null) odm.enabled = !stopped;
         Cursor.lockState = stopped ? CursorLockMode.None : CursorLockMode.Locked;
         Cursor.visible = stopped;
@@ -387,7 +399,7 @@ public class GameManager : MonoBehaviour
             {
                 if (t == null || t.Nape == null) continue;
                 Vector3 sp = cam.WorldToScreenPoint(t.Nape.position);
-                if (sp.z <= 0f || sp.z > 120f) continue;
+                if (sp.z <= 0f || sp.z > 120f || sp.x < 0f || sp.x > Screen.width || sp.y < 0f || sp.y > Screen.height) continue;
 
                 bool inRange = Vector3.Distance(cam.transform.position, t.Nape.position) <= combat.napeReach;
                 Color c = inRange ? (combat.CanKillNow ? new Color(1f, 0.9f, 0.2f) : new Color(1f, 0.55f, 0.1f))

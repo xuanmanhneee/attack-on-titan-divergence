@@ -7,6 +7,7 @@ public class GasHUD : MonoBehaviour
 {
     ODMController player;
     Image fill;
+    RectTransform fillRt;
     Text label;
     Text speedText;
 
@@ -53,9 +54,7 @@ public class GasHUD : MonoBehaviour
         var fRt = fill.rectTransform;
         fRt.anchorMin = new Vector2(0, 0); fRt.anchorMax = new Vector2(1, 1);
         fRt.offsetMin = new Vector2(3, 3); fRt.offsetMax = new Vector2(-3, -3);
-        fill.type = Image.Type.Filled;
-        fill.fillMethod = Image.FillMethod.Horizontal;
-        fill.fillOrigin = 0;
+        fillRt = fRt;
 
         label = MakeText("GasLabel", bg.transform, 20, TextAnchor.LowerLeft);
         label.rectTransform.anchoredPosition = new Vector2(0, 30);
@@ -72,7 +71,7 @@ public class GasHUD : MonoBehaviour
     {
         if (player == null) return;
         float g = player.GasNormalized;
-        fill.fillAmount = g;
+        fillRt.anchorMax = new Vector2(Mathf.Clamp01(g), 1f);
         fill.color = Color.Lerp(Low, Full, Mathf.InverseLerp(0.1f, 0.4f, g));
         label.text = "GAS " + Mathf.RoundToInt(g * 100f) + "%";
         speedText.text = player.Speed.ToString("F1") + " m/s";
