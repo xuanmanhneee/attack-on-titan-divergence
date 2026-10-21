@@ -166,6 +166,7 @@ public class ODMController : MonoBehaviour
     void OnDisable()
     {
         GameSettings.Changed -= ApplySettings;
+        GameAudio.SetLoops(0f, 0f);
     }
 
     // Cài đặt người chơi (menu Cài đặt) ghi đè lên các thông số trong Inspector
@@ -199,6 +200,7 @@ public class ODMController : MonoBehaviour
         float dt = Time.deltaTime;
 
         HandleLook();
+        UpdateAudio();
 
         aimTimer -= dt;
         if (aimTimer <= 0f)
@@ -234,6 +236,21 @@ public class ODMController : MonoBehaviour
     }
 
     // ================= LOOK =================
+    // Tiếng xì gas, gió theo tốc độ, cảnh báo gas thấp
+    float lastGas = -1f;
+    bool lowGasWarned;
+    void UpdateAudio()
+    {
+        if (lastGas < 0f) lastGas = gas;
+        float drop = lastGas - gas;   // gas giảm so với khung trước = đang xả
+        lastGas = gas;
+        GameAudio.SetLoops(drop > 0.0005f ? 1f : 0f, velocity.magnitude / Mathf.Max(1f, maxSpeed));
+
+        float g = gas / Mathf.Max(1f, maxGas);
+        if (g < 0.2f) { if (!lowGasWarned) { lowGasWarned = true; GameAudio.Play2D(Sfx.LowGas, 0.6f); } }
+        else if (g > 0.35f) lowGasWarned = false;
+    }
+
     void HandleLook()
     {
         yaw += GameInput.GetAxis("Mouse X") * mouseSensitivity;
@@ -328,6 +345,7 @@ public class ODMController : MonoBehaviour
                 hookRight.attached = false;
                 velocity = cameraTransform.forward * wallLaunchSpeed;
                 gas = Mathf.Max(0f, gas - wallLaunchGasCost);
+                GameAudio.Play2D(Sfx.GasBurst, 0.8f);
                 return;
             }
             velocity = Vector3.zero;
@@ -483,6 +501,7 @@ public class ODMController : MonoBehaviour
                 // Va mạnh vào tường: nảy ra. Dây neo gần chỗ va phải nhả, nếu không dây căng sẽ kéo lại gây cảm giác "dính".
                 float away = Mathf.Max(impact * bounceRestitution, bounceMinSpeed);
                 velocity = along + hit.normal * away;
+                GameAudio.Play(Sfx.Impact, hit.point, Mathf.Clamp01(impact / 25f) + 0.3f);
                 ReleaseHooksNear(hit.point);
             }
             else
@@ -557,6 +576,10 @@ public class ODMController : MonoBehaviour
         hook.anchorPoint = anchor;
         hook.ropeLength = Vector3.Distance(transform.position, anchor);
         hook.attached = false;
+
+        GameAudio.Play2D(Sfx.HookFire, 0.7f, Random.Range(0.95f, 1.08f));
+        GameAudio.Play(Sfx.HookHit, anchor, 0.9f, Random.Range(0.92f, 1.05f), Mathf.Min(0.35f, hook.ropeLength / 120f));
+        GameVfx.Burst(anchor, new Color(0.82f, 0.8f, 0.72f, 0.8f), 10, 4f, 0.5f, 0.6f);
 
         // Đang đứng đất: giật người lên không ngay lập tức (đỡ phải giữ Space mới rời đất được)
         if (groundHookYank && isGrounded && velocity.y <= 0.1f)

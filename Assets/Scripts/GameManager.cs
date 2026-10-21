@@ -31,6 +31,12 @@ public class GameManager : MonoBehaviour
 
     public State Current { get; private set; } = State.Title;
 
+    // HUD (MangaHud) đọc các giá trị này
+    public TrostMission Mission => mission;
+    public int Wave => wave;
+    public int TotalWaves => totalWaves;
+    public string Hint => hint;
+
     ODMController odm;
     TrostMission mission;
     PlayerCombat combat;
@@ -43,10 +49,8 @@ public class GameManager : MonoBehaviour
     string message = "";
     float messageTimer;
 
-    GUIStyle label, title, button, small;
-    float styleScale = -1f;
-
     MangaMenu menu;
+    MangaHud hud;
     static bool skipTitle;   // "Chơi lại" bỏ qua menu chính, "Về menu chính" thì không
     int kills;
     float playTime;
@@ -75,6 +79,8 @@ public class GameManager : MonoBehaviour
     {
         Time.timeScale = 1f;
         Titan.ResetAll();
+        GameAudio.Battle(false);
+        GameAudio.SetLoops(0f, 0f);
 
         odm = FindFirstObjectByType<ODMController>();
         cam = odm.cameraTransform != null ? odm.cameraTransform.GetComponent<Camera>() : Camera.main;
@@ -95,6 +101,7 @@ public class GameManager : MonoBehaviour
         RebuildHint();
 
         // Giao diện manga: menu chính -> màn hình chờ -> chơi. Thế giới được dựng sau khi bấm "Bắt đầu".
+        hud = MangaHud.Create(this, odm, combat, playerHealth, cam);
         menu = MangaMenu.Create();
         menu.Play += BeginLoading;
         menu.Resume += () => SetPaused(false);
@@ -132,6 +139,9 @@ public class GameManager : MonoBehaviour
         else StartWave(1);
         menu.SetProgress(0.75f, "Titan đang tiến vào khu phố...");
         yield return null;
+        GameAudio.Warmup();
+        menu.SetProgress(0.9f, "Chuẩn bị âm thanh...");
+        yield return null;
 
         while (Time.unscaledTime - start < minBriefingSeconds) yield return null;
 
@@ -146,6 +156,7 @@ public class GameManager : MonoBehaviour
         Current = State.Playing;
         ApplyState(false);
         menu.Hide();
+        GameAudio.Battle(true);
         Say(mission != null ? "Hạ gục titan! Gas cạn thì chạy tới cột sáng xanh để tiếp tế." : "Hạ gục hết titan!");
     }
 
@@ -283,6 +294,7 @@ public class GameManager : MonoBehaviour
     {
         Current = pause ? State.Paused : State.Playing;
         ApplyState(pause);
+        GameAudio.Duck(pause);
         if (pause) menu.ShowPause(); else menu.Hide();
     }
 
@@ -291,6 +303,7 @@ public class GameManager : MonoBehaviour
         if (Current != State.Playing && Current != State.Paused) return; // đã kết thúc rồi
         Current = s;
         ApplyState(true);
+        GameAudio.Battle(false);
         menu.ShowResult(s == State.Won, kills, playTime);
     }
 
@@ -336,131 +349,6 @@ public class GameManager : MonoBehaviour
     {
         message = m;
         messageTimer = 3f;
-    }
-
-    // ================= GIAO DIỆN (IMGUI) =================
-    void OnGUI()
-    {
-        if (odm == null) return;
-        float s = Screen.height / 1080f;
-        EnsureStyles(s);
-
-        if (Current == State.Playing) DrawHud(s); // các màn hình khác do MangaMenu (UGUI) vẽ
-    }
-
-    void EnsureStyles(float s)
-    {
-        if (Mathf.Approximately(styleScale, s) && label != null) return;
-        styleScale = s;
-        label = new GUIStyle(GUI.skin.label) { fontSize = Mathf.RoundToInt(26 * s) };
-        label.normal.textColor = Color.white;
-        title = new GUIStyle(GUI.skin.label) { fontSize = Mathf.RoundToInt(72 * s), alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold };
-        title.normal.textColor = Color.white;
-        button = new GUIStyle(GUI.skin.button) { fontSize = Mathf.RoundToInt(32 * s) };
-        small = new GUIStyle(GUI.skin.label) { fontSize = Mathf.RoundToInt(20 * s), alignment = TextAnchor.MiddleCenter };
-        small.normal.textColor = Color.white;
-    }
-
-    static void Box(Rect r, Color c)
-    {
-        Color old = GUI.color;
-        GUI.color = c;
-        GUI.DrawTexture(r, Texture2D.whiteTexture);
-        GUI.color = old;
-    }
-
-    void DrawHud(float s)
-    {
-        // Máu
-        Box(new Rect(30 * s, 30 * s, 420 * s, 26 * s), new Color(0, 0, 0, 0.55f));
-        Color hp = Color.Lerp(new Color(0.9f, 0.15f, 0.1f), new Color(0.3f, 0.9f, 0.3f), playerHealth.Normalized);
-        Box(new Rect(33 * s, 33 * s, 414 * s * playerHealth.Normalized, 20 * s), hp);
-        GUI.Label(new Rect(460 * s, 26 * s, 200 * s, 36 * s), "HP " + Mathf.CeilToInt(playerHealth.Current), label);
-
-        // Thông tin
-        string blades = combat.IsReloading ? "đang thay kiếm..." : Mathf.RoundToInt(combat.Durability) + "%";
-        string waveInfo = mission != null ? "Titan còn: " + Titan.All.Count : "Đợt " + wave + "/" + totalWaves + "   |   Titan còn: " + Titan.All.Count;
-        GUI.Label(new Rect(30 * s, 66 * s, 700 * s, 36 * s), waveInfo, label);
-        GUI.Label(new Rect(30 * s, 100 * s, 700 * s, 36 * s), "Kiếm: " + blades + "   (dự phòng: " + combat.Spare + ")", label);
-
-        string speedMsg = combat.CanKillNow ? "ĐỦ TỐC ĐỘ CHÉM GÁY" : "Chưa đủ tốc độ chém gáy (" + combat.killSpeed.ToString("F0") + " m/s)";
-        Color old = label.normal.textColor;
-        label.normal.textColor = combat.CanKillNow ? new Color(1f, 0.9f, 0.2f) : new Color(1f, 1f, 1f, 0.7f);
-        GUI.Label(new Rect(30 * s, 134 * s, 800 * s, 36 * s), speedMsg, label);
-        var focus = odm.GetComponent<TimeFocus>();
-        if (focus != null && focus.Active)
-            GUI.Label(new Rect(30 * s, 168 * s, 800 * s, 36 * s), "TẬP TRUNG (thời gian chậm)", label);
-        label.normal.textColor = old;
-
-        // Chấm đỏ đánh dấu gáy titan
-        if (cam != null)
-        {
-            foreach (Titan t in Titan.All)
-            {
-                if (t == null || t.Nape == null) continue;
-                Vector3 sp = cam.WorldToScreenPoint(t.Nape.position);
-                if (sp.z <= 0f || sp.z > 120f || sp.x < 0f || sp.x > Screen.width || sp.y < 0f || sp.y > Screen.height) continue;
-
-                bool inRange = Vector3.Distance(cam.transform.position, t.Nape.position) <= combat.napeReach;
-                Color c = inRange ? (combat.CanKillNow ? new Color(1f, 0.9f, 0.2f) : new Color(1f, 0.55f, 0.1f))
-                                  : new Color(1f, 0.2f, 0.15f, 0.7f);
-                float size = (inRange ? 20f : 10f) * s;
-                Box(new Rect(sp.x - size / 2f, Screen.height - sp.y - size / 2f, size, size), c);
-            }
-        }
-
-        if (mission != null) DrawMission(s);
-
-        // Thông báo giữa màn hình
-        if (messageTimer > 0f)
-        {
-            Color mc = title.normal.textColor;
-            title.normal.textColor = new Color(1f, 1f, 1f, Mathf.Clamp01(messageTimer));
-            int fs = title.fontSize; title.fontSize = Mathf.RoundToInt(40 * s);
-            GUI.Label(new Rect(0, 160 * s, Screen.width, 80 * s), message, title);
-            title.fontSize = fs; title.normal.textColor = mc;
-        }
-
-        // Gợi ý phím
-        GUI.Label(new Rect(Screen.width / 2f - 450 * s, Screen.height - 50 * s, 900 * s, 36 * s),
-                  hint,
-                  new GUIStyle(label) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(20 * s) });
-    }
-
-    void DrawMission(float s)
-    {
-        // Mục tiêu ở giữa phía trên
-        var head = new GUIStyle(label) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(28 * s), fontStyle = FontStyle.Bold };
-        Box(new Rect(Screen.width / 2f - 480 * s, 20 * s, 960 * s, 44 * s), new Color(0, 0, 0, 0.45f));
-        GUI.Label(new Rect(Screen.width / 2f - 480 * s, 20 * s, 960 * s, 44 * s), mission.ObjectiveText, head);
-
-        if (cam == null) return;
-
-        // Đánh dấu điểm tiếp tế, cổng
-        foreach (var mk in mission.Markers)
-        {
-            float dist = Vector3.Distance(cam.transform.position, mk.pos);
-            string txt = mk.label + "  " + Mathf.RoundToInt(dist) + " m";
-            Vector3 sp = cam.WorldToScreenPoint(mk.pos + Vector3.up * 8f);
-
-            Color old = GUI.color;
-            if (sp.z > 0f)
-            {
-                float x = Mathf.Clamp(sp.x, 80 * s, Screen.width - 80 * s);
-                float y = Mathf.Clamp(Screen.height - sp.y, 90 * s, Screen.height - 90 * s);
-                Box(new Rect(x - 8 * s, y - 8 * s, 16 * s, 16 * s), mk.color);
-                small.normal.textColor = mk.color;
-                GUI.Label(new Rect(x - 120 * s, y - 38 * s, 240 * s, 26 * s), txt, small);
-            }
-            else
-            {
-                // Ở sau lưng: hiện ở cạnh màn hình phía bên cần quay
-                bool right = cam.transform.InverseTransformPoint(mk.pos).x >= 0f;
-                small.normal.textColor = mk.color;
-                GUI.Label(new Rect(right ? Screen.width - 300 * s : 20 * s, Screen.height * 0.5f, 280 * s, 26 * s), (right ? txt + "  >>" : "<<  " + txt), small);
-            }
-            GUI.color = old;
-        }
-        small.normal.textColor = Color.white;
+        if (hud != null) hud.Toast(m);
     }
 }
