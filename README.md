@@ -29,9 +29,11 @@ A work-in-progress Unity fan game exploring fast, momentum-based ODM gear moveme
 | Bay sát tường | Khi đang có dây, hướng camera dọc theo tường để giữ đà và lướt qua góc |
 | Đáp xuống mái | `WASD` để chạy dù vẫn giữ móc; giữ `Space` để dây kéo rời mái trở lại |
 | Tiếp đất | Vận tốc được ghì một nhịp theo lực đáp để tránh bị quán tính hất khỏi mái |
+| Giữ `S` khi tiếp đất | Ghì/cuộn người mạnh hơn; trong `0.2 giây` đầu phím này chưa làm nhân vật chạy lùi |
 | `F` / chuột giữa | Chém; gáy trong tầm và góc nhìn sẽ hạ Titan, không cần tốc độ tối thiểu |
 | `R` | Thay kiếm |
 | `T` | Bật/tắt hỗ trợ thời gian: chậm khi đang tìm neo, chậm sâu với một móc, nhanh lại khi đủ hai móc |
+| Điểm tiếp tế xanh | Nạp lại gas và kiếm; gas không tự hồi ở nơi khác |
 | `Esc` | Tạm dừng |
 | `Shift` (khi đang bám tường) | Bật ra khỏi tường theo hướng nhìn |
 

@@ -990,8 +990,10 @@ MonoBehaviour:
   groundGasDrainFactor: 0.5
   groundAccel: 45
   gravity: -12
-  landingMomentumRetention: 0.45
+  landingMomentumRetention: 0.65
+  bracedLandingMomentumRetention: 0.25
   landingBrakeMinAirTime: 0.08
+  landingBrakeInputWindow: 0.2
   airControl: 6
   airControlMaxSpeed: 8
   airControlRequiresGas: 1
@@ -1032,9 +1034,8 @@ MonoBehaviour:
   dualHookGasMultiplier: 1.3
   dualHookReelMultiplier: 1.25
   dualHookMaxSpeedMultiplier: 1.18
-  maxGas: 140
+  maxGas: 500
   gasDrain: 12
-  gasRegen: 40
   wallGlideAssist: 1
   wallGlideMomentum: 0.55
   wallSeparationSpeed: 2.5
