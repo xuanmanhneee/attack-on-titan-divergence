@@ -463,24 +463,29 @@ public class Titan : MonoBehaviour
         transform.rotation = Quaternion.RotateTowards(transform.rotation, want, turnSpeed * dt);
     }
 
+
     void SnapToGround(float dt)
     {
         if (GroundSampler != null)
         {
             Vector3 q = transform.position;
             float gy = GroundSampler(q);
-            q.y = Mathf.Abs(q.y - gy) > 1f ? gy : Mathf.Lerp(q.y, gy, 10f * dt); // lệch nhiều thì đặt thẳng xuống đất, không trôi từ từ
+            q.y = Mathf.Abs(q.y - gy) > 1f
+                ? gy
+                : Mathf.Lerp(q.y, gy, 10f * dt);
             transform.position = q;
             return;
         }
 
         var terr = Terrain.activeTerrain;
         if (terr == null) return;
+
         Vector3 p = transform.position;
-        float gy = terr.SampleHeight(p) + terr.transform.position.y;
-        p.y = Mathf.Lerp(p.y, gy, 10f * dt);
+        float terrainY = terr.SampleHeight(p) + terr.transform.position.y;
+        p.y = Mathf.Lerp(p.y, terrainY, 10f * dt);
         transform.position = p;
     }
+
 
     // ================= HOẠT ẢNH ĐƠN GIẢN =================
     void AnimateLegs(float dt)

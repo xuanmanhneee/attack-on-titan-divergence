@@ -882,7 +882,7 @@ CapsuleCollider:
   m_LayerOverridePriority: 0
   m_IsTrigger: 0
   m_ProvidesContacts: 0
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 2
   m_Radius: 0.5
   m_Height: 2
@@ -984,26 +984,33 @@ MonoBehaviour:
   fovSpeedRef: 40
   groundLayer:
     serializedVersion: 2
-    m_Bits: 0
-  walkSpeed: 4
-  groundBoostSpeed: 12
+    m_Bits: 9
+  walkSpeed: 9
+  groundBoostSpeed: 17
   groundGasDrainFactor: 0.5
-  groundAccel: 30
+  groundAccel: 45
   gravity: -12
-  airControl: 14
-  airControlMaxSpeed: 12
+  landingMomentumRetention: 0.45
+  landingBrakeMinAirTime: 0.08
+  airControl: 6
+  airControlMaxSpeed: 8
+  airControlRequiresGas: 1
   hookableLayer:
     serializedVersion: 2
     m_Bits: 8
-  maxHookRange: 50
-  assistRadius: 2.5
+  maxHookRange: 75
+  assistRadius: 0.45
+  toggleHooks: 0
   ropeDamping: 0.998
-  constraintIterations: 3
-  reelForce: 35
-  reelMaxSpeed: 18
+  cornerMomentumRetention: 0.35
+  constraintIterations: 6
+  maxSimulationStep: 0.008333334
+  reelForce: 30
+  reelMaxSpeed: 15
+  reelSpeed: 10
   attachDistance: 1.2
   requireReelToAttach: 1
-  smartAim: 1
+  smartAim: 0
   smartAimAngle: 35
   smartAimRings: 2
   smartAimSamples: 8
@@ -1012,18 +1019,25 @@ MonoBehaviour:
   aimHeightWeight: 0.6
   aimMomentumWeight: 0.5
   autoTakeUpSlack: 1
-  autoReel: 1
+  slackTakeUpSpeed: 60
+  autoReel: 0
   autoReelStrength: 0.6
   autoReelLookDot: 0.6
-  autoRelease: 1
+  autoRelease: 0
   autoReleaseMinSpeed: 10
   autoReleaseBehindDot: -0.2
-  gasForce: 32
-  steerRate: 130
-  maxSpeed: 45
+  gasForce: 26
+  steerRate: 55
+  maxSpeed: 34
+  dualHookGasMultiplier: 1.3
+  dualHookReelMultiplier: 1.25
+  dualHookMaxSpeedMultiplier: 1.18
   maxGas: 140
   gasDrain: 12
   gasRegen: 40
+  wallGlideAssist: 1
+  wallGlideMomentum: 0.55
+  wallSeparationSpeed: 2.5
   ropeMaterial: {fileID: 0}
   ropeWidth: 0.03
   showDebugGizmos: 1
@@ -1621,7 +1635,7 @@ BoxCollider:
   m_LayerOverridePriority: 0
   m_IsTrigger: 0
   m_ProvidesContacts: 0
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 3
   m_Size: {x: 1, y: 1, z: 1}
   m_Center: {x: 0, y: 0, z: 0}
@@ -1733,7 +1747,7 @@ BoxCollider:
   m_LayerOverridePriority: 0
   m_IsTrigger: 0
   m_ProvidesContacts: 0
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 3
   m_Size: {x: 1, y: 1, z: 1}
   m_Center: {x: 0, y: 0, z: 0}
