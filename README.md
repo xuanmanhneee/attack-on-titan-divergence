@@ -8,10 +8,10 @@ A work-in-progress Unity fan game exploring fast, momentum-based ODM gear moveme
 - Dual left/right grappling hooks
 - Rope reeling and aerial movement
 - Gas-powered acceleration and steering
-- Smart aim, automatic slack take-up, and optional assisted release
+- Manual dual-hook aiming with momentum-preserving rope constraints
 - Dynamic crosshair feedback for valid hook targets
 - Titan placeholder (dựng bằng code) với AI đuổi và đập, điểm yếu ở gáy
-- Chém bằng kiếm: chém gáy khi đủ tốc độ để hạ gục, kiếm bị mòn và phải thay
+- Chém bằng kiếm: áp sát và ngắm đúng gáy để hạ gục, kiếm bị mòn và phải thay
 - Đợt titan, máu người chơi, thắng/thua, tạm dừng
 - HUD: máu, gas, tốc độ, độ bền kiếm
 - Universal Render Pipeline (URP)
@@ -20,13 +20,18 @@ A work-in-progress Unity fan game exploring fast, momentum-based ODM gear moveme
 
 | Input | Action |
 | --- | --- |
-| `Q` | Fire/hold the left hook |
-| `E` | Fire/hold the right hook |
-| `Space` | Reel the rope in strongly |
-| `Shift` | Use gas while airborne or attached |
-| `F` / chuột giữa | Chém |
+| `WASD` | Move on the ground (`Shift` raises it to a gas-powered sprint) |
+| Giữ chuột trái | Fire and hold the left hook; release to detach |
+| Giữ chuột phải | Fire and hold the right hook; release to detach |
+| `Space` | Manually shorten active ropes; the spool only removes harmless slack automatically |
+| `Shift` | Use gas in the exact camera direction; with one hook, turn the camera to carve a smooth arc |
+| Hai dây + `Space` + `Shift` | Cú phóng kép: lực kéo/gas mạnh hơn và trần tốc độ cao hơn |
+| Bay sát tường | Khi đang có dây, hướng camera dọc theo tường để giữ đà và lướt qua góc |
+| Đáp xuống mái | `WASD` để chạy dù vẫn giữ móc; giữ `Space` để dây kéo rời mái trở lại |
+| Tiếp đất | Vận tốc được ghì một nhịp theo lực đáp để tránh bị quán tính hất khỏi mái |
+| `F` / chuột giữa | Chém; gáy trong tầm và góc nhìn sẽ hạ Titan, không cần tốc độ tối thiểu |
 | `R` | Thay kiếm |
-| `T` | Bật/tắt làm chậm thời gian khi ở trên không |
+| `T` | Bật/tắt hỗ trợ thời gian: chậm khi đang tìm neo, chậm sâu với một móc, nhanh lại khi đủ hai móc |
 | `Esc` | Tạm dừng |
 | `Shift` (khi đang bám tường) | Bật ra khỏi tường theo hướng nhìn |
 

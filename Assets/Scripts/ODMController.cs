@@ -1,7 +1,7 @@
 using UnityEngine;
 
 // ODM Gear Controller - v3 (góc nhìn thứ nhất, có lớp hỗ trợ tự động)
-// Q = bắn/giữ móc trái, E = bắn/giữ móc phải (nhả phím = thả dây)
+// Chuột trái = móc trái, chuột phải = móc phải (giữ để duy trì, thả để nhả dây)
 // Space = thu dây MẠNH, Shift = gas (khi ở trên không hoặc đang móc)
 // Tự động (có công tắc): smart aim, rút dây chùng, thu dây nhẹ khi nhìn về phía móc, tự nhả đúng lúc.
 // Mọi con số là điểm khởi đầu, cần tự tune khi chơi thử.
@@ -22,31 +22,38 @@ public class ODMController : MonoBehaviour
 
     [Header("Ground")]
     public LayerMask groundLayer;
-    public float walkSpeed = 4f;
-    public float groundBoostSpeed = 12f;
+    public float walkSpeed = 9f;
+    public float groundBoostSpeed = 17f;
     public float groundGasDrainFactor = 0.5f;
-    public float groundAccel = 30f;
+    public float groundAccel = 45f;
     public float gravity = -20f;
+    [Range(0f, 1f)] public float landingMomentumRetention = 0.45f;
+    public float landingBrakeMinAirTime = 0.08f;
 
     [Header("Air")]
-    public float airControl = 14f;
-    public float airControlMaxSpeed = 12f;
+    public float airControl = 6f;
+    public float airControlMaxSpeed = 8f;
+    public bool airControlRequiresGas = true;
 
     [Header("Hook")]
     public LayerMask hookableLayer;
-    public float maxHookRange = 40f;
-    public float assistRadius = 2.5f;
+    public float maxHookRange = 75f;
+    public float assistRadius = 0.45f;
+    public bool toggleHooks = false;
     public float ropeDamping = 0.998f;
-    public int constraintIterations = 3;
+    [Range(0f, 1f)] public float cornerMomentumRetention = 0.35f;
+    public int constraintIterations = 6;
+    public float maxSimulationStep = 0.008333334f;
 
     [Header("Reel")]
-    public float reelForce = 35f;
-    public float reelMaxSpeed = 18f;
+    public float reelForce = 30f;
+    public float reelMaxSpeed = 15f;
+    public float reelSpeed = 10f;
     public float attachDistance = 1.2f;
     public bool requireReelToAttach = true;
 
     [Header("Smart Assist - Aim")]
-    public bool smartAim = true;           // tia thẳng trượt thì quét hình nón tìm điểm tốt nhất
+    public bool smartAim = false;          // manual ODM: chỉ móc đúng nơi người chơi ngắm
     public float smartAimAngle = 35f;      // nửa góc của nón quét (độ)
     public int smartAimRings = 2;          // số vòng quét
     public int smartAimSamples = 8;        // số tia mỗi vòng (tổng tia = rings * samples)
@@ -56,33 +63,37 @@ public class ODMController : MonoBehaviour
     public float aimMomentumWeight = 0.5f; // ưu tiên điểm nằm theo hướng đang bay
 
     [Header("Smart Assist - Rope")]
-    public bool autoTakeUpSlack = true;    // dây tự rút theo khoảng cách ngắn nhất đã đạt, không bao giờ chùng
-    public bool autoReel = true;           // nhìn về phía móc thì dây tự kéo nhẹ
+    public bool autoTakeUpSlack = true;    // tang cuốn giữ dây căng; không tạo lực kéo hay tự chọn hướng
+    public float slackTakeUpSpeed = 60f;
+    public bool autoReel = false;          // manual ODM: nhìn về móc không tự kéo
     public float autoReelStrength = 0.6f;  // 0..1, so với kéo mạnh bằng Space
     public float autoReelLookDot = 0.6f;   // dot(hướng nhìn, hướng tới móc) bắt đầu kéo từ mức này
-    public bool autoRelease = true;       // tự nhả khi đã vượt qua điểm neo và đang bay lên (mặc định tắt)
+    public bool autoRelease = false;       // chỉ nhả khi người chơi thả nút móc
     public float autoReleaseMinSpeed = 10f;
     public float autoReleaseBehindDot = -0.2f; // điểm neo nằm sau lưng tới mức này thì nhả (âm = sau lưng)
 
     [Header("Smart Assist - Dễ chơi hơn")]
-    public bool reelOnlyWhenApproaching = true;   // Space không kéo khi bạn đang bay ra xa điểm neo (không bị hãm đà)
+    public bool reelOnlyWhenApproaching = false;  // manual ODM: Space luôn có quyền thu dây
     public float reelAwayThreshold = 2f;          // bay ra xa nhanh hơn mức này (m/s) thì Space ngừng kéo
     public bool autoReleaseWhileReeling = true;   // vẫn tự nhả dây khi vượt qua điểm neo kể cả đang giữ Space
 
     [Header("Smart Assist - Neo cao (đu được lên cao)")]
-    public bool liftAnchorToRoof = true;        // bắn trúng tường nhà thì điểm neo được nâng lên gần mái nhà
+    public bool liftAnchorToRoof = false;       // manual ODM: neo nằm đúng tại điểm bắn trúng
     public float liftMaxHeight = 16f;           // nâng tối đa bao nhiêu mét so với chỗ ngắm trúng
     public float liftRoofMargin = 0.6f;         // chừa cách mép mái
     public float liftSkipIfAbovePlayer = 8f;   // điểm ngắm đã cao hơn người chơi mức này thì không nâng nữa
     public float liftWallMaxNormalY = 0.35f;    // chỉ nâng khi trúng mặt tường (pháp tuyến gần nằm ngang)
-    public bool groundHookYank = true;          // bắn móc khi đang đứng đất: bị giật lên không ngay, khỏi phải nhấn Space
+    public bool groundHookYank = false;         // bắn móc không tự tạo vận tốc
     public float groundHookYankSpeed = 10f;
     public float swingKeepSpeed = 14f;          // đu nhanh hơn mức này thì lướt sát đất không bị hãm như đang đi bộ
 
     [Header("Gas")]
-    public float gasForce = 32f;
-    public float steerRate = 130f;
-    public float maxSpeed = 45f;
+    public float gasForce = 26f;
+    public float steerRate = 55f;
+    public float maxSpeed = 34f;
+    public float dualHookGasMultiplier = 1.3f;
+    public float dualHookReelMultiplier = 1.25f;
+    public float dualHookMaxSpeedMultiplier = 1.18f;
     public float maxGas = 140f;
     public float gasDrain = 12f;
     public float gasRegen = 40f;
@@ -91,11 +102,9 @@ public class ODMController : MonoBehaviour
     public float gasRegenDelay = 1f;            // phải ngừng dùng Shift bấy nhiêu giây mới bắt đầu hồi
 
     [Header("Wall Collision")]
-    public float bounceRestitution = 0.45f;   // 0 = trượt dọc tường, 1 = nảy lại nguyên tốc độ
-    public float bounceMinSpeed = 4f;         // tốc độ văng ra tối thiểu khi va mạnh
-    public float hardImpactSpeed = 7f;        // va nhanh hơn mức này: nảy ra và nhả dây gần chỗ va
-    public float anchorReleaseRadius = 8f;    // nhả móc có điểm neo trong bán kính này quanh chỗ va
-    public float attachMaxImpactSpeed = 6f;   // chỉ bám tường khi chạm nhẹ (đang giữ Space)
+    public bool wallGlideAssist = true;
+    [Range(0f, 1f)] public float wallGlideMomentum = 0.55f;
+    public float wallSeparationSpeed = 2.5f;
 
     [Header("Wall Launch")]
     public float wallLaunchSpeed = 16f;    // tốc độ bật ra khỏi tường khi nhấn Shift lúc đang bám
@@ -112,27 +121,24 @@ public class ODMController : MonoBehaviour
     public float GasNormalized => gas / maxGas;
     public float Speed => velocity.magnitude;
     public bool IsGrounded => isGrounded;
+    public int ActiveHookCount => (hookLeft.active ? 1 : 0) + (hookRight.active ? 1 : 0);
     public void RefillGas(float amount) { gas = Mathf.Min(maxGas, gas + amount); }
-
-    // Cho hệ thống chiến đấu (lướt tới gáy titan) cộng thêm vận tốc
-    public void AddVelocity(Vector3 v) { velocity += v; }
 
     private CharacterController controller;
     private Camera cam;
 
     private Vector3 velocity;
     private bool isGrounded;
+    private float airborneTime;
     private float gas;
 
     private float pitch;
     private float yaw;
 
-    private float logTimer = 0f;
-    private const float LOG_INTERVAL = 0.15f;
-
     private float gasIdle = 0f;
     private float aimTimer = 0f;
     private const float AIM_INTERVAL = 0.05f; // cập nhật chấm ngắm 20 lần/giây cho nhẹ
+    private readonly Collider[] groundHits = new Collider[16];
 
     private class HookState
     {
@@ -174,17 +180,46 @@ public class ODMController : MonoBehaviour
         }
 
         HandleHookInput();
+
+        // CharacterController không có fixed simulation riêng. Chia frame dài thành các bước nhỏ
+        // để gravity và rope constraint cho cùng kết quả ở các mức FPS khác nhau.
+        float remaining = Mathf.Min(dt, 0.1f);
+        float stepLimit = Mathf.Max(0.001f, maxSimulationStep);
+        while (remaining > 0.000001f)
+        {
+            float step = Mathf.Min(remaining, stepLimit);
+            SimulateMovement(step);
+            controller.Move(velocity * step);
+            remaining -= step;
+        }
+
+        UpdateFov(dt);
+        UpdateRopeVisuals();
+    }
+
+    void SimulateMovement(float dt)
+    {
+        bool wasGrounded = isGrounded;
         UpdateGrounded();
 
+        if (!isGrounded)
+        {
+            airborneTime += dt;
+        }
+        else
+        {
+            if (!wasGrounded && airborneTime >= landingBrakeMinAirTime)
+                ApplyLandingBrake();
+            airborneTime = 0f;
+        }
+
         bool hooked = hookLeft.active || hookRight.active;
-
-        // Đang đứng trên đất: mặt đất đỡ người, dây không được phép kéo lê như con lắc.
-        // Chỉ chuyển sang chế độ dây (AirMovement) khi: đang thu dây bằng Space, hoặc đã bám vào bề mặt.
         bool standing = isGrounded && velocity.y <= 0.1f;
-        bool swingingFast = hooked && velocity.sqrMagnitude > swingKeepSpeed * swingKeepSpeed;
-        bool ropeTakesOver = hooked && (GameInput.GetKey(KeyCode.Space) || IsAttached(hookLeft) || IsAttached(hookRight) || swingingFast);
 
-        if (standing && !ropeTakesOver)
+        // Chạm đất hoặc mái thì ưu tiên chạy, kể cả vẫn đang giữ móc. Dây nhả thêm
+        // theo bước chân và chỉ tiếp quản trở lại khi người chơi chủ động thu bằng Space.
+        bool wantsRopeMovement = hooked && GameInput.GetKey(KeyCode.Space);
+        if (standing && !wantsRopeMovement)
         {
             LoosenRope(hookLeft);
             LoosenRope(hookRight);
@@ -192,11 +227,21 @@ public class ODMController : MonoBehaviour
         }
         else
             AirMovement(dt, hooked);
+    }
 
-        UpdateFov(dt);
-        UpdateRopeVisuals();
+    void ApplyLandingBrake()
+    {
+        Vector3 flat = Vector3.ProjectOnPlane(velocity, Vector3.up);
+        float speed = flat.magnitude;
+        if (speed < 0.1f) return;
 
-        controller.Move(velocity * dt);
+        // Cú đáp chậm chỉ ghì nhẹ; cú đáp tốc độ ODM giữ ít đà hơn để không bị
+        // hất văng khỏi mái ngay sau khi chân vừa chạm bề mặt.
+        float impact = Mathf.InverseLerp(walkSpeed, maxSpeed, speed);
+        float retention = Mathf.Lerp(0.8f, landingMomentumRetention, impact);
+        flat *= retention;
+        velocity.x = flat.x;
+        velocity.z = flat.z;
     }
 
     // ================= LOOK =================
@@ -221,10 +266,24 @@ public class ODMController : MonoBehaviour
     // ================= GROUND CHECK =================
     void UpdateGrounded()
     {
-        Vector3 feet = transform.position + controller.center
-                     + Vector3.down * (controller.height * 0.5f - controller.radius + 0.1f);
-        isGrounded = Physics.CheckSphere(feet, controller.radius * 0.95f, groundLayer, QueryTriggerInteraction.Ignore)
-                     || controller.isGrounded;
+        Vector3 scale = transform.lossyScale;
+        float worldHeight = controller.height * Mathf.Abs(scale.y);
+        float worldRadius = controller.radius * Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.z));
+        Vector3 feet = transform.TransformPoint(controller.center)
+                     + Vector3.down * (worldHeight * 0.5f - worldRadius + 0.1f);
+        bool sphereGrounded = false;
+        int count = Physics.OverlapSphereNonAlloc(feet, worldRadius * 0.95f, groundHits,
+                                                  groundLayer, QueryTriggerInteraction.Ignore);
+        for (int i = 0; i < count; i++)
+        {
+            Collider hit = groundHits[i];
+            if (hit != null && !hit.transform.IsChildOf(transform))
+            {
+                sphereGrounded = true;
+                break;
+            }
+        }
+        isGrounded = sphereGrounded || controller.isGrounded;
     }
 
     // Khi đứng trên đất, dây tự nhả thêm theo khoảng cách (đi xa điểm neo thì dây dài ra).
@@ -258,17 +317,7 @@ public class ODMController : MonoBehaviour
         velocity.y = -2f;
 
         if (boosting)
-        {
             gas = Mathf.Max(0f, gas - gasDrain * groundGasDrainFactor * dt);
-
-            logTimer += dt;
-            if (logTimer >= LOG_INTERVAL)
-            {
-                float currentSpeed = new Vector2(velocity.x, velocity.z).magnitude;
-                Debug.Log($"<color=#55ff55>[GAS - GROUND]</color> Speed: {currentSpeed:F1} m/s (Target: {speed:F1} m/s) | Gas: {gas:F0}/{maxGas}");
-                logTimer = 0f;
-            }
-        }
         else
             gas = Mathf.Min(maxGas, gas + gasRegen * dt);
     }
@@ -276,6 +325,8 @@ public class ODMController : MonoBehaviour
     // ================= AIR MOVEMENT =================
     void AirMovement(float dt, bool hooked)
     {
+        bool dualHooked = hookLeft.active && hookRight.active;
+        float speedLimit = maxSpeed * (dualHooked ? dualHookMaxSpeedMultiplier : 1f);
         bool boosting = GameInput.GetKey(KeyCode.LeftShift) && gas > 0f;
         if (boosting) gasIdle = 0f;
         else
@@ -284,25 +335,10 @@ public class ODMController : MonoBehaviour
             if (gasIdle >= gasRegenDelay) gas = Mathf.Min(maxGas, gas + airGasRegen * dt);
         }
 
-        if (hooked && (IsAttached(hookLeft) || IsAttached(hookRight)))
-        {
-            // Đang bám tường: nhấn Shift để bật ra theo hướng nhìn (thoát trạng thái dính tường)
-            if (GameInput.GetKeyDown(KeyCode.LeftShift) && gas > 0f)
-            {
-                hookLeft.attached = false;
-                hookRight.attached = false;
-                velocity = cameraTransform.forward * wallLaunchSpeed;
-                gas = Mathf.Max(0f, gas - wallLaunchGasCost);
-                return;
-            }
-            velocity = Vector3.zero;
-            return;
-        }
-
         velocity.y += gravity * dt;
 
         Vector3 wish = GetWishDirection();
-        if (wish.sqrMagnitude > 0.0001f)
+        if ((!airControlRequiresGas || boosting) && wish.sqrMagnitude > 0.0001f)
         {
             Vector3 wishDir = wish.normalized;
             float along = Vector3.Dot(new Vector3(velocity.x, 0f, velocity.z), wishDir);
@@ -312,59 +348,96 @@ public class ODMController : MonoBehaviour
 
         if (GameInput.GetKey(KeyCode.LeftShift) && gas > 0f)
         {
-            float currentSpeed = velocity.magnitude;
-            if (currentSpeed > 0.5f)
+            // Một quy tắc duy nhất: gas luôn đẩy theo camera. Dây chỉ giới hạn bán kính,
+            // nên nhìn sang bên khi đang bám một móc sẽ tạo cung bẻ hướng dễ đoán.
+            Vector3 gasDirection = cameraTransform.forward.normalized;
+
+            // Uốn quỹ đạo mượt theo camera thay vì đổi hướng vận tốc tức thời.
+            // A/D vẫn bổ sung một lượng air control nhỏ ở khối phía trên.
+            float speedBeforeSteer = velocity.magnitude;
+            if (steerRate > 0f && speedBeforeSteer > 0.5f)
             {
-                velocity = Vector3.RotateTowards(velocity, cameraTransform.forward * currentSpeed,
-                                                 steerRate * Mathf.Deg2Rad * dt, 0f);
+                velocity = Vector3.RotateTowards(velocity,
+                                                 gasDirection * speedBeforeSteer,
+                                                 steerRate * Mathf.Deg2Rad * dt,
+                                                 0f);
             }
 
-            velocity += cameraTransform.forward * gasForce * dt;
+            float gasMultiplier = dualHooked ? dualHookGasMultiplier : 1f;
+            velocity += gasDirection * gasForce * gasMultiplier * dt;
             gas = Mathf.Max(0f, gas - gasDrain * (hooked ? hookedGasDrainFactor : 1f) * dt);
 
-            if (velocity.magnitude > maxSpeed)
-                velocity = velocity.normalized * maxSpeed;
+            if (velocity.magnitude > speedLimit)
+                velocity = velocity.normalized * speedLimit;
         }
 
         if (!hooked) return;
 
-        // Rút dây chùng: độ dài dây chỉ giảm theo khoảng cách ngắn nhất đã đạt
+        // Tang cuốn thụ động chỉ lấy phần dây chùng. Nó không rút ngắn hơn khoảng cách
+        // hiện tại nên không tạo lực và không điều khiển thay người chơi.
         if (autoTakeUpSlack)
         {
-            TakeUpSlack(hookLeft);
-            TakeUpSlack(hookRight);
+            TakeUpSlack(hookLeft, dt);
+            TakeUpSlack(hookRight, dt);
         }
 
         // Thu dây: Space = kéo mạnh; không bấm thì kéo nhẹ nếu đang nhìn về phía móc
         bool strong = GameInput.GetKey(KeyCode.Space);
-        ReelPull(hookLeft, dt, strong);
-        ReelPull(hookRight, dt, strong);
+        float reelMultiplier = dualHooked ? dualHookReelMultiplier : 1f;
+        ReelPull(hookLeft, dt, strong, reelMultiplier);
+        ReelPull(hookRight, dt, strong, reelMultiplier);
 
-        if (velocity.magnitude > maxSpeed)
-            velocity = velocity.normalized * maxSpeed;
+        if (velocity.magnitude > speedLimit)
+            velocity = velocity.normalized * speedLimit;
 
+        float speedBeforeConstraint = velocity.magnitude;
         Vector3 predicted = transform.position + velocity * dt;
+        bool constrained = false;
         for (int i = 0; i < constraintIterations; i++)
         {
-            if (hookLeft.active) ApplyRopeConstraint(hookLeft, ref predicted);
-            if (hookRight.active) ApplyRopeConstraint(hookRight, ref predicted);
+            // Đổi thứ tự mỗi vòng để hai dây không ưu tiên cố định dây trái.
+            if ((i & 1) == 0)
+            {
+                if (hookLeft.active) constrained |= ApplyRopeConstraint(hookLeft, ref predicted);
+                if (hookRight.active) constrained |= ApplyRopeConstraint(hookRight, ref predicted);
+            }
+            else
+            {
+                if (hookRight.active) constrained |= ApplyRopeConstraint(hookRight, ref predicted);
+                if (hookLeft.active) constrained |= ApplyRopeConstraint(hookLeft, ref predicted);
+            }
         }
 
         if (dt > 0f)
             velocity = (predicted - transform.position) / dt;
 
+        // Projection dây thật làm mất toàn bộ động lượng hướng ra ngoài. ODM kiểu anime
+        // chuyển một phần năng lượng đó sang tiếp tuyến để cú bẻ góc vẫn nhanh và dễ đọc.
+        if (constrained && cornerMomentumRetention > 0f && velocity.sqrMagnitude > 0.0001f)
+        {
+            float currentSpeed = velocity.magnitude;
+            float retainedSpeed = Mathf.Lerp(currentSpeed,
+                                             Mathf.Max(currentSpeed, speedBeforeConstraint),
+                                             cornerMomentumRetention);
+            velocity *= Mathf.Min(retainedSpeed, speedLimit) / currentSpeed;
+        }
+
         velocity *= Mathf.Pow(ropeDamping, dt * 60f);
+
+        if (velocity.magnitude > speedLimit)
+            velocity = velocity.normalized * speedLimit;
     }
 
-    void TakeUpSlack(HookState hook)
+    void TakeUpSlack(HookState hook, float dt)
     {
         if (!hook.active || hook.attached) return;
         float dist = Vector3.Distance(transform.position, hook.anchorPoint);
-        // Không rút ngắn hơn attachDistance, tránh nhân vật bị kẹt sát điểm neo
-        hook.ropeLength = Mathf.Max(attachDistance, Mathf.Min(hook.ropeLength, dist));
+        float target = Mathf.Max(attachDistance, dist);
+        if (hook.ropeLength > target)
+            hook.ropeLength = Mathf.MoveTowards(hook.ropeLength, target, slackTakeUpSpeed * dt);
     }
 
-    void ReelPull(HookState hook, float dt, bool strong)
+    void ReelPull(HookState hook, float dt, bool strong, float forceMultiplier)
     {
         if (!hook.active || hook.attached) return;
 
@@ -386,16 +459,18 @@ public class ODMController : MonoBehaviour
 
         if (dist <= attachDistance)
         {
-            if (strong) hook.attached = true; // chỉ bám khi chủ động giữ Space
+            hook.ropeLength = attachDistance;
             return;
         }
 
+        if (strong)
+            hook.ropeLength = Mathf.Max(attachDistance, hook.ropeLength - reelSpeed * dt);
+
         float approachSpeed = Vector3.Dot(velocity, dir);
-        float cap = reelMaxSpeed * Mathf.Max(0.5f, intensity);
-        float add = Mathf.Min(reelForce * intensity * dt, Mathf.Max(0f, cap - approachSpeed));
+        float cap = reelMaxSpeed * forceMultiplier * Mathf.Max(0.5f, intensity);
+        float add = Mathf.Min(reelForce * forceMultiplier * intensity * dt, Mathf.Max(0f, cap - approachSpeed));
         velocity += dir * add;
 
-        hook.ropeLength = Mathf.Min(hook.ropeLength, dist);
     }
 
     bool IsAttached(HookState hook)
@@ -403,12 +478,17 @@ public class ODMController : MonoBehaviour
         return hook.active && hook.attached;
     }
 
-    void ApplyRopeConstraint(HookState hook, ref Vector3 predicted)
+    bool ApplyRopeConstraint(HookState hook, ref Vector3 predicted)
     {
         Vector3 toPos = predicted - hook.anchorPoint;
         float dist = toPos.magnitude;
         if (dist > hook.ropeLength && dist > 0.0001f)
+        {
             predicted = hook.anchorPoint + toPos / dist * hook.ropeLength;
+            return true;
+        }
+
+        return false;
     }
 
     Vector3 GetWishDirection()
@@ -423,67 +503,67 @@ public class ODMController : MonoBehaviour
 
     void OnControllerColliderHit(ControllerColliderHit hit)
     {
-        bool hooked = hookLeft.active || hookRight.active;
-        bool wantsAttach = !requireReelToAttach || GameInput.GetKey(KeyCode.Space);
-        bool hookableSurface = ((1 << hit.gameObject.layer) & hookableLayer.value) != 0;
-
-        bool wall = hit.normal.y < 0.7f; // tường hoặc trần; mặt gần nằm ngang coi là mặt đất/mái
         float into = Vector3.Dot(velocity, hit.normal); // < 0: đang lao vào bề mặt
-        float impact = -into;
+        if (into >= 0f) return;
 
-        // Chạm nhẹ khi đang giữ Space: bám vào tường. Chạm mạnh: không bám mà nảy ra.
-        if (hooked && wantsAttach && hookableSurface && wall && impact <= attachMaxImpactSpeed)
+        Vector3 incoming = velocity;
+        Vector3 alongWall = Vector3.ProjectOnPlane(incoming, hit.normal);
+        bool isWall = Mathf.Abs(hit.normal.y) < 0.5f;
+        bool hooked = hookLeft.active || hookRight.active;
+
+        if (wallGlideAssist && hooked && isWall)
         {
-            hookLeft.attached = hookLeft.active;
-            hookRight.attached = hookRight.active;
-            return;
-        }
-
-        if (into < 0f)
-        {
-            Vector3 along = Vector3.ProjectOnPlane(velocity, hit.normal);
-
-            if (wall && impact >= hardImpactSpeed)
+            // Đổi một phần cú đâm trực diện thành chuyển động theo mặt tường về hướng camera.
+            // Người chơi vẫn phải nhìn/chọn hướng cua, nhưng va quệt không làm mất sạch đà.
+            Vector3 desired = Vector3.ProjectOnPlane(cameraTransform.forward, hit.normal);
+            if (desired.sqrMagnitude > 0.0001f)
             {
-                // Va mạnh vào tường: nảy ra. Dây neo gần chỗ va phải nhả, nếu không dây căng sẽ kéo lại gây cảm giác "dính".
-                float away = Mathf.Max(impact * bounceRestitution, bounceMinSpeed);
-                velocity = along + hit.normal * away;
-                ReleaseHooksNear(hit.point);
+                desired.Normalize();
+                float targetAlong = incoming.magnitude * wallGlideMomentum;
+                float currentAlong = Vector3.Dot(alongWall, desired);
+                if (currentAlong < targetAlong)
+                    alongWall += desired * (targetAlong - currentAlong);
             }
-            else
-            {
-                velocity = along;
-            }
-        }
-    }
 
-    void ReleaseHooksNear(Vector3 point)
-    {
-        if (hookLeft.active && Vector3.Distance(hookLeft.anchorPoint, point) <= anchorReleaseRadius)
-        {
-            hookLeft.active = false;
-            hookLeft.attached = false;
+            alongWall += hit.normal * wallSeparationSpeed;
         }
-        if (hookRight.active && Vector3.Distance(hookRight.anchorPoint, point) <= anchorReleaseRadius)
-        {
-            hookRight.active = false;
-            hookRight.attached = false;
-        }
+
+        float speedLimit = maxSpeed * (ActiveHookCount >= 2 ? dualHookMaxSpeedMultiplier : 1f);
+        velocity = Vector3.ClampMagnitude(alongWall, speedLimit);
     }
 
     // ================= HOOK INPUT =================
     void HandleHookInput()
     {
-        bool leftDown  = GameInput.GetKeyDown(KeyCode.Q) || GameInput.GetMouseButtonDown(0);
-        bool leftUp    = GameInput.GetKeyUp(KeyCode.Q)   || GameInput.GetMouseButtonUp(0);
-        bool rightDown = GameInput.GetKeyDown(KeyCode.E) || GameInput.GetMouseButtonDown(1);
-        bool rightUp   = GameInput.GetKeyUp(KeyCode.E)   || GameInput.GetMouseButtonUp(1);
+        bool leftDown  = GameInput.GetMouseButtonDown(0);
+        bool leftHeld  = GameInput.GetMouseButton(0);
+        bool leftUp    = GameInput.GetMouseButtonUp(0);
+        bool rightDown = GameInput.GetMouseButtonDown(1);
+        bool rightHeld = GameInput.GetMouseButton(1);
+        bool rightUp   = GameInput.GetMouseButtonUp(1);
 
-        if (leftDown)  TryFireHook(hookLeft, hipOriginLeft);
-        if (leftUp)    hookLeft.active = false;
+        if (toggleHooks)
+        {
+            if (leftDown)
+            {
+                if (hookLeft.active) hookLeft.active = false;
+                else TryFireHook(hookLeft, hipOriginLeft);
+            }
 
-        if (rightDown) TryFireHook(hookRight, hipOriginRight);
-        if (rightUp)   hookRight.active = false;
+            if (rightDown)
+            {
+                if (hookRight.active) hookRight.active = false;
+                else TryFireHook(hookRight, hipOriginRight);
+            }
+        }
+        else
+        {
+            if (leftDown) TryFireHook(hookLeft, hipOriginLeft);
+            if (leftUp) hookLeft.active = false;
+
+            if (rightDown) TryFireHook(hookRight, hipOriginRight);
+            if (rightUp) hookRight.active = false;
+        }
 
         AutoReleaseCheck(hookLeft);
         AutoReleaseCheck(hookRight);

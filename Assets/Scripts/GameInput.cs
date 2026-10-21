@@ -15,8 +15,6 @@ public static class GameInput
     {
         switch (k)
         {
-            case KeyCode.Q: return Key.Q;
-            case KeyCode.E: return Key.E;
             case KeyCode.W: return Key.W;
             case KeyCode.A: return Key.A;
             case KeyCode.S: return Key.S;

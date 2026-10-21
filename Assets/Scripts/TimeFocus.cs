@@ -1,20 +1,19 @@
 using UnityEngine;
 
-// Làm chậm thời gian khi nhân vật ở trên không để kịp ngắm và xử lý.
-//  - Trên không: timeScale giảm còn airTimeScale.
-//  - Trên không và có gáy titan trong tầm nhìn (đủ gần để lướt/chém): giảm sâu hơn (focusTimeScale).
-//  - Trên mặt đất: trở về tốc độ bình thường.
+// Làm chậm thời gian theo đúng lúc người chơi cần ngắm móc.
+//  - Không có móc: mở cửa sổ ngắm chậm để tìm điểm neo tiếp theo.
+//  - Chỉ có một móc: chậm sâu hơn để kịp xoay camera và bắn móc thứ hai.
+//  - Đủ hai móc: tăng nhịp trở lại; về mặt đất: tốc độ bình thường.
 // Nhấn T để bật/tắt. Chuột (nhìn) không bị chậm nên vẫn ngắm nhanh được.
 [RequireComponent(typeof(ODMController))]
 public class TimeFocus : MonoBehaviour
 {
     public bool enabledEffect = true;
-    public float airTimeScale = 0.7f;
-    public float focusTimeScale = 0.4f;
-    public float airDelay = 0.15f;       // phải ở trên không đủ lâu mới chậm (tránh giật khi nhảy nhẹ)
-    public float focusRange = 35f;
-    public float focusAngle = 45f;
-    public float blendSpeed = 6f;
+    public float dualHookTimeScale = 0.65f;
+    public float freeAimTimeScale = 0.55f;
+    public float singleHookTimeScale = 0.5f;
+    public float airDelay = 0.08f;       // tránh nhấp nháy khi vừa rời một bậc thấp
+    public float blendSpeed = 8f;
 
     public bool Active { get; private set; }
 
@@ -40,24 +39,25 @@ public class TimeFocus : MonoBehaviour
 
         float target = 1f;
         if (enabledEffect && airTime >= airDelay)
-            target = HasNapeInSight() ? focusTimeScale : airTimeScale;
+        {
+            switch (odm.ActiveHookCount)
+            {
+                case 0:
+                    target = freeAimTimeScale;
+                    break;
+                case 1:
+                    target = singleHookTimeScale;
+                    break;
+                default:
+                    target = dualHookTimeScale;
+                    break;
+            }
+        }
 
         current = Mathf.MoveTowards(current, target, blendSpeed * Time.unscaledDeltaTime);
         Active = current < 0.99f;
         Time.timeScale = current;
         Time.fixedDeltaTime = 0.02f * current;
-    }
-
-    bool HasNapeInSight()
-    {
-        Transform cam = odm.cameraTransform;
-        foreach (Titan t in Titan.All)
-        {
-            if (t == null || t.IsDead) continue;
-            Vector3 to = t.Nape.position - cam.position;
-            if (to.magnitude <= focusRange && Vector3.Angle(cam.forward, to) <= focusAngle) return true;
-        }
-        return false;
     }
 
     void OnDisable()

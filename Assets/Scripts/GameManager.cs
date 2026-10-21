@@ -273,10 +273,9 @@ public class GameManager : MonoBehaviour
         GUI.Label(new Rect(30 * s, 66 * s, 700 * s, 36 * s), waveInfo, label);
         GUI.Label(new Rect(30 * s, 100 * s, 700 * s, 36 * s), "Kiếm: " + blades + "   (dự phòng: " + combat.Spare + ")", label);
 
-        string speedMsg = combat.CanKillNow ? "ĐỦ TỐC ĐỘ CHÉM GÁY" : "Chưa đủ tốc độ chém gáy (" + combat.killSpeed.ToString("F0") + " m/s)";
         Color old = label.normal.textColor;
-        label.normal.textColor = combat.CanKillNow ? new Color(1f, 0.9f, 0.2f) : new Color(1f, 1f, 1f, 0.7f);
-        GUI.Label(new Rect(30 * s, 134 * s, 800 * s, 36 * s), speedMsg, label);
+        label.normal.textColor = new Color(1f, 1f, 1f, 0.7f);
+        GUI.Label(new Rect(30 * s, 134 * s, 800 * s, 36 * s), "Ngắm gáy trong tầm rồi nhấn F để chém", label);
         var focus = odm.GetComponent<TimeFocus>();
         if (focus != null && focus.Active)
             GUI.Label(new Rect(30 * s, 168 * s, 800 * s, 36 * s), "TẬP TRUNG (thời gian chậm)", label);
@@ -292,7 +291,7 @@ public class GameManager : MonoBehaviour
                 if (sp.z <= 0f || sp.z > 120f) continue;
 
                 bool inRange = Vector3.Distance(cam.transform.position, t.Nape.position) <= combat.napeReach;
-                Color c = inRange ? (combat.CanKillNow ? new Color(1f, 0.9f, 0.2f) : new Color(1f, 0.55f, 0.1f))
+                Color c = inRange ? new Color(1f, 0.9f, 0.2f)
                                   : new Color(1f, 0.2f, 0.15f, 0.7f);
                 float size = (inRange ? 20f : 10f) * s;
                 Box(new Rect(sp.x - size / 2f, Screen.height - sp.y - size / 2f, size, size), c);
@@ -313,7 +312,7 @@ public class GameManager : MonoBehaviour
 
         // Gợi ý phím
         GUI.Label(new Rect(Screen.width / 2f - 450 * s, Screen.height - 50 * s, 900 * s, 36 * s),
-                  "F: chém (xa thì lướt tới gáy)   R: thay kiếm   Q/E: móc   Space: thu dây   Shift: gas   T: bật/tắt làm chậm thời gian   Esc: tạm dừng",
+                  "F: chém gáy   R: thay kiếm   Giữ chuột trái/phải: móc, thả: nhả   Space: thu dây   Shift: gas + lái   Hai dây: tăng tốc   T: slow-motion   Esc: tạm dừng",
                   new GUIStyle(label) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(20 * s) });
     }
 
