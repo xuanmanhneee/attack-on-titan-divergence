@@ -3,7 +3,7 @@ using UnityEngine;
 
 // Nhiệm vụ "Trận Trost" (3 giai đoạn):
 //  1) Dọn titan đã lọt vào khu phố.
-//  2) Titan tràn qua lỗ hổng trên tường (có một Armored Titan).
+//  2) Titan tràn qua lỗ hổng trên tường (có một Pure Titan khổng lồ).
 //  3) Tới cổng, trụ lại trong vùng cổng đủ lâu để chặn lỗ hổng trong khi titan tiếp tục kéo tới.
 // Gas không tự hồi: phải chạy tới điểm tiếp tế (cột sáng xanh) để nạp gas và kiếm.
 public class TrostMission : MonoBehaviour
@@ -76,7 +76,7 @@ public class TrostMission : MonoBehaviour
             if (spawned >= clearTitans) break;
             Vector3 d = p - odm.transform.position; d.y = 0f;
             if (d.magnitude < minSpawnDistance) continue;
-            Spawn(p, TitanModels.PickRandom(), Random.Range(12f, 20f));
+            Spawn(p, TitanModels.PickRandom(), Random.Range(10f, 15f));
             spawned++;
         }
     }
@@ -102,11 +102,11 @@ public class TrostMission : MonoBehaviour
 
     void SpawnReinforcements()
     {
-        var armored = TitanModels.Get("ArmoredTitan");
+        var abnormal = TitanModels.Get("MeshyGluttonousTitan");
         for (int i = 0; i < reinforceTitans; i++)
         {
-            bool boss = (i == 0 && armored != null);
-            Spawn(GatePoint(), boss ? armored : TitanModels.PickRandom(), boss ? Random.Range(20f, 24f) : Random.Range(12f, 20f));
+            bool boss = (i == 0 && abnormal != null);
+            Spawn(GatePoint(), boss ? abnormal : TitanModels.PickRandom(), boss ? 15f : Random.Range(9f, 15f));
         }
     }
 
@@ -169,7 +169,7 @@ public class TrostMission : MonoBehaviour
         if (respawnTimer <= 0f && Titan.All.Count < 5)
         {
             respawnTimer = 10f;
-            for (int i = 0; i < 2; i++) Spawn(GatePoint(), TitanModels.PickRandom(), Random.Range(12f, 18f));
+            for (int i = 0; i < 2; i++) Spawn(GatePoint(), TitanModels.PickRandom(), Random.Range(10f, 15f));
         }
 
         if (sealProgress >= sealSeconds)

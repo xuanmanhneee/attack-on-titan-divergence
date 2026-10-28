@@ -1,8 +1,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-// Khai báo các model titan thật (nằm trong Assets/Resources/Titans/...).
-// Thêm titan mới: bỏ FBX + texture vào Resources/Titans/<Tên>/ rồi thêm một dòng vào All.
+// Danh sách ngoại hình Titan. Titan vô tri có thể dùng proceduralStyle để dựng
+// trực tiếp bằng mesh nhẹ; Titan đặc biệt dùng FBX trong Resources chỉ khi được
+// gọi riêng cho boss/biến hình, không nằm trong pool quái thường.
 // modelPath là đường dẫn trong Resources, KHÔNG có đuôi file.
 // Nếu titan đi lùi hoặc gáy (chấm đỏ) nằm ở phía trước mặt thì đổi yawOffset thành 180.
 [System.Serializable]
@@ -10,6 +11,7 @@ public class TitanModelDef
 {
     public string name;
     public string modelPath;
+    public string proceduralStyle;       // Titan vô tri dựng từ mesh nhẹ ngay trong Unity
     public string bodyTex, faceTex, hairTex, weaponTex; // đường dẫn texture trong Resources (có thể để trống)
     public float yawOffset = 0f;       // xoay model cho đúng hướng mặt (độ)
     public float napeHeight = 0.85f;   // độ cao gáy so với chiều cao titan (0..1)
@@ -25,31 +27,13 @@ public static class TitanModels
     {
         new TitanModelDef
         {
-            name = "RealisticTitan",
-            modelPath = "Titans/RealisticTitan/Attack_sketchfab",
-            bodyTex = "Titans/RealisticTitan/Body_color",
-            spawnWeight = 5,
-        },
-        new TitanModelDef
-        {
-            name = "ArmoredTitan",
-            modelPath = "Titans/ArmoredTitan/role_kaizhijuren_skin",
-            bodyTex = "Titans/ArmoredTitan/role_kaizhijuren_body_tex",
-            faceTex = "Titans/ArmoredTitan/role_kaizhijuren_face_tex",
-            hairTex = "Titans/ArmoredTitan/role_kaizhijuren_hair_tex",
-            healthMultiplier = 1.8f,
-            heightMultiplier = 1.1f,
-            spawnWeight = 2,
-        },
-        new TitanModelDef
-        {
-            name = "WarhammerTitan",
-            modelPath = "Titans/WarhammerTitan/role_lala_cj_skin",
-            bodyTex = "Titans/WarhammerTitan/role_zhanchuijuren_body_tex",
-            faceTex = "Titans/WarhammerTitan/role_zhanchuijuren_head_tex",
-            weaponTex = "Titans/WarhammerTitan/role_zhanchuijuren_wiqi02_tex",
-            healthMultiplier = 1.5f,
-            spawnWeight = 2,
+            name = "MeshyGluttonousTitan",
+            modelPath = "Titans/MeshyGluttonousTitan",
+            napeHeight = 0.69f,
+            napeBack = 0.85f,
+            healthMultiplier = 1.2f,
+            heightMultiplier = 1f,
+            spawnWeight = 1,
         },
     };
 
@@ -57,6 +41,7 @@ public static class TitanModels
 
     static bool IsAvailable(TitanModelDef d)
     {
+        if (!string.IsNullOrEmpty(d.proceduralStyle)) return true;
         if (!available.TryGetValue(d.modelPath, out bool ok))
         {
             ok = Resources.Load<GameObject>(d.modelPath) != null;

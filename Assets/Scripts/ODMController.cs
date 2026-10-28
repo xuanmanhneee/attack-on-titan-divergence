@@ -65,11 +65,11 @@ public class ODMController : MonoBehaviour
     public float aimMomentumWeight = 0.5f; // ưu tiên điểm nằm theo hướng đang bay
 
     [Header("Smart Assist - Rope")]
-    public bool autoTakeUpSlack = true;    // tang cuốn giữ dây căng; không tạo lực kéo hay tự chọn hướng
+    public bool autoTakeUpSlack = true;
     public float slackTakeUpSpeed = 60f;
-    public bool autoReel = false;          // manual ODM: nhìn về móc không tự kéo
-    public float autoReelStrength = 0.6f;  // 0..1, so với kéo mạnh bằng Space
-    public float autoReelLookDot = 0.6f;   // dot(hướng nhìn, hướng tới móc) bắt đầu kéo từ mức này
+    public bool autoReel = false;
+    public float autoReelStrength = 0.6f;
+    public float autoReelLookDot = 0.6f;
     public bool autoRelease = false;       // chỉ nhả khi người chơi thả nút móc
     public float autoReleaseMinSpeed = 10f;
     public float autoReleaseBehindDot = -0.2f; // điểm neo nằm sau lưng tới mức này thì nhả (âm = sau lưng)
@@ -85,9 +85,10 @@ public class ODMController : MonoBehaviour
     public float liftRoofMargin = 0.6f;         // chừa cách mép mái
     public float liftSkipIfAbovePlayer = 8f;   // điểm ngắm đã cao hơn người chơi mức này thì không nâng nữa
     public float liftWallMaxNormalY = 0.35f;    // chỉ nâng khi trúng mặt tường (pháp tuyến gần nằm ngang)
-    public bool groundHookYank = false;         // bắn móc không tự tạo vận tốc
-    public float groundHookYankSpeed = 10f;
     public float swingKeepSpeed = 14f;          // đu nhanh hơn mức này thì lướt sát đất không bị hãm như đang đi bộ
+
+    public bool groundHookYank = false;
+    public float groundHookYankSpeed = 10f;
 
     [Header("Gas")]
     public float gasForce = 26f;
@@ -111,7 +112,14 @@ public class ODMController : MonoBehaviour
 
     [Header("Rope Visual")]
     public Material ropeMaterial;
-    public float ropeWidth = 0.03f;
+    public float ropeWidth = 0.065f;
+    public float hookProjectileSpeed = 300f;
+
+    [Header("Hook Audio")]
+    public AudioClip hookLaunchClip;
+    public AudioClip hookReleaseClip;
+    [Range(0f, 1f)] public float hookLaunchVolume = 0.32f;
+    [Range(0f, 1f)] public float hookReleaseVolume = 0.28f;
 
     [Header("Debug")]
     public bool showDebugGizmos = true;
@@ -120,7 +128,10 @@ public class ODMController : MonoBehaviour
     public float GasNormalized => gas / maxGas;
     public float Speed => velocity.magnitude;
     public bool IsGrounded => isGrounded;
+    public bool IsGassing => GameInput.GetKey(KeyCode.LeftShift) && gas > 0f;
     public int ActiveHookCount => (hookLeft.active ? 1 : 0) + (hookRight.active ? 1 : 0);
+    public bool LeftHookActive => hookLeft.active;
+    public bool RightHookActive => hookRight.active;
     public void RefillGas(float amount) { gas = Mathf.Min(maxGas, gas + amount); }
 
     private CharacterController controller;
@@ -144,6 +155,10 @@ public class ODMController : MonoBehaviour
     {
         public bool active;
         public Vector3 anchorPoint;
+        public Transform anchorTransform;
+        public Vector3 anchorLocalPoint;
+        public bool followsTransform;
+        public float visualProgress;
         public float ropeLength;
         public bool attached;
     }
@@ -152,10 +167,18 @@ public class ODMController : MonoBehaviour
     private HookState hookRight = new HookState();
     private LineRenderer lineLeft;
     private LineRenderer lineRight;
+    private AudioSource hookAudio;
 
     void Start()
     {
         controller = GetComponent<CharacterController>();
+        // Give the 1.7 m controller enough clearance to step onto the low
+        // training/checkpoint plates without catching its lower hemisphere on
+        // their vertical edge. Visual feet are aligned to this capsule.
+        controller.slopeLimit = Mathf.Max(controller.slopeLimit, 55f);
+        controller.stepOffset = Mathf.Clamp(Mathf.Max(controller.stepOffset, 0.45f),
+                                            0f, controller.height - 0.05f);
+        controller.minMoveDistance = 0f;
         cam = cameraTransform.GetComponent<Camera>();
         Cursor.lockState = CursorLockMode.Locked;
 
@@ -164,6 +187,13 @@ public class ODMController : MonoBehaviour
 
         lineLeft = CreateRopeLine("RopeLine_Left");
         lineRight = CreateRopeLine("RopeLine_Right");
+
+        hookAudio = gameObject.AddComponent<AudioSource>();
+        hookAudio.playOnAwake = false;
+        hookAudio.loop = false;
+        hookAudio.spatialBlend = 0f;
+        if (hookLaunchClip == null) hookLaunchClip = Resources.Load<AudioClip>("Audio/ODM/HookLaunch");
+        if (hookReleaseClip == null) hookReleaseClip = Resources.Load<AudioClip>("Audio/ODM/HookRelease");
     }
 
     void Update()
@@ -171,6 +201,11 @@ public class ODMController : MonoBehaviour
         float dt = Time.deltaTime;
 
         HandleLook();
+
+        // A hook embedded in a Titan must travel with its body instead of remaining
+        // at the world-space point where the shot originally landed.
+        RefreshAnchor(hookLeft);
+        RefreshAnchor(hookRight);
 
         aimTimer -= dt;
         if (aimTimer <= 0f)
@@ -236,8 +271,7 @@ public class ODMController : MonoBehaviour
         bool hooked = hookLeft.active || hookRight.active;
         bool standing = isGrounded && velocity.y <= 0.1f;
 
-        // Chạm đất hoặc mái thì ưu tiên chạy, kể cả vẫn đang giữ móc. Dây nhả thêm
-        // theo bước chân và chỉ tiếp quản trở lại khi người chơi chủ động thu bằng Space.
+        // Khi đứng trên đất, dây chỉ tiếp quản chuyển động nếu người chơi chủ động thu bằng Space.
         bool wantsRopeMovement = hooked && GameInput.GetKey(KeyCode.Space);
         if (standing && !wantsRopeMovement)
         {
@@ -317,9 +351,6 @@ public class ODMController : MonoBehaviour
         isGrounded = sphereGrounded || controller.isGrounded;
     }
 
-    // Khi đứng trên đất, dây tự nhả thêm theo khoảng cách (đi xa điểm neo thì dây dài ra).
-    // Bước ra khỏi mép thì dây đang căng đúng độ dài lúc đó và bắt đầu đu.
-    // Đi quá xa tầm móc thì dây tự đứt.
     void LoosenRope(HookState hook)
     {
         if (!hook.active) return;
@@ -370,14 +401,10 @@ public class ODMController : MonoBehaviour
             velocity += wishDir * add;
         }
 
-        if (GameInput.GetKey(KeyCode.LeftShift) && gas > 0f)
+        if (boosting)
         {
-            // Một quy tắc duy nhất: gas luôn đẩy theo camera. Dây chỉ giới hạn bán kính,
-            // nên nhìn sang bên khi đang bám một móc sẽ tạo cung bẻ hướng dễ đoán.
+            // Gas đẩy theo hướng camera; dây giới hạn bán kính và tạo cung đu.
             Vector3 gasDirection = cameraTransform.forward.normalized;
-
-            // Uốn quỹ đạo mượt theo camera thay vì đổi hướng vận tốc tức thời.
-            // A/D vẫn bổ sung một lượng air control nhỏ ở khối phía trên.
             float speedBeforeSteer = velocity.magnitude;
             if (steerRate > 0f && speedBeforeSteer > 0.5f)
             {
@@ -397,15 +424,12 @@ public class ODMController : MonoBehaviour
 
         if (!hooked) return;
 
-        // Tang cuốn thụ động chỉ lấy phần dây chùng. Nó không rút ngắn hơn khoảng cách
-        // hiện tại nên không tạo lực và không điều khiển thay người chơi.
         if (autoTakeUpSlack)
         {
             TakeUpSlack(hookLeft, dt);
             TakeUpSlack(hookRight, dt);
         }
 
-        // Thu dây: Space = kéo mạnh; không bấm thì kéo nhẹ nếu đang nhìn về phía móc
         bool strong = GameInput.GetKey(KeyCode.Space);
         float reelMultiplier = dualHooked ? dualHookReelMultiplier : 1f;
         ReelPull(hookLeft, dt, strong, reelMultiplier);
@@ -419,7 +443,6 @@ public class ODMController : MonoBehaviour
         bool constrained = false;
         for (int i = 0; i < constraintIterations; i++)
         {
-            // Đổi thứ tự mỗi vòng để hai dây không ưu tiên cố định dây trái.
             if ((i & 1) == 0)
             {
                 if (hookLeft.active) constrained |= ApplyRopeConstraint(hookLeft, ref predicted);
@@ -435,8 +458,6 @@ public class ODMController : MonoBehaviour
         if (dt > 0f)
             velocity = (predicted - transform.position) / dt;
 
-        // Projection dây thật làm mất toàn bộ động lượng hướng ra ngoài. ODM kiểu anime
-        // chuyển một phần năng lượng đó sang tiếp tuyến để cú bẻ góc vẫn nhanh và dễ đọc.
         if (constrained && cornerMomentumRetention > 0f && velocity.sqrMagnitude > 0.0001f)
         {
             float currentSpeed = velocity.magnitude;
@@ -469,15 +490,14 @@ public class ODMController : MonoBehaviour
         float dist = toAnchor.magnitude;
         Vector3 dir = toAnchor / Mathf.Max(dist, 0.0001f);
 
-        // Ý định của người chơi: kéo mạnh nếu bấm Space, kéo nhẹ nếu đang nhìn về phía móc
         float intensity = strong ? 1f : 0f;
         if (!strong && autoReel)
         {
             float look = Vector3.Dot(cameraTransform.forward, dir);
             intensity = Mathf.InverseLerp(autoReelLookDot, 0.97f, look) * autoReelStrength;
         }
-        // Đang bay ra xa điểm neo (đã vượt qua nó): Space không hãm lại, giữ nguyên đà
-        if (reelOnlyWhenApproaching && Vector3.Dot(velocity, dir) < -reelAwayThreshold) intensity = 0f;
+        if (reelOnlyWhenApproaching && Vector3.Dot(velocity, dir) < -reelAwayThreshold)
+            intensity = 0f;
 
         if (intensity <= 0f) return;
 
@@ -492,9 +512,9 @@ public class ODMController : MonoBehaviour
 
         float approachSpeed = Vector3.Dot(velocity, dir);
         float cap = reelMaxSpeed * forceMultiplier * Mathf.Max(0.5f, intensity);
-        float add = Mathf.Min(reelForce * forceMultiplier * intensity * dt, Mathf.Max(0f, cap - approachSpeed));
+        float add = Mathf.Min(reelForce * forceMultiplier * intensity * dt,
+                              Mathf.Max(0f, cap - approachSpeed));
         velocity += dir * add;
-
     }
 
     bool IsAttached(HookState hook)
@@ -571,23 +591,23 @@ public class ODMController : MonoBehaviour
         {
             if (leftDown)
             {
-                if (hookLeft.active) hookLeft.active = false;
+                if (hookLeft.active) ReleaseHook(hookLeft, -1f);
                 else TryFireHook(hookLeft, hipOriginLeft);
             }
 
             if (rightDown)
             {
-                if (hookRight.active) hookRight.active = false;
+                if (hookRight.active) ReleaseHook(hookRight, 1f);
                 else TryFireHook(hookRight, hipOriginRight);
             }
         }
         else
         {
             if (leftDown) TryFireHook(hookLeft, hipOriginLeft);
-            if (leftUp) hookLeft.active = false;
+            if (leftUp) ReleaseHook(hookLeft, -1f);
 
             if (rightDown) TryFireHook(hookRight, hipOriginRight);
-            if (rightUp) hookRight.active = false;
+            if (rightUp) ReleaseHook(hookRight, 1f);
         }
 
         AutoReleaseCheck(hookLeft);
@@ -610,7 +630,7 @@ public class ODMController : MonoBehaviour
         if (flatVel.sqrMagnitude < 0.01f || flatTo.sqrMagnitude < 0.01f) return;
 
         if (Vector3.Dot(flatVel.normalized, flatTo.normalized) < autoReleaseBehindDot)
-            hook.active = false;
+            ReleaseHook(hook, hook == hookLeft ? -1f : 1f);
     }
 
     void TryFireHook(HookState hook, Transform hip)
@@ -621,10 +641,16 @@ public class ODMController : MonoBehaviour
 
         hook.active = true;
         hook.anchorPoint = anchor;
+        hook.anchorTransform = hit.collider != null ? hit.collider.transform : null;
+        hook.followsTransform = hook.anchorTransform != null;
+        hook.anchorLocalPoint = hook.anchorTransform != null
+            ? hook.anchorTransform.InverseTransformPoint(anchor)
+            : Vector3.zero;
+        hook.visualProgress = 0f;
         hook.ropeLength = Vector3.Distance(transform.position, anchor);
         hook.attached = false;
+        PlayHookSound(hookLaunchClip, hookLaunchVolume, hook == hookLeft ? -1f : 1f);
 
-        // Đang đứng đất: giật người lên không ngay lập tức (đỡ phải giữ Space mới rời đất được)
         if (groundHookYank && isGrounded && velocity.y <= 0.1f)
         {
             Vector3 dir = (anchor - transform.position).normalized;
@@ -632,6 +658,35 @@ public class ODMController : MonoBehaviour
             velocity += yank;
             isGrounded = false;
         }
+    }
+
+    void ReleaseHook(HookState hook, float side)
+    {
+        if (!hook.active) return;
+        hook.active = false;
+        hook.followsTransform = false;
+        hook.anchorTransform = null;
+        PlayHookSound(hookReleaseClip, hookReleaseVolume, side);
+    }
+
+    void PlayHookSound(AudioClip clip, float volume, float side)
+    {
+        if (hookAudio == null || clip == null) return;
+        hookAudio.panStereo = side * 0.18f;
+        hookAudio.pitch = Random.Range(0.97f, 1.03f);
+        hookAudio.PlayOneShot(clip, volume);
+    }
+
+    void RefreshAnchor(HookState hook)
+    {
+        if (!hook.active || !hook.followsTransform) return;
+        if (hook.anchorTransform == null)
+        {
+            hook.active = false;
+            hook.followsTransform = false;
+            return;
+        }
+        hook.anchorPoint = hook.anchorTransform.TransformPoint(hook.anchorLocalPoint);
     }
 
     // Bắn trúng tường nhà thì nâng điểm neo lên gần mái: neo càng cao thì càng đu được lên cao và có chỗ để vung.
@@ -763,8 +818,11 @@ public class ODMController : MonoBehaviour
         LineRenderer lr = obj.AddComponent<LineRenderer>();
         lr.positionCount = 2;
         lr.startWidth = ropeWidth;
-        lr.endWidth = ropeWidth;
+        lr.endWidth = ropeWidth * 0.72f;
         lr.useWorldSpace = true;
+        lr.numCapVertices = 2;
+        lr.numCornerVertices = 2;
+        lr.alignment = LineAlignment.View;
 
         if (ropeMaterial != null)
         {
@@ -773,8 +831,8 @@ public class ODMController : MonoBehaviour
         else
         {
             lr.material = new Material(Shader.Find("Sprites/Default"));
-            lr.startColor = Color.white;
-            lr.endColor = Color.white;
+            lr.startColor = new Color(0.34f, 0.34f, 0.36f, 1f);
+            lr.endColor = new Color(0.46f, 0.43f, 0.43f, 1f);
         }
 
         lr.enabled = false;
@@ -792,8 +850,16 @@ public class ODMController : MonoBehaviour
         if (hook.active)
         {
             line.enabled = true;
-            line.SetPosition(0, origin != null ? origin.position : transform.position);
-            line.SetPosition(1, hook.anchorPoint);
+            Vector3 start = origin != null ? origin.position : transform.position;
+            float distance = Vector3.Distance(start, hook.anchorPoint);
+            float duration = distance / Mathf.Max(1f, hookProjectileSpeed);
+            hook.visualProgress = Mathf.MoveTowards(hook.visualProgress, 1f,
+                Time.unscaledDeltaTime / Mathf.Max(0.025f, duration));
+            float eased = 1f - Mathf.Pow(1f - hook.visualProgress, 3f);
+
+            line.positionCount = 2;
+            line.SetPosition(0, start);
+            line.SetPosition(1, Vector3.Lerp(start, hook.anchorPoint, eased));
         }
         else
         {
