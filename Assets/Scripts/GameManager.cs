@@ -12,8 +12,10 @@ public class GameManager : MonoBehaviour
     public int totalWaves = 3;
     public int firstWaveTitans = 2;
     public int titansPerWave = 2;
+    // Attack on Titan scale: ordinary Titans reach roughly 3-15 m. This combat
+    // pool favours the imposing 9-15 m classes; smaller Titans can be added separately.
     public float minTitanHeight = 9f;
-    public float maxTitanHeight = 18f;
+    public float maxTitanHeight = 15f;
     public float spawnMinDist = 50f;
     public float spawnMaxDist = 90f;
     public float timeBetweenWaves = 4f;
@@ -57,6 +59,9 @@ public class GameManager : MonoBehaviour
     static void AutoCreate()
     {
         if (FindFirstObjectByType<GameManager>() != null) return;
+        // Chapter 0 has its own non-combat progression and HUD.  Do not start
+        // Trost (or spawn combat waves) merely because it reuses ODMController.
+        if (FindFirstObjectByType<Chapter0Training>() != null) return;
         if (FindFirstObjectByType<ODMController>() == null) return;
         new GameObject("GameManager").AddComponent<GameManager>();
     }
@@ -68,6 +73,13 @@ public class GameManager : MonoBehaviour
 
         odm = FindFirstObjectByType<ODMController>();
         cam = odm.cameraTransform != null ? odm.cameraTransform.GetComponent<Camera>() : Camera.main;
+
+        // Titans use the player's first hookable layer so ODM raycasts can hit them
+        // in every game mode, not only during the Trost mission.
+        int hookMask = odm.hookableLayer.value;
+        Titan.HookableLayer = -1;
+        for (int i = 0; i < 32; i++)
+            if ((hookMask & (1 << i)) != 0) { Titan.HookableLayer = i; break; }
 
         combat = odm.GetComponent<PlayerCombat>();
         if (combat == null) combat = odm.gameObject.AddComponent<PlayerCombat>();
@@ -312,7 +324,7 @@ public class GameManager : MonoBehaviour
 
         // Gợi ý phím
         GUI.Label(new Rect(Screen.width / 2f - 450 * s, Screen.height - 50 * s, 900 * s, 36 * s),
-                  "F: chém gáy   R: thay kiếm   Giữ chuột trái/phải: móc, thả: nhả   Space: thu dây   Shift: gas + lái   Hai dây: tăng tốc   T: slow-motion   Esc: tạm dừng",
+                  "F: chém gáy   R: thay kiếm   Giữ chuột trái/phải: móc, thả: nhả   Space: thu dây   Shift: gas + lái   V: đổi camera   T: slow-motion   Esc: tạm dừng",
                   new GUIStyle(label) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(20 * s) });
     }
 

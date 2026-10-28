@@ -13,10 +13,14 @@ public class Titan : MonoBehaviour
     public static event Action<Titan> Killed;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-    static void ClearStatics() { All.Clear(); Killed = null; ObstacleMask = 0; GroundSampler = null; }
+    static void ClearStatics() { All.Clear(); Killed = null; ObstacleMask = 0; HookableLayer = -1; GroundSampler = null; }
 
     // Layer của công trình mà titan phải tránh (đặt bởi bản đồ). 0 = không tránh.
     public static int ObstacleMask;
+
+    // Layer used by ODM raycasts. Set by GameManager from the player's hook mask.
+    // -1 keeps the old Ignore Raycast fallback for scenes without a manager.
+    public static int HookableLayer = -1;
 
     // Hàm cho biết độ cao mặt đất tại một vị trí (đặt bởi bản đồ). null = dùng Terrain.
     public static Func<Vector3, float> GroundSampler;
@@ -77,11 +81,15 @@ public class Titan : MonoBehaviour
         root.transform.rotation = Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 360f), 0f); // xoay sau khi dựng để tính bounds đúng
         root.transform.localScale = Vector3.one * t.k;
 
-        // Layer "Ignore Raycast" (2): tia móc dây / raycast mặc định không trúng titan
-        SetLayerRecursively(root, 2);
+        // Put every body collider on the same layer used by ODM anchors so the
+        // player can grapple directly to a Titan.
+        SetLayerRecursively(root, HookableLayer >= 0 ? HookableLayer : 2);
 
         var rb = root.AddComponent<Rigidbody>();
         rb.isKinematic = true;
+        // Titan only turns around the world-up axis. Keeping pitch/roll locked also
+        // protects the gameplay root if physics settings are changed later.
+        rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
 
         t.health = root.AddComponent<Health>();
         t.health.Init((80f + heightMeters * 6f) * (def != null ? def.healthMultiplier : 1f));
@@ -94,6 +102,12 @@ public class Titan : MonoBehaviour
     void BuildBody()
     {
         if (def != null && BuildFromModel()) return;
+
+        if (def != null && !string.IsNullOrEmpty(def.proceduralStyle))
+        {
+            BuildPureTitan(def.proceduralStyle);
+            return;
+        }
 
         Color skin = new Color(0.78f, 0.58f, 0.45f);
         Color dark = new Color(0.62f, 0.44f, 0.34f);
@@ -116,6 +130,108 @@ public class Titan : MonoBehaviour
         // Điểm yếu ở gáy (phía sau cổ): quả cầu đỏ để dễ nhìn
         var nape = Part(PrimitiveType.Sphere, transform, new Vector3(0f, 8.5f, -1.0f), Vector3.one * 0.9f,
                         new Color(1f, 0.15f, 0.1f), false);
+        nape.name = "Nape";
+        Nape = nape.transform;
+    }
+
+    // Titan vô tri có tỷ lệ cơ thể và khuôn mặt cố tình bất thường. Các model này
+    // dùng chung animation khớp đơn giản, nhẹ hơn FBX và không chiếm vai trò của
+    // Titan Shifter (Tiến Công, Thiết Giáp, Búa Chiến).
+    void BuildPureTitan(string style)
+    {
+        Color skin = new Color(0.80f, 0.58f, 0.43f);
+        Color shadow = new Color(0.55f, 0.30f, 0.22f);
+        Color sclera = new Color(0.92f, 0.86f, 0.72f);
+        Color pupil = new Color(0.08f, 0.045f, 0.025f);
+        Color mouth = new Color(0.20f, 0.025f, 0.02f);
+        Color teeth = new Color(0.92f, 0.82f, 0.60f);
+
+        float shoulder = 1.85f;
+        float armLength = 1.9f;
+        float legWidth = 1.15f;
+        Vector3 torsoScale = new Vector3(2.75f, 2.05f, 1.75f);
+        Vector3 headScale = new Vector3(1.65f, 1.8f, 1.55f);
+        float headY = 8.9f;
+
+        switch (style)
+        {
+            case "longface":
+                skin = new Color(0.72f, 0.49f, 0.35f);
+                shoulder = 1.65f;
+                armLength = 2.2f;
+                torsoScale = new Vector3(2.35f, 2.0f, 1.55f);
+                headScale = new Vector3(1.35f, 2.35f, 1.35f);
+                headY = 8.75f;
+                break;
+            case "potbelly":
+                skin = new Color(0.86f, 0.64f, 0.49f);
+                shoulder = 2.1f;
+                armLength = 1.65f;
+                legWidth = 1.35f;
+                torsoScale = new Vector3(3.8f, 2.35f, 2.8f);
+                headScale = new Vector3(1.55f, 1.55f, 1.5f);
+                headY = 8.55f;
+                break;
+            case "pinhead":
+                skin = new Color(0.68f, 0.44f, 0.31f);
+                shoulder = 2.2f;
+                armLength = 2.35f;
+                torsoScale = new Vector3(3.25f, 2.25f, 1.9f);
+                headScale = new Vector3(1.0f, 1.15f, 1.0f);
+                headY = 9.25f;
+                break;
+        }
+
+        legL = Pivot("LegL_Pivot", new Vector3(-0.78f, 4.35f, 0f));
+        legR = Pivot("LegR_Pivot", new Vector3(0.78f, 4.35f, 0f));
+        Part(PrimitiveType.Capsule, legL, new Vector3(0f, -2.15f, 0f), new Vector3(legWidth, 2.15f, legWidth), shadow, true);
+        Part(PrimitiveType.Capsule, legR, new Vector3(0f, -2.15f, 0f), new Vector3(legWidth, 2.15f, legWidth), shadow, true);
+
+        Part(PrimitiveType.Capsule, transform, new Vector3(0f, 6.15f, 0f), torsoScale, skin, true);
+
+        armL = Pivot("ArmL_Pivot", new Vector3(-shoulder, 7.65f, 0f));
+        armR = Pivot("ArmR_Pivot", new Vector3(shoulder, 7.65f, 0f));
+        Part(PrimitiveType.Capsule, armL, new Vector3(0f, -armLength, 0f), new Vector3(0.82f, armLength, 0.82f), skin, true);
+        Part(PrimitiveType.Capsule, armR, new Vector3(0f, -armLength, 0f), new Vector3(0.82f, armLength, 0.82f), skin, true);
+
+        Part(PrimitiveType.Sphere, transform, new Vector3(0f, headY, 0.05f), headScale, skin, true);
+
+        float faceZ = headScale.z * 0.48f;
+        float eyeY = headY + (style == "longface" ? 0.35f : 0.22f);
+        float eyeGap = headScale.x * 0.35f;
+        float eyeSize = style == "pinhead" ? 0.22f : 0.30f;
+        Part(PrimitiveType.Sphere, transform, new Vector3(-eyeGap, eyeY, faceZ + 0.08f), Vector3.one * eyeSize, sclera, false);
+        Part(PrimitiveType.Sphere, transform, new Vector3(eyeGap, eyeY, faceZ + 0.08f), Vector3.one * eyeSize, sclera, false);
+        Part(PrimitiveType.Sphere, transform, new Vector3(-eyeGap, eyeY - 0.02f, faceZ + 0.22f), Vector3.one * eyeSize * 0.38f, pupil, false);
+        Part(PrimitiveType.Sphere, transform, new Vector3(eyeGap, eyeY - 0.02f, faceZ + 0.22f), Vector3.one * eyeSize * 0.38f, pupil, false);
+
+        float mouthY = headY - (style == "longface" ? 0.65f : 0.42f);
+        Vector3 mouthScale = style == "grinning"
+            ? new Vector3(1.20f, 0.38f, 0.16f)
+            : new Vector3(headScale.x * 0.48f, 0.30f, 0.14f);
+        Part(PrimitiveType.Cube, transform, new Vector3(0f, mouthY, faceZ + 0.10f), mouthScale, mouth, false);
+
+        if (style == "grinning" || style == "potbelly")
+        {
+            for (int i = -2; i <= 2; i++)
+                Part(PrimitiveType.Cube, transform,
+                    new Vector3(i * 0.22f, mouthY + 0.04f, faceZ + 0.20f),
+                    new Vector3(0.16f, 0.25f, 0.08f), teeth, false);
+        }
+
+        // Mũi lệch và tai quá khổ giúp silhouette không còn giống một Shifter đẹp/ngầu.
+        float noseSide = style == "longface" ? 0.16f : -0.08f;
+        Part(PrimitiveType.Sphere, transform,
+            new Vector3(noseSide, headY - 0.1f, faceZ + 0.18f),
+            new Vector3(0.26f, style == "longface" ? 0.58f : 0.36f, 0.32f), shadow, false);
+        Part(PrimitiveType.Sphere, transform, new Vector3(-headScale.x * 0.55f, headY, 0f), new Vector3(0.30f, 0.55f, 0.25f), skin, false);
+        Part(PrimitiveType.Sphere, transform, new Vector3(headScale.x * 0.55f, headY + 0.12f, 0f), new Vector3(0.38f, 0.68f, 0.25f), skin, false);
+
+        float napeY = def != null ? 10f * def.napeHeight : 8.5f;
+        float napeZ = def != null ? -def.napeBack : -1f;
+        var nape = Part(PrimitiveType.Sphere, transform,
+            new Vector3(0f, napeY, napeZ), Vector3.one * 0.7f,
+            new Color(1f, 0.15f, 0.1f), false);
         nape.name = "Nape";
         Nape = nape.transform;
     }
@@ -200,6 +316,7 @@ public class Titan : MonoBehaviour
 
     bool BuildFromModel()
     {
+        if (def == null || string.IsNullOrEmpty(def.modelPath)) return false;
         var prefab = Resources.Load<GameObject>(def.modelPath);
         if (prefab == null) return false;
 
@@ -209,7 +326,12 @@ public class Titan : MonoBehaviour
         var model = Instantiate(prefab, visual);
         model.name = def.name;
         model.transform.localPosition = Vector3.zero;
-        model.transform.localRotation = Quaternion.Euler(0f, def.yawOffset, 0f);
+        // Imported FBX prefabs can contain a corrective root rotation (this Meshy
+        // model needs -90 degrees on X to convert Z-up to Unity's Y-up). Replacing
+        // that rotation with yaw made the Titan lie flat. Add yaw on top of the
+        // authored import rotation instead of discarding it.
+        Quaternion importRotation = model.transform.localRotation;
+        model.transform.localRotation = Quaternion.Euler(0f, def.yawOffset, 0f) * importRotation;
         model.transform.localScale = Vector3.one;
 
         foreach (var c in model.GetComponentsInChildren<Collider>()) Destroy(c);
@@ -272,19 +394,41 @@ public class Titan : MonoBehaviour
             var mats = r.sharedMaterials;
             for (int i = 0; i < mats.Length; i++)
             {
-                string n = mats[i] != null ? mats[i].name.ToLowerInvariant() : "";
+                Material source = mats[i];
+                string n = source != null ? source.name.ToLowerInvariant() : "";
                 string path = def.bodyTex;
                 if (n.Contains("hair") && !string.IsNullOrEmpty(def.hairTex)) path = def.hairTex;
                 else if ((n.Contains("face") || n.Contains("head")) && !string.IsNullOrEmpty(def.faceTex)) path = def.faceTex;
                 else if ((n.Contains("wiqi") || n.Contains("weapon")) && !string.IsNullOrEmpty(def.weaponTex)) path = def.weaponTex;
 
-                Material m = lit != null ? new Material(lit) : (mats[i] != null ? new Material(mats[i]) : new Material(Shader.Find("Standard")));
-                var tex = Tex(path);
-                if (tex != null)
+                // Preserve a prefab's authored textures. Switching an imported material to URP used to
+                // create a blank Lit material here, which made Meshy models turn completely white.
+                Texture sourceBase = null;
+                Texture sourceNormal = null;
+                if (source != null)
                 {
-                    if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", tex);
-                    if (m.HasProperty("_MainTex")) m.SetTexture("_MainTex", tex);
+                    if (source.HasProperty("_BaseMap")) sourceBase = source.GetTexture("_BaseMap");
+                    if (sourceBase == null && source.HasProperty("_MainTex")) sourceBase = source.GetTexture("_MainTex");
+                    if (source.HasProperty("_BumpMap")) sourceNormal = source.GetTexture("_BumpMap");
+                }
+
+                Material m = source != null
+                    ? new Material(source)
+                    : new Material(lit != null ? lit : Shader.Find("Standard"));
+                if (lit != null && m.shader != lit) m.shader = lit;
+
+                var tex = Tex(path);
+                Texture baseMap = tex != null ? tex : sourceBase;
+                if (baseMap != null)
+                {
+                    if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", baseMap);
+                    if (m.HasProperty("_MainTex")) m.SetTexture("_MainTex", baseMap);
                     if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", Color.white);
+                }
+                if (sourceNormal != null && m.HasProperty("_BumpMap"))
+                {
+                    m.SetTexture("_BumpMap", sourceNormal);
+                    m.EnableKeyword("_NORMALMAP");
                 }
                 if (n.Contains("hair") && m.HasProperty("_AlphaClip"))
                 {

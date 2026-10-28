@@ -45,7 +45,9 @@ public static class TrostCity
     // Mỗi block là một cụm nhà liền nhau; khoảng trống giữa các block là đường phố thật.
     // Không tạo ngõ hẹp 2-3 m ở giữa cụm vì người chơi rất dễ rơi và mắc kẹt trong đó.
     const float Pitch = 64f, Block = 40f, StartZ = 58f;
-    const float WallHeight = 60f, WallThickness = 26f, GateWidth = 30f;
+    // Canon scale in metres: the Walls are 50 m high; Trost houses are mostly
+    // three to six storeys, with occasional taller civic buildings.
+    const float WallHeight = 50f, WallThickness = 26f, GateWidth = 30f;
 
     static readonly Color[] WallColors =
     {
@@ -125,8 +127,8 @@ public static class TrostCity
                 }
                 foreach (var c in cells)
                 {
-                    float h = 14f + (float)rng.NextDouble() * 18f; // nhà 14–32 m: đủ cao để tạo cung ODM
-                    if (rng.NextDouble() < 0.15) h += 12f;         // một vài mốc cao 26–44 m
+                    float h = 9f + (float)rng.NextDouble() * 9f;  // nhà 9–18 m: khoảng 3–6 tầng
+                    if (rng.NextDouble() < 0.15) h += 6f;         // một vài mốc cao 15–24 m
                     Building(tr, c.x, c.y, c.z, c.w, h, layer, rng, map, fb);
                 }
             }
@@ -148,7 +150,7 @@ public static class TrostCity
         {
             float x = origin.x + side * (GateWidth / 2f + segW / 2f);
             float g = map.GroundY(x, wallZ, fb);
-            Box(tr, new Vector3(x, g + WallHeight / 2f - 3f, wallZ), new Vector3(segW, WallHeight + 3f, WallThickness), stoneMat, layer);
+            Box(tr, new Vector3(x, g + WallHeight / 2f, wallZ), new Vector3(segW, WallHeight, WallThickness), stoneMat, layer);
         }
         // Tường bao hai bên và phía nam (giữ người chơi và titan trong khu phố)
         float len = wallZ - (origin.z - 40f);
@@ -157,12 +159,12 @@ public static class TrostCity
         {
             float x = origin.x + side * (totalW / 2f + 10f);
             float g = map.GroundY(x, midZ, fb);
-            Box(tr, new Vector3(x, g + 24f, midZ), new Vector3(20f, 50f, len), stoneMat, layer);
+            Box(tr, new Vector3(x, g + WallHeight / 2f, midZ), new Vector3(20f, WallHeight, len), stoneMat, layer);
         }
         {
             float z = origin.z - 40f;
             float g = map.GroundY(origin.x, z, fb);
-            Box(tr, new Vector3(origin.x, g + 24f, z), new Vector3(totalW + 40f, 50f, 20f), stoneMat, layer);
+            Box(tr, new Vector3(origin.x, g + WallHeight / 2f, z), new Vector3(totalW + 40f, WallHeight, 20f), stoneMat, layer);
         }
 
         // Đống đổ nát quanh lỗ hổng
