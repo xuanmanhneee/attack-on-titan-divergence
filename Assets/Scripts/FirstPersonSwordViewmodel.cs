@@ -20,7 +20,26 @@ public sealed class FirstPersonSwordViewmodel : MonoBehaviour
     [SerializeField] Vector3 wristMidpoint = new Vector3(0f, -0.48f, 0.60f);
     [SerializeField, Min(0.2f)] float wristSeparation = 0.58f;
     [SerializeField, Min(0.2f)] float swordLength = 1.15f;
-    [SerializeField, Range(0f, 1f)] float revealPitch = 0.18f;
+    [Tooltip("Corrects the imported arm rig after its wrists are aligned to the camera. Use this only for the first-person rig.")]
+    // Keep the imported forearm pose after aligning the wrists. A 180-degree roll
+    // puts the elbows above the hands and makes the arms cover the swords.
+    [SerializeField] Vector3 armRigRotationCorrection = Vector3.zero;
+    [Tooltip("Small local offset applied after the rig correction, useful for keeping the forearms out of the camera clip plane.")]
+    [SerializeField] Vector3 armRigPositionCorrection = new Vector3(0f, 0f, 0.02f);
+    [Tooltip("Keeps only wrist/hand/finger-weighted triangles from the imported arm mesh.")]
+    [SerializeField] bool cropForearmsToHands = true;
+    [Tooltip("Length of forearm retained next to each wrist, in imported arm-model units.")]
+    [SerializeField, Min(0f)] float retainedForearmLength = 0.28f;
+    [Tooltip("Pitch of the sword toward/away from the camera.")]
+    [SerializeField] float swordPitch = 0f;
+    [Tooltip("Rolls the blade around its length so the blade face is vertical in the hand.")]
+    [SerializeField] float swordRoll = 270f;
+    [Tooltip("Moves the sword relative to the wrist socket in camera-local space.")]
+    [SerializeField] Vector3 swordPositionOffset = Vector3.zero;
+    // Do not reveal the full arm model for a small camera pitch. The arms should
+    // appear only when the player deliberately looks down; slashes still force
+    // them visible through slashTime below.
+    [SerializeField, Range(0f, 1f)] float revealPitch = 0.48f;
     [SerializeField, Min(0f)] float lookDownLift = 0.34f;
 
     Transform viewRoot;
@@ -97,8 +116,11 @@ public sealed class FirstPersonSwordViewmodel : MonoBehaviour
 
         Transform leftWrist = FindDeep(armsInstance, "wrist.l");
         Transform rightWrist = FindDeep(armsInstance, "wrist.r");
-        leftSocket = FindDeep(armsInstance, "socket.l") ?? leftWrist;
-        rightSocket = FindDeep(armsInstance, "socket.r") ?? rightWrist;
+        // The imported socket helpers are positioned for the source arm rig and
+        // do not sit in the palm after the viewmodel is fitted to the camera.
+        // Anchor the sword grip to the actual wrist bones instead.
+        leftSocket = leftWrist;
+        rightSocket = rightWrist;
         if (leftWrist == null || rightWrist == null || leftSocket == null || rightSocket == null)
         {
             Debug.LogError("WRAD arms are missing wrist/socket bones.", this);
@@ -106,6 +128,8 @@ public sealed class FirstPersonSwordViewmodel : MonoBehaviour
         }
 
         FitArmsToCamera(leftWrist, rightWrist);
+        if (cropForearmsToHands)
+            CropForearmsToHands(leftWrist, rightWrist);
         ApplyArmsMaterial();
         CurlGripFingers(".l", -1f);
         CurlGripFingers(".r", 1f);
@@ -131,12 +155,19 @@ public sealed class FirstPersonSwordViewmodel : MonoBehaviour
         Vector3 span = right - left;
         if (span.sqrMagnitude < 0.000001f) return;
 
+        // Align the wrist line to the camera's X axis first. The old implementation
+        // used FromToRotation alone, which leaves the roll around that axis
+        // under-constrained; depending on the imported FBX orientation the arms
+        // could end up facing backward or twisting the swords away from the hands.
         Quaternion alignAcrossView = Quaternion.FromToRotation(span.normalized, Vector3.right);
+        Quaternion correctedRotation = Quaternion.Euler(armRigRotationCorrection) * alignAcrossView;
         float scale = wristSeparation / span.magnitude;
         Vector3 midpoint = (left + right) * 0.5f;
-        armsInstance.localRotation = alignAcrossView;
+        armsInstance.localRotation = correctedRotation;
         armsInstance.localScale = Vector3.one * scale;
-        armsInstance.localPosition = wristMidpoint - alignAcrossView * (midpoint * scale);
+        armsInstance.localPosition = wristMidpoint
+            - correctedRotation * (midpoint * scale)
+            + armRigPositionCorrection;
     }
 
     void ApplyArmsMaterial()
@@ -157,6 +188,97 @@ public sealed class FirstPersonSwordViewmodel : MonoBehaviour
             for (int i = 0; i < replacements.Length; i++) replacements[i] = material;
             renderer.sharedMaterials = replacements;
         }
+    }
+
+    void CropForearmsToHands(Transform leftWrist, Transform rightWrist)
+    {
+        foreach (SkinnedMeshRenderer renderer in armsInstance.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+        {
+            Mesh source = renderer.sharedMesh;
+            if (source == null || source.subMeshCount == 0) continue;
+
+            bool[] handBones = new bool[renderer.bones.Length];
+            bool[] forearmBones = new bool[renderer.bones.Length];
+            for (int i = 0; i < renderer.bones.Length; i++)
+            {
+                string boneName = renderer.bones[i] != null
+                    ? renderer.bones[i].name.ToLowerInvariant()
+                    : string.Empty;
+                handBones[i] = boneName.Contains("wrist")
+                    || boneName.Contains("hand")
+                    || boneName.Contains("finger")
+                    || boneName.Contains("thumb")
+                    || boneName.Contains("index")
+                    || boneName.Contains("middle")
+                    || boneName.Contains("ring")
+                    || boneName.Contains("pinky");
+                forearmBones[i] = boneName.Contains("forearm");
+            }
+
+            Vector3[] wristPositions =
+            {
+                renderer.transform.InverseTransformPoint(leftWrist.position),
+                renderer.transform.InverseTransformPoint(rightWrist.position)
+            };
+
+            BoneWeight[] weights = source.boneWeights;
+            Mesh cropped = Instantiate(source);
+            cropped.name = source.name + "_HandsOnly";
+            cropped.subMeshCount = source.subMeshCount;
+
+            for (int subMesh = 0; subMesh < source.subMeshCount; subMesh++)
+            {
+                int[] indices = source.GetIndices(subMesh);
+                List<int> kept = new List<int>(indices.Length);
+                for (int i = 0; i + 2 < indices.Length; i += 3)
+                {
+                    int handVertices = 0;
+                    int shortForearmVertices = 0;
+                    if (HasHandInfluence(weights[indices[i]], handBones)) handVertices++;
+                    if (HasHandInfluence(weights[indices[i + 1]], handBones)) handVertices++;
+                    if (HasHandInfluence(weights[indices[i + 2]], handBones)) handVertices++;
+                    if (HasShortForearmInfluence(weights[indices[i]], source.vertices[indices[i]], forearmBones, wristPositions)) shortForearmVertices++;
+                    if (HasShortForearmInfluence(weights[indices[i + 1]], source.vertices[indices[i + 1]], forearmBones, wristPositions)) shortForearmVertices++;
+                    if (HasShortForearmInfluence(weights[indices[i + 2]], source.vertices[indices[i + 2]], forearmBones, wristPositions)) shortForearmVertices++;
+                    if (handVertices >= 2 || (handVertices >= 1 && shortForearmVertices >= 2))
+                    {
+                        kept.Add(indices[i]);
+                        kept.Add(indices[i + 1]);
+                        kept.Add(indices[i + 2]);
+                    }
+                }
+                cropped.SetIndices(kept, MeshTopology.Triangles, subMesh, false);
+            }
+
+            renderer.sharedMesh = cropped;
+        }
+    }
+
+    static bool HasHandInfluence(BoneWeight weight, bool[] handBones)
+    {
+        return (weight.weight0 > 0.2f && IsHandBone(weight.boneIndex0, handBones))
+            || (weight.weight1 > 0.2f && IsHandBone(weight.boneIndex1, handBones))
+            || (weight.weight2 > 0.2f && IsHandBone(weight.boneIndex2, handBones))
+            || (weight.weight3 > 0.2f && IsHandBone(weight.boneIndex3, handBones));
+    }
+
+    bool HasShortForearmInfluence(BoneWeight weight, Vector3 vertex, bool[] forearmBones, Vector3[] wristPositions)
+    {
+        bool forearmWeighted = (weight.weight0 > 0.2f && IsHandBone(weight.boneIndex0, forearmBones))
+            || (weight.weight1 > 0.2f && IsHandBone(weight.boneIndex1, forearmBones))
+            || (weight.weight2 > 0.2f && IsHandBone(weight.boneIndex2, forearmBones))
+            || (weight.weight3 > 0.2f && IsHandBone(weight.boneIndex3, forearmBones));
+        if (!forearmWeighted) return false;
+
+        float nearestWristDistance = Mathf.Min(
+            Vector3.Distance(vertex, wristPositions[0]),
+            Vector3.Distance(vertex, wristPositions[1]));
+        return nearestWristDistance <= retainedForearmLength;
+    }
+
+    static bool IsHandBone(int index, bool[] handBones)
+    {
+        return index >= 0 && index < handBones.Length && handBones[index];
     }
 
     void CurlGripFingers(string suffix, float side)
@@ -221,7 +343,9 @@ public sealed class FirstPersonSwordViewmodel : MonoBehaviour
         }
 
         float lookDown = Mathf.Clamp01(Vector3.Dot(viewCamera.transform.forward, Vector3.down));
-        bool visible = lookDown >= revealPitch || slashTime >= 0f;
+        // Keep the first-person weapon out of view during traversal. It appears
+        // only for the slash itself, including when the player is airborne.
+        bool visible = slashTime >= 0f;
         SetVisible(visible);
 
         float lift = lookDownLift * Mathf.SmoothStep(0f, 1f,
@@ -259,8 +383,12 @@ public sealed class FirstPersonSwordViewmodel : MonoBehaviour
     void PoseSword(Transform sword, Transform socket, float side)
     {
         if (sword == null || socket == null) return;
-        sword.position = socket.position;
-        sword.rotation = viewCamera.transform.rotation * Quaternion.Euler(-10f, 0f, 7f * side);
+        sword.position = socket.position
+            + viewCamera.transform.right * swordPositionOffset.x
+            + viewCamera.transform.up * swordPositionOffset.y
+            + viewCamera.transform.forward * swordPositionOffset.z;
+
+        sword.rotation = viewCamera.transform.rotation * Quaternion.Euler(swordPitch, 0f, swordRoll + 7f * side);
     }
 
     void SetVisible(bool visible)

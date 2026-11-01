@@ -105,6 +105,9 @@ public class ODMController : MonoBehaviour
     public bool wallGlideAssist = true;
     [Range(0f, 1f)] public float wallGlideMomentum = 0.55f;
     public float wallSeparationSpeed = 2.5f;
+    [Tooltip("Layers that physically block ODM movement. Buildings are on Hookable, so this intentionally includes every layer by default.")]
+    public LayerMask movementCollisionMask = ~0;
+    [Min(0f)] public float wallCollisionSkin = 0.03f;
 
     [Header("Wall Launch")]
     public float wallLaunchSpeed = 16f;    // tốc độ bật ra khỏi tường khi nhấn Shift lúc đang bám
@@ -120,6 +123,12 @@ public class ODMController : MonoBehaviour
     public AudioClip hookReleaseClip;
     [Range(0f, 1f)] public float hookLaunchVolume = 0.32f;
     [Range(0f, 1f)] public float hookReleaseVolume = 0.28f;
+
+    [Header("Background Music")]
+    public AudioClip backgroundMusic;
+    [Range(0f, 1f)] public float backgroundMusicVolume = 0.24f;
+    [Tooltip("The normal exploration loop ends here. The remaining track is reserved for Titan transformation.")]
+    [Min(1f)] public float backgroundMusicLoopEnd = 142f;
 
     [Header("Debug")]
     public bool showDebugGizmos = true;
@@ -168,6 +177,7 @@ public class ODMController : MonoBehaviour
     private LineRenderer lineLeft;
     private LineRenderer lineRight;
     private AudioSource hookAudio;
+    private AudioSource backgroundMusicAudio;
 
     void Start()
     {
@@ -194,6 +204,17 @@ public class ODMController : MonoBehaviour
         hookAudio.spatialBlend = 0f;
         if (hookLaunchClip == null) hookLaunchClip = Resources.Load<AudioClip>("Audio/ODM/HookLaunch");
         if (hookReleaseClip == null) hookReleaseClip = Resources.Load<AudioClip>("Audio/ODM/HookRelease");
+
+        if (backgroundMusic != null)
+        {
+            backgroundMusicAudio = gameObject.AddComponent<AudioSource>();
+            backgroundMusicAudio.clip = backgroundMusic;
+            backgroundMusicAudio.playOnAwake = false;
+            backgroundMusicAudio.loop = false;
+            backgroundMusicAudio.spatialBlend = 0f;
+            backgroundMusicAudio.volume = backgroundMusicVolume;
+            backgroundMusicAudio.Play();
+        }
     }
 
     void Update()
@@ -224,12 +245,23 @@ public class ODMController : MonoBehaviour
         {
             float step = Mathf.Min(remaining, stepLimit);
             SimulateMovement(step);
-            controller.Move(velocity * step);
+            MoveWithWallCollision(velocity * step);
             remaining -= step;
         }
 
         UpdateFov(dt);
         UpdateRopeVisuals();
+        UpdateBackgroundMusic();
+    }
+
+    void UpdateBackgroundMusic()
+    {
+        if (backgroundMusicAudio == null || backgroundMusicAudio.clip == null || !backgroundMusicAudio.isPlaying)
+            return;
+
+        float loopEnd = Mathf.Min(backgroundMusicLoopEnd, backgroundMusicAudio.clip.length);
+        if (backgroundMusicAudio.time >= loopEnd)
+            backgroundMusicAudio.time = 0f;
     }
 
     void SimulateMovement(float dt)
@@ -548,19 +580,68 @@ public class ODMController : MonoBehaviour
 
     void OnControllerColliderHit(ControllerColliderHit hit)
     {
-        float into = Vector3.Dot(velocity, hit.normal); // < 0: đang lao vào bề mặt
+        ApplyWallContact(hit.normal);
+    }
+
+    void MoveWithWallCollision(Vector3 displacement)
+    {
+        if (displacement.sqrMagnitude < 0.0000001f)
+        {
+            controller.Move(displacement);
+            return;
+        }
+
+        Vector3 scale = transform.lossyScale;
+        float radius = controller.radius * Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.z));
+        float height = controller.height * Mathf.Abs(scale.y);
+        float halfSegment = Mathf.Max(0f, height * 0.5f - radius);
+        Vector3 center = transform.TransformPoint(controller.center);
+        Vector3 top = center + Vector3.up * halfSegment;
+        Vector3 bottom = center - Vector3.up * halfSegment;
+        Vector3 direction = displacement.normalized;
+        float distance = displacement.magnitude;
+        float castRadius = Mathf.Max(0.01f, radius - wallCollisionSkin);
+
+        if (Physics.CapsuleCast(bottom, top, castRadius, direction, out RaycastHit hit,
+                                distance + wallCollisionSkin, movementCollisionMask,
+                                QueryTriggerInteraction.Ignore)
+            && !hit.transform.IsChildOf(transform))
+        {
+            float safeDistance = Mathf.Max(0f, hit.distance - wallCollisionSkin);
+            if (safeDistance < distance)
+            {
+                controller.Move(direction * safeDistance);
+
+                // Preserve movement that runs along the wall, while discarding
+                // the component that would push the controller through it.
+                Vector3 remaining = displacement - direction * safeDistance;
+                Vector3 slide = Vector3.ProjectOnPlane(remaining, hit.normal);
+                if (slide.sqrMagnitude > 0.0000001f)
+                    controller.Move(slide);
+
+                ApplyWallContact(hit.normal);
+                return;
+            }
+        }
+
+        controller.Move(displacement);
+    }
+
+    void ApplyWallContact(Vector3 normal)
+    {
+        float into = Vector3.Dot(velocity, normal); // < 0: đang lao vào bề mặt
         if (into >= 0f) return;
 
         Vector3 incoming = velocity;
-        Vector3 alongWall = Vector3.ProjectOnPlane(incoming, hit.normal);
-        bool isWall = Mathf.Abs(hit.normal.y) < 0.5f;
+        Vector3 alongWall = Vector3.ProjectOnPlane(incoming, normal);
+        bool isWall = Mathf.Abs(normal.y) < 0.5f;
         bool hooked = hookLeft.active || hookRight.active;
 
         if (wallGlideAssist && hooked && isWall)
         {
             // Đổi một phần cú đâm trực diện thành chuyển động theo mặt tường về hướng camera.
             // Người chơi vẫn phải nhìn/chọn hướng cua, nhưng va quệt không làm mất sạch đà.
-            Vector3 desired = Vector3.ProjectOnPlane(cameraTransform.forward, hit.normal);
+            Vector3 desired = Vector3.ProjectOnPlane(cameraTransform.forward, normal);
             if (desired.sqrMagnitude > 0.0001f)
             {
                 desired.Normalize();
@@ -570,7 +651,7 @@ public class ODMController : MonoBehaviour
                     alongWall += desired * (targetAlong - currentAlong);
             }
 
-            alongWall += hit.normal * wallSeparationSpeed;
+            alongWall += normal * wallSeparationSpeed;
         }
 
         float speedLimit = maxSpeed * (ActiveHookCount >= 2 ? dualHookMaxSpeedMultiplier : 1f);
