@@ -82,6 +82,7 @@ public class PlayerCombat : MonoBehaviour
         if (cooldown > 0f) return;
         if (Durability <= 0f) { Feedback?.Invoke("Kiếm gãy! Nhấn R để thay"); return; }
         cooldown = slashCooldown;
+        GetComponent<FirstPersonSwordViewmodel>()?.PlaySlash();
 
         Transform cam = odm.cameraTransform;
 

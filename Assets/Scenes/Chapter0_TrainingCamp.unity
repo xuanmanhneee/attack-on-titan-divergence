@@ -21728,6 +21728,7 @@ GameObject:
   - component: {fileID: 1643340613}
   - component: {fileID: 1643340618}
   - component: {fileID: 1643340617}
+  - component: {fileID: 1643340619}
   m_Layer: 0
   m_Name: Capsule
   m_TagString: Untagged
@@ -21907,9 +21908,9 @@ MonoBehaviour:
   liftRoofMargin: 0.6
   liftSkipIfAbovePlayer: 8
   liftWallMaxNormalY: 0.35
+  swingKeepSpeed: 14
   groundHookYank: 0
   groundHookYankSpeed: 10
-  swingKeepSpeed: 14
   gasForce: 26
   steerRate: 55
   maxSpeed: 34
@@ -21957,6 +21958,28 @@ CharacterController:
   m_SkinWidth: 0.08
   m_MinMoveDistance: 0.001
   m_Center: {x: 0, y: 0, z: 0}
+--- !u!114 &1643340619
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1643340612}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9d2a4f716ef7477096bd5c31cbfc344f, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::FirstPersonSwordViewmodel
+  odm: {fileID: 1643340617}
+  viewCamera: {fileID: 330585545}
+  armsPrefab: {fileID: 919132149155446097, guid: b613aa8d39bc36144880b8d55aafcc11, type: 3}
+  swordPrefab: {fileID: -6689036041284674117, guid: 1100d4bec2cf6de46b87d313e339ba0e, type: 3}
+  armsAlbedo: {fileID: 2800000, guid: 4af8f95ce34ca04439ae261dbf877378, type: 3}
+  wristMidpoint: {x: 0, y: -0.48, z: 0.6}
+  wristSeparation: 0.58
+  swordLength: 1.15
+  revealPitch: 0.18
+  lookDownLift: 0.34
 --- !u!1 &1645349269
 GameObject:
   m_ObjectHideFlags: 0
