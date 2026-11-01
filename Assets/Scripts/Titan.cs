@@ -29,7 +29,9 @@ public class Titan : MonoBehaviour
 
     [Header("Movement")]
     public float walkSpeed = 2.5f;
-    public float runSpeed = 6f;
+    // A normal ODM runner tops out around 9 m/s.  Titans must outrun a simple
+    // sprint so the player is forced to use hooks, gas, and rooftops.
+    public float runSpeed = 17.5f;
     public float turnSpeed = 100f;
     public float detectRange = 80f;
     public float loseRange = 140f;
@@ -77,6 +79,9 @@ public class Titan : MonoBehaviour
         t.k = heightMeters / 10f;
         t.target = target;
         t.def = def;
+        // Vary the chase speed per Titan while keeping every one faster than a
+        // player's 9 m/s ground sprint.
+        t.runSpeed = UnityEngine.Random.Range(15f, 20f);
         t.BuildBody();
         root.transform.rotation = Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 360f), 0f); // xoay sau khi dựng để tính bounds đúng
         root.transform.localScale = Vector3.one * t.k;
