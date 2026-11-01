@@ -21923,6 +21923,10 @@ MonoBehaviour:
   wallGlideAssist: 1
   wallGlideMomentum: 0.55
   wallSeparationSpeed: 2.5
+  movementCollisionMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  wallCollisionSkin: 0.03
   wallLaunchSpeed: 16
   wallLaunchGasCost: 10
   ropeMaterial: {fileID: 0}
@@ -21932,6 +21936,9 @@ MonoBehaviour:
   hookReleaseClip: {fileID: 0}
   hookLaunchVolume: 0.32
   hookReleaseVolume: 0.28
+  backgroundMusic: {fileID: 8300000, guid: 79e989a4e1242804b91cdc0f87cc31cf, type: 3}
+  backgroundMusicVolume: 0.24
+  backgroundMusicLoopEnd: 142
   showDebugGizmos: 1
 --- !u!143 &1643340618
 CharacterController:
@@ -21978,7 +21985,14 @@ MonoBehaviour:
   wristMidpoint: {x: 0, y: -0.48, z: 0.6}
   wristSeparation: 0.58
   swordLength: 1.15
-  revealPitch: 0.18
+  armRigRotationCorrection: {x: 0, y: 0, z: 0}
+  armRigPositionCorrection: {x: 0, y: 0, z: 0.02}
+  cropForearmsToHands: 1
+  retainedForearmLength: 0.28
+  swordPitch: 0
+  swordRoll: 270
+  swordPositionOffset: {x: 0, y: 0, z: 0}
+  revealPitch: 0.48
   lookDownLift: 0.34
 --- !u!1 &1645349269
 GameObject:
