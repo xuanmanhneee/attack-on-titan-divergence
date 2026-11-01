@@ -34,6 +34,7 @@ public class GameManager : MonoBehaviour
     PlayerCombat combat;
     Health playerHealth;
     Camera cam;
+    TrostMap activeTrostMap;
 
     int wave;
     bool waitingNextWave;
@@ -111,7 +112,14 @@ public class GameManager : MonoBehaviour
             if (go.transform.parent == null && System.Text.RegularExpressions.Regex.IsMatch(go.name, @"^Cube( \(\d+\))?$"))
                 go.SetActive(false);
 
-        var map = TrostCity.Build(odm.transform.position, layer);
+        // Chapter 1 is a baked Unity scene.  Keep the procedural builder only
+        // as a fallback for legacy/test scenes which have no authored map.
+        TrostMapAuthoring authoredMap = FindFirstObjectByType<TrostMapAuthoring>();
+        var map = authoredMap != null
+            ? authoredMap.CreateRuntimeMap(odm.transform.position)
+            : TrostCity.Build(odm.transform.position, layer);
+        activeTrostMap = map;
+        layer = map.buildingLayer;
         Titan.ObstacleMask = 1 << layer;
         Titan.GroundSampler = p => map.GroundAt(p);
 
@@ -144,7 +152,14 @@ public class GameManager : MonoBehaviour
 
         if (Current != State.Playing) return;
 
-        if (odm.transform.position.y < voidY) playerHealth.TakeDamage(9999f);
+        if (activeTrostMap != null && odm.transform.position.y < activeTrostMap.groundY - 10f)
+        {
+            // Recover from a missed roof/floor seam instead of dropping out of
+            // the chapter. The authored map owns the safe rooftop start point.
+            odm.RecoverTo(activeTrostMap.playerStart);
+            Say("Mất thăng bằng — trở lại nóc nhà.");
+        }
+        else if (odm.transform.position.y < voidY) playerHealth.TakeDamage(9999f);
 
         if (waitingNextWave)
         {

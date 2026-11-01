@@ -9,7 +9,7 @@ EditorBuildSettings:
     path: Assets/Scenes/Chapter0_TrainingCamp.unity
     guid: eb0d65c9a07c38440b675da5c5411ffe
   - enabled: 1
-    path: Assets/Scenes/SampleScene.unity
-    guid: 99c9720ab356a0642a771bea13969a05
+    path: Assets/Scenes/Chapter1_BattleOfTrost.unity
+    guid: e5dbb84fc0d8e4640935862771ec20fe
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}

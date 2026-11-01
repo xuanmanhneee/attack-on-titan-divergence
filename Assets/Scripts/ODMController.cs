@@ -26,6 +26,10 @@ public class ODMController : MonoBehaviour
     public float groundBoostSpeed = 17f;
     public float groundGasDrainFactor = 0.5f;
     public float groundAccel = 45f;
+    [Range(45f, 89f)] public float walkableSlopeLimit = 65f;
+    [Range(45f, 89f)] public float gasSlopeLimit = 85f;
+    public float gasRoofProbeDistance = 1.8f;
+    public float gasRoofProbeHeight = 3.5f;
     public float gravity = -20f;
     [Range(0f, 1f)] public float landingMomentumRetention = 0.65f;
     [Range(0f, 1f)] public float bracedLandingMomentumRetention = 0.25f;
@@ -143,6 +147,17 @@ public class ODMController : MonoBehaviour
     public bool RightHookActive => hookRight.active;
     public void RefillGas(float amount) { gas = Mathf.Min(maxGas, gas + amount); }
 
+    public void RecoverTo(Vector3 position)
+    {
+        if (controller == null) controller = GetComponent<CharacterController>();
+        controller.enabled = false;
+        transform.position = position;
+        controller.enabled = true;
+        velocity = Vector3.zero;
+        airborneTime = 0f;
+        landingBrakeWindow = 0f;
+    }
+
     private CharacterController controller;
     private Camera cam;
 
@@ -159,6 +174,7 @@ public class ODMController : MonoBehaviour
     private float aimTimer = 0f;
     private const float AIM_INTERVAL = 0.05f; // cập nhật chấm ngắm 20 lần/giây cho nhẹ
     private readonly Collider[] groundHits = new Collider[16];
+    private readonly RaycastHit[] roofHits = new RaycastHit[16];
 
     private class HookState
     {
@@ -185,7 +201,7 @@ public class ODMController : MonoBehaviour
         // Give the 1.7 m controller enough clearance to step onto the low
         // training/checkpoint plates without catching its lower hemisphere on
         // their vertical edge. Visual feet are aligned to this capsule.
-        controller.slopeLimit = Mathf.Max(controller.slopeLimit, 55f);
+        controller.slopeLimit = Mathf.Clamp(walkableSlopeLimit, 45f, 89f);
         controller.stepOffset = Mathf.Clamp(Mathf.Max(controller.stepOffset, 0.45f),
                                             0f, controller.height - 0.05f);
         controller.minMoveDistance = 0f;
@@ -404,6 +420,23 @@ public class ODMController : MonoBehaviour
         bool boosting = GameInput.GetKey(KeyCode.LeftShift) && gas > 0f && wishDir.sqrMagnitude > 0.0001f;
         float speed = boosting ? groundBoostSpeed : walkSpeed;
 
+        // Normal walking handles ordinary roof pitches.  A steeper roof only
+        // becomes climbable while gas is held, which keeps rooftops useful
+        // without letting the player casually walk up walls.
+        controller.slopeLimit = boosting ? gasSlopeLimit : walkableSlopeLimit;
+
+        if (boosting && TryFindRoofSurface(wishDir, out RaycastHit roof))
+        {
+            Vector3 alongRoof = Vector3.ProjectOnPlane(wishDir, roof.normal);
+            if (alongRoof.sqrMagnitude > 0.0001f)
+            {
+                alongRoof.Normalize();
+                velocity = Vector3.MoveTowards(velocity, alongRoof * speed, groundAccel * dt);
+                gas = Mathf.Max(0f, gas - gasDrain * groundGasDrainFactor * dt);
+                return;
+            }
+        }
+
         Vector3 flat = new Vector3(velocity.x, 0f, velocity.z);
         flat = Vector3.MoveTowards(flat, wishDir * speed, groundAccel * dt);
         velocity.x = flat.x;
@@ -413,6 +446,38 @@ public class ODMController : MonoBehaviour
 
         if (boosting)
             gas = Mathf.Max(0f, gas - gasDrain * groundGasDrainFactor * dt);
+    }
+
+    bool TryFindRoofSurface(Vector3 wishDir, out RaycastHit best)
+    {
+        best = default;
+        Vector3 forward = wishDir.normalized;
+        if (forward.sqrMagnitude < 0.0001f) return false;
+        Vector3 origin = transform.position + forward * gasRoofProbeDistance + Vector3.up * gasRoofProbeHeight;
+
+        int count = Physics.RaycastNonAlloc(origin, Vector3.down, roofHits,
+                                            gasRoofProbeHeight + controller.height + 2f,
+                                            groundLayer, QueryTriggerInteraction.Ignore);
+        float bestScore = float.NegativeInfinity;
+        for (int i = 0; i < count; i++)
+        {
+            RaycastHit candidate = roofHits[i];
+            if (candidate.collider == null || candidate.transform.IsChildOf(transform)) continue;
+            float slope = candidate.normal.y;
+            if (slope < 0.08f || slope > 0.995f) continue;
+            Vector3 along = Vector3.ProjectOnPlane(forward, candidate.normal);
+            if (along.sqrMagnitude < 0.0001f) continue;
+            float ahead = Vector3.Dot(along.normalized, forward);
+            if (ahead < 0.25f) continue;
+            float score = ahead * 10f + candidate.point.y;
+            if (score <= bestScore) continue;
+            bestScore = score;
+            best = candidate;
+        }
+
+        if (bestScore == float.NegativeInfinity) return false;
+        float angle = Vector3.Angle(best.normal, Vector3.up);
+        return angle > 2f && angle <= gasSlopeLimit;
     }
 
     // ================= AIR MOVEMENT =================
@@ -607,6 +672,15 @@ public class ODMController : MonoBehaviour
                                 QueryTriggerInteraction.Ignore)
             && !hit.transform.IsChildOf(transform))
         {
+            // Let CharacterController resolve real roof slopes.  The custom
+            // wall slide below is for vertical walls; applying it to a roof
+            // would erase the uphill component and trap the player in place.
+            if (isGrounded && hit.normal.y > 0.1f)
+            {
+                controller.Move(displacement);
+                return;
+            }
+
             float safeDistance = Mathf.Max(0f, hit.distance - wallCollisionSkin);
             if (safeDistance < distance)
             {
@@ -629,6 +703,8 @@ public class ODMController : MonoBehaviour
 
     void ApplyWallContact(Vector3 normal)
     {
+        if (isGrounded && normal.y > 0.1f) return;
+
         float into = Vector3.Dot(velocity, normal); // < 0: đang lao vào bề mặt
         if (into >= 0f) return;
 
