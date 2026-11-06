@@ -68,7 +68,7 @@ public static class Chapter1SceneBuilder
         BuildWalls(city, terrain, stone);
         BuildDressing(city, terrain);
 
-        ODMController player = UnityEngine.Object.FindFirstObjectByType<ODMController>();
+        ODMController player = UnityEngine.Object.FindAnyObjectByType<ODMController>();
         if (player == null) throw new InvalidOperationException("SampleScene has no ODMController player.");
         // Deliberately authored rooftop start. Do not infer this from the
         // tallest prefab: rebuilding the city must preserve the chosen spawn.
@@ -171,6 +171,7 @@ public static class Chapter1SceneBuilder
                     instance.transform.localScale = Vector3.one * (1.45f + (index % 3) * .10f);
                     SnapBottomToGround(instance, groundY);
                     MakeHookable(instance);
+                    TrostMapAuthoring.EnsureSolidHouseBody(instance.transform, Hookable);
                     index++;
                 }
             }
@@ -241,15 +242,34 @@ public static class Chapter1SceneBuilder
     {
         foreach (Transform child in root.GetComponentsInChildren<Transform>(true)) child.gameObject.layer = Hookable;
 
-        // Remove package colliders and the previous catch-all box.  They often
-        // cover empty space around roofs and create invisible ODM hook points.
+        // Remove imported/detail colliders. Some source houses contain dozens
+        // of overlapping colliders for windows, beams and all three LODs.
         foreach (Collider oldCollider in root.GetComponentsInChildren<Collider>(true))
             UnityEngine.Object.DestroyImmediate(oldCollider);
 
-        int meshColliderCount = 0;
+        var structuralMeshes = new List<MeshFilter>();
         foreach (MeshFilter filter in root.GetComponentsInChildren<MeshFilter>(true))
         {
             if (filter.sharedMesh == null) continue;
+            string hierarchyName = filter.name;
+            foreach (Transform ancestor in filter.GetComponentsInParent<Transform>(true))
+                hierarchyName += " " + ancestor.name;
+            string lower = hierarchyName.ToLowerInvariant();
+            if (lower.Contains("lod1") || lower.Contains("lod2")
+                || lower.Contains("window") || lower.Contains("shutter")
+                || lower.Contains("bolt") || lower.Contains("prop"))
+                continue;
+            structuralMeshes.Add(filter);
+        }
+
+        structuralMeshes.Sort((a, b) => RendererVolume(b).CompareTo(RendererVolume(a)));
+        float largestVolume = structuralMeshes.Count > 0 ? RendererVolume(structuralMeshes[0]) : 0f;
+        int meshColliderCount = 0;
+        for (int i = 0; i < structuralMeshes.Count && meshColliderCount < 4; i++)
+        {
+            MeshFilter filter = structuralMeshes[i];
+            float volume = RendererVolume(filter);
+            if (i > 0 && volume < largestVolume * 0.08f) break;
             MeshCollider meshCollider = filter.gameObject.AddComponent<MeshCollider>();
             meshCollider.sharedMesh = filter.sharedMesh;
             meshCollider.convex = false;
@@ -266,17 +286,46 @@ public static class Chapter1SceneBuilder
         fallbackCollider.size = root.transform.InverseTransformVector(bounds.size);
     }
 
+    static float RendererVolume(MeshFilter filter)
+    {
+        Renderer renderer = filter != null ? filter.GetComponent<Renderer>() : null;
+        if (renderer == null) return 0f;
+        Vector3 size = renderer.bounds.size;
+        return Mathf.Max(0.0001f, size.x * size.y * size.z);
+    }
+
     static void KeepVisibleAtDistance(GameObject root)
     {
         foreach (LODGroup group in root.GetComponentsInChildren<LODGroup>(true))
         {
-            Renderer[] renderers = group.GetComponentsInChildren<Renderer>(true);
+            Renderer[] renderers = HighestDetailRenderers(group);
             if (renderers.Length == 0) continue;
-            // One LOD with a tiny transition height means Unity never reaches
-            // the package's final Culled LOD while the building is on-screen.
+            // Keep only the authored highest-detail renderers. Putting LOD0,
+            // LOD1 and LOD2 into one LOD renders duplicate geometry (notably
+            // floating stair fragments) at the same time.
             group.SetLODs(new[] { new LOD(0.001f, renderers) });
             group.RecalculateBounds();
         }
+    }
+
+    static Renderer[] HighestDetailRenderers(LODGroup group)
+    {
+        var renderers = new List<Renderer>();
+        foreach (Renderer renderer in group.GetComponentsInChildren<Renderer>(true))
+        {
+            // Prefabs can contain nested LODGroups. A renderer owned by a
+            // child LODGroup must not also be assigned to this parent group,
+            // otherwise Unity reports that it is registered with multiple
+            // LODGroups and LOD selection becomes undefined.
+            LODGroup[] ownerGroups = renderer.GetComponentsInParent<LODGroup>(true);
+            if (ownerGroups.Length == 0 || ownerGroups[0] != group) continue;
+
+            string name = renderer.name.ToLowerInvariant();
+            if (name.Contains("lod1") || name.Contains("lod2") || name.Contains("lod3")) continue;
+            renderers.Add(renderer);
+        }
+
+        return renderers.ToArray();
     }
 
     static void SnapBottomToGround(GameObject root, float groundY)

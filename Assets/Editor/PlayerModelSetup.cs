@@ -45,7 +45,7 @@ public static class PlayerModelSetup
     public static void CapturePreview()
     {
         Scene scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
-        ODMController odm = UnityEngine.Object.FindFirstObjectByType<ODMController>();
+        ODMController odm = UnityEngine.Object.FindAnyObjectByType<ODMController>();
         FirstPersonCharacterVisual installed = odm != null
             ? odm.GetComponentInChildren<FirstPersonCharacterVisual>(true)
             : null;
@@ -206,7 +206,7 @@ public static class PlayerModelSetup
     static void InstallIntoSampleScene(GameObject visualPrefab)
     {
         Scene scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
-        ODMController odm = UnityEngine.Object.FindFirstObjectByType<ODMController>();
+        ODMController odm = UnityEngine.Object.FindAnyObjectByType<ODMController>();
         if (odm == null)
             throw new InvalidOperationException("SampleScene has no ODMController.");
 

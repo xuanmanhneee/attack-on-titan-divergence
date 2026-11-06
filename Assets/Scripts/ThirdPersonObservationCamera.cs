@@ -20,7 +20,10 @@ public sealed class ThirdPersonObservationCamera : MonoBehaviour
     [SerializeField] float rotationSharpness = 16f;
     [SerializeField] float collisionRadius = 0.24f;
     [SerializeField] float collisionPadding = 0.16f;
+    [SerializeField] float minimumModelClearance = 0.9f;
     [SerializeField] float groundClearance = 0.22f;
+    [SerializeField, Range(0.1f, 0.95f)] float ignoreRoofNormalY = 0.62f;
+    [SerializeField, Range(0.5f, 1f)] float groundNormalY = 0.82f;
 
     readonly RaycastHit[] collisionHits = new RaycastHit[16];
     Camera observationCamera;
@@ -111,17 +114,34 @@ public sealed class ThirdPersonObservationCamera : MonoBehaviour
                 Collider hitCollider = collisionHits[i].collider;
                 if (hitCollider == null || hitCollider.transform.IsChildOf(transform))
                     continue;
+                // A player standing on a pitched roof should not have the
+                // chase camera pushed into that roof. Vertical walls remain
+                // valid camera obstacles; sloped roof faces are not.
+                if (collisionHits[i].normal.y > ignoreRoofNormalY)
+                    continue;
                 nearest = Mathf.Min(nearest, collisionHits[i].distance);
             }
-            desired = focus + direction * Mathf.Max(0.35f, nearest - collisionPadding);
+            // Do not let the chase camera solve a wall collision by moving
+            // inside the player's own body.  The old 0.35 m floor was smaller
+            // than the character's torso, which caused visible camera-through-
+            // model clipping whenever a wall was directly behind the player.
+            float safeDistance = Mathf.Max(minimumModelClearance, nearest - collisionPadding);
+            desired = focus + direction * safeDistance;
         }
+
+        // Also protect the no-hit path and the first frames after toggling V.
+        Vector3 fromFocus = desired - focus;
+        if (fromFocus.sqrMagnitude > 0.0001f
+            && fromFocus.magnitude < minimumModelClearance)
+            desired = focus + fromFocus.normalized * minimumModelClearance;
 
         // Collision shortening can push the chase camera close to sloped
         // terrain. Keep the lens above the surface to avoid underground shots.
         Vector3 groundProbe = desired + up * 1.5f;
         if (Physics.Raycast(groundProbe, Vector3.down, out RaycastHit groundHit,
                             3f, ~0, QueryTriggerInteraction.Ignore)
-            && !groundHit.collider.transform.IsChildOf(transform))
+            && !groundHit.collider.transform.IsChildOf(transform)
+            && groundHit.normal.y >= groundNormalY)
             desired.y = Mathf.Max(desired.y, groundHit.point.y + groundClearance);
 
         observationCamera.transform.position = Vector3.Lerp(

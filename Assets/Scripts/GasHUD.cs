@@ -26,14 +26,14 @@ public class GasHUD : MonoBehaviour
 
     static void AutoCreate()
     {
-        if (FindFirstObjectByType<GasHUD>() != null) return;
-        if (FindFirstObjectByType<ODMController>() == null) return;
+        if (FindAnyObjectByType<GasHUD>() != null) return;
+        if (FindAnyObjectByType<ODMController>() == null) return;
         new GameObject("GasHUD").AddComponent<GasHUD>();
     }
 
     void Start()
     {
-        player = FindFirstObjectByType<ODMController>();
+        player = FindAnyObjectByType<ODMController>();
 
         var canvasObj = new GameObject("GasHUD_Canvas");
         canvasObj.transform.SetParent(transform);

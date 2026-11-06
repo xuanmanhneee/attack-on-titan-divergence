@@ -27,7 +27,11 @@ public class ODMController : MonoBehaviour
     public float groundGasDrainFactor = 0.5f;
     public float groundAccel = 45f;
     [Range(45f, 89f)] public float walkableSlopeLimit = 65f;
-    [Range(45f, 89f)] public float gasSlopeLimit = 85f;
+    [Range(45f, 89f)] public float gasSlopeLimit = 89f;
+    [Range(1f, 45f)] public float roofSlideMinAngle = 6f;
+    public float roofSlideAcceleration = 24f;
+    public float roofSlideMaxSpeed = 14f;
+    public float roofSurfaceGrip = 1.5f;
     public float gasRoofProbeDistance = 1.8f;
     public float gasRoofProbeHeight = 3.5f;
     public float gravity = -20f;
@@ -136,6 +140,7 @@ public class ODMController : MonoBehaviour
 
     [Header("Debug")]
     public bool showDebugGizmos = true;
+    public bool logRoofCollisionDebug = true;
 
     public bool AimHasTarget { get; private set; }
     public float GasNormalized => gas / maxGas;
@@ -174,7 +179,17 @@ public class ODMController : MonoBehaviour
     private float aimTimer = 0f;
     private const float AIM_INTERVAL = 0.05f; // cập nhật chấm ngắm 20 lần/giây cho nhẹ
     private readonly Collider[] groundHits = new Collider[16];
+    private readonly Collider[] overlapHits = new Collider[32];
     private readonly RaycastHit[] roofHits = new RaycastHit[16];
+    private Collider lastContactCollider;
+    private Vector3 lastContactPoint;
+    private Vector3 lastContactNormal;
+    private Vector3 lastContactMoveDirection;
+    private float lastContactTime = -10f;
+    private float nextRoofDebugLog;
+    private bool loggedRoofContactSample;
+    private RaycastHit currentGroundSurface;
+    private bool hasCurrentGroundSurface;
 
     private class HookState
     {
@@ -201,7 +216,10 @@ public class ODMController : MonoBehaviour
         // Give the 1.7 m controller enough clearance to step onto the low
         // training/checkpoint plates without catching its lower hemisphere on
         // their vertical edge. Visual feet are aligned to this capsule.
-        controller.slopeLimit = Mathf.Clamp(walkableSlopeLimit, 45f, 89f);
+        // Do not let CharacterController reject the roof geometry before our
+        // gas-vs-walking rule gets a chance to run. GroundMovement gates steep
+        // roofs without gas; gas movement is projected along the roof plane.
+        controller.slopeLimit = 89f;
         controller.stepOffset = Mathf.Clamp(Mathf.Max(controller.stepOffset, 0.45f),
                                             0f, controller.height - 0.05f);
         controller.minMoveDistance = 0f;
@@ -235,6 +253,7 @@ public class ODMController : MonoBehaviour
 
     void Update()
     {
+        Vector3 frameStartPosition = transform.position;
         float dt = Time.deltaTime;
 
         HandleLook();
@@ -268,6 +287,7 @@ public class ODMController : MonoBehaviour
         UpdateFov(dt);
         UpdateRopeVisuals();
         UpdateBackgroundMusic();
+        LogRoofContact(frameStartPosition);
     }
 
     void UpdateBackgroundMusic()
@@ -282,6 +302,7 @@ public class ODMController : MonoBehaviour
 
     void SimulateMovement(float dt)
     {
+        ResolveControllerOverlap();
         bool wasGrounded = isGrounded;
         UpdateGrounded();
 
@@ -329,6 +350,39 @@ public class ODMController : MonoBehaviour
         }
         else
             AirMovement(dt, hooked);
+    }
+
+    void ResolveControllerOverlap()
+    {
+        if (controller == null || !controller.enabled) return;
+
+        Vector3 scale = transform.lossyScale;
+        float worldHeight = controller.height * Mathf.Abs(scale.y);
+        float worldRadius = controller.radius * Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.z));
+        Vector3 center = transform.TransformPoint(controller.center);
+        float halfSegment = Mathf.Max(0f, worldHeight * 0.5f - worldRadius);
+        Vector3 top = center + Vector3.up * halfSegment;
+        Vector3 bottom = center - Vector3.up * halfSegment;
+        int count = Physics.OverlapCapsuleNonAlloc(bottom, top, worldRadius,
+                                                   overlapHits, groundLayer,
+                                                   QueryTriggerInteraction.Ignore);
+        Vector3 correction = Vector3.zero;
+        for (int i = 0; i < count; i++)
+        {
+            Collider other = overlapHits[i];
+            if (other == null || other == controller || other.transform.IsChildOf(transform)) continue;
+            if (Physics.ComputePenetration(controller, transform.position, transform.rotation,
+                                           other, other.transform.position, other.transform.rotation,
+                                           out Vector3 direction, out float distance))
+                correction += direction * distance;
+        }
+
+        if (correction.sqrMagnitude < 0.000001f) return;
+        correction = Vector3.ClampMagnitude(correction, 0.75f);
+        controller.enabled = false;
+        transform.position += correction + correction.normalized * 0.015f;
+        controller.enabled = true;
+        velocity = Vector3.ProjectOnPlane(velocity, correction.normalized);
     }
 
     void ApplyLandingBrake(bool braced)
@@ -379,6 +433,7 @@ public class ODMController : MonoBehaviour
     // ================= GROUND CHECK =================
     void UpdateGrounded()
     {
+        hasCurrentGroundSurface = false;
         Vector3 scale = transform.lossyScale;
         float worldHeight = controller.height * Mathf.Abs(scale.y);
         float worldRadius = controller.radius * Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.z));
@@ -397,6 +452,23 @@ public class ODMController : MonoBehaviour
             }
         }
         isGrounded = sphereGrounded || controller.isGrounded;
+
+        // A sloped MeshCollider can sit between the controller's lower
+        // hemisphere and the overlap volume for one frame.  A short downward
+        // ray makes roof contact deterministic instead of switching to air
+        // movement and appearing stuck.
+        Vector3 rayOrigin = transform.TransformPoint(controller.center)
+                          + Vector3.up * 0.2f;
+        float rayLength = worldHeight * 0.5f + 0.45f;
+        if (Physics.Raycast(rayOrigin, Vector3.down, out RaycastHit groundHit,
+                            rayLength, groundLayer, QueryTriggerInteraction.Ignore)
+            && !groundHit.transform.IsChildOf(transform)
+            && groundHit.normal.y > 0.05f)
+        {
+            currentGroundSurface = groundHit;
+            hasCurrentGroundSurface = true;
+            isGrounded = true;
+        }
     }
 
     void LoosenRope(HookState hook)
@@ -418,12 +490,13 @@ public class ODMController : MonoBehaviour
         bool brakingLanding = landingBrakeWindow > 0f && GameInput.GetAxis("Vertical") < -0.5f;
         Vector3 wishDir = GetWishDirection(brakingLanding);
         bool boosting = GameInput.GetKey(KeyCode.LeftShift) && gas > 0f && wishDir.sqrMagnitude > 0.0001f;
-        float speed = boosting ? groundBoostSpeed : walkSpeed;
+        bool slidingRoof = TryGetSteepGround(out Vector3 roofNormal, out Vector3 downhill);
+        float speed = boosting ? groundBoostSpeed : (slidingRoof ? 0f : walkSpeed);
 
         // Normal walking handles ordinary roof pitches.  A steeper roof only
         // becomes climbable while gas is held, which keeps rooftops useful
         // without letting the player casually walk up walls.
-        controller.slopeLimit = boosting ? gasSlopeLimit : walkableSlopeLimit;
+        controller.slopeLimit = boosting ? gasSlopeLimit : 89f;
 
         if (boosting && TryFindRoofSurface(wishDir, out RaycastHit roof))
         {
@@ -433,6 +506,22 @@ public class ODMController : MonoBehaviour
                 alongRoof.Normalize();
                 velocity = Vector3.MoveTowards(velocity, alongRoof * speed, groundAccel * dt);
                 gas = Mathf.Max(0f, gas - gasDrain * groundGasDrainFactor * dt);
+                return;
+            }
+        }
+
+        if (slidingRoof && !boosting)
+        {
+            // Gravity projected onto the roof gives the real downhill
+            // direction. Player input cannot create walking traction here;
+            // use gas or reel the rope to get off the slope.
+            if (downhill.sqrMagnitude > 0.0001f)
+            {
+                downhill.Normalize();
+                Vector3 surfaceVelocity = Vector3.ProjectOnPlane(velocity, roofNormal);
+                surfaceVelocity += downhill * roofSlideAcceleration * dt;
+                surfaceVelocity = Vector3.ClampMagnitude(surfaceVelocity, roofSlideMaxSpeed);
+                velocity = surfaceVelocity - roofNormal * roofSurfaceGrip;
                 return;
             }
         }
@@ -478,6 +567,64 @@ public class ODMController : MonoBehaviour
         if (bestScore == float.NegativeInfinity) return false;
         float angle = Vector3.Angle(best.normal, Vector3.up);
         return angle > 2f && angle <= gasSlopeLimit;
+    }
+
+    bool TryGetSteepGround(out Vector3 surfaceNormal, out Vector3 downhill)
+    {
+        RaycastHit ground;
+        if (hasCurrentGroundSurface)
+            ground = currentGroundSurface;
+        else
+        {
+            Vector3 origin = transform.position + Vector3.up * 1.25f;
+            if (!Physics.Raycast(origin, Vector3.down, out ground, 3.5f, groundLayer,
+                                 QueryTriggerInteraction.Ignore)
+                || ground.transform.IsChildOf(transform))
+            {
+                surfaceNormal = Vector3.up;
+                downhill = Vector3.zero;
+                return false;
+            }
+        }
+
+        // Do not trust a single imported MeshCollider triangle: this roof pack
+        // has hidden ridge/seam triangles whose normals do not match what the
+        // player sees. Estimate the visible surface from nearby hit heights.
+        float radius = Mathf.Max(controller.radius * 1.25f, 0.55f);
+        float sumXX = 0f, sumZZ = 0f, sumXH = 0f, sumZH = 0f;
+        SampleGroundGradient(ground, new Vector3(radius, 0f, 0f), ref sumXX, ref sumZZ, ref sumXH, ref sumZH);
+        SampleGroundGradient(ground, new Vector3(-radius, 0f, 0f), ref sumXX, ref sumZZ, ref sumXH, ref sumZH);
+        SampleGroundGradient(ground, new Vector3(0f, 0f, radius), ref sumXX, ref sumZZ, ref sumXH, ref sumZH);
+        SampleGroundGradient(ground, new Vector3(0f, 0f, -radius), ref sumXX, ref sumZZ, ref sumXH, ref sumZH);
+
+        float gradientX = sumXX > 0.0001f ? sumXH / sumXX : 0f;
+        float gradientZ = sumZZ > 0.0001f ? sumZH / sumZZ : 0f;
+        float gradient = Mathf.Sqrt(gradientX * gradientX + gradientZ * gradientZ);
+        float angle = Mathf.Atan(gradient) * Mathf.Rad2Deg;
+
+        surfaceNormal = new Vector3(-gradientX, 1f, -gradientZ).normalized;
+        downhill = new Vector3(-gradientX, -gradient * gradient, -gradientZ);
+        if (downhill.sqrMagnitude > 0.0001f) downhill.Normalize();
+        return angle >= roofSlideMinAngle;
+    }
+
+    void SampleGroundGradient(RaycastHit center, Vector3 offset,
+                              ref float sumXX, ref float sumZZ,
+                              ref float sumXH, ref float sumZH)
+    {
+        Vector3 origin = center.point + offset + Vector3.up * 2f;
+        if (!Physics.Raycast(origin, Vector3.down, out RaycastHit sample, 4f,
+                             groundLayer, QueryTriggerInteraction.Ignore))
+            return;
+        if (sample.collider != center.collider) return;
+
+        float heightDelta = sample.point.y - center.point.y;
+        if (Mathf.Abs(heightDelta) > 1.5f) return;
+
+        sumXX += offset.x * offset.x;
+        sumZZ += offset.z * offset.z;
+        sumXH += offset.x * heightDelta;
+        sumZH += offset.z * heightDelta;
     }
 
     // ================= AIR MOVEMENT =================
@@ -645,7 +792,63 @@ public class ODMController : MonoBehaviour
 
     void OnControllerColliderHit(ControllerColliderHit hit)
     {
+        lastContactCollider = hit.collider;
+        lastContactPoint = hit.point;
+        lastContactNormal = hit.normal;
+        lastContactMoveDirection = hit.moveDirection;
+        lastContactTime = Time.time;
         ApplyWallContact(hit.normal);
+    }
+
+    void LogRoofContact(Vector3 frameStartPosition)
+    {
+        if (!logRoofCollisionDebug || Time.time < nextRoofDebugLog) return;
+
+        float input = new Vector2(GameInput.GetAxis("Horizontal"), GameInput.GetAxis("Vertical")).magnitude;
+        bool tryingToMove = input > 0.2f || GameInput.GetKey(KeyCode.LeftShift)
+                           || (hookLeft.active || hookRight.active) && GameInput.GetKey(KeyCode.Space);
+        float moved = Vector3.Distance(frameStartPosition, transform.position);
+        bool stuck = tryingToMove && moved <= 0.025f;
+        Vector3 scale = transform.lossyScale;
+        float worldHeight = controller.height * Mathf.Abs(scale.y);
+        float worldRadius = controller.radius * Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.z));
+        Vector3 worldCenter = transform.TransformPoint(controller.center);
+        float capsuleBottomY = worldCenter.y - worldHeight * 0.5f;
+
+        string groundInfo = "groundHit=none";
+        float groundAngle = 0f;
+        if (Physics.Raycast(worldCenter + Vector3.up * 0.2f, Vector3.down,
+                            out RaycastHit ground, worldHeight + 2f, groundLayer,
+                            QueryTriggerInteraction.Ignore)
+            && !ground.transform.IsChildOf(transform))
+        {
+            groundAngle = Vector3.Angle(ground.normal, Vector3.up);
+            groundInfo = $"ground={ground.collider.name}, pointY={ground.point.y:F3}, "
+                       + $"bottomY={capsuleBottomY:F3}, gap={capsuleBottomY - ground.point.y:F3}, "
+                       + $"normal={ground.normal}, angle={groundAngle:F1}";
+            Debug.DrawRay(ground.point, ground.normal * 3f, Color.cyan, 1f);
+        }
+
+        // Keep normal gameplay logs quiet. Sample the first surface under the
+        // player even when the collider reports it as flat; imported roof
+        // meshes can contain hidden horizontal triangles around the ridge.
+        if (!stuck && loggedRoofContactSample) return;
+        if (!stuck) loggedRoofContactSample = true;
+        nextRoofDebugLog = Time.time + 0.75f;
+
+        string contactInfo = Time.time - lastContactTime < 0.75f && lastContactCollider != null
+            ? $"contact={lastContactCollider.name}, point={lastContactPoint}, normal={lastContactNormal}, "
+              + $"angle={Vector3.Angle(lastContactNormal, Vector3.up):F1}, moveDir={lastContactMoveDirection}"
+            : "contact=none";
+
+        string message = $"[RoofCollision] {(stuck ? "STUCK" : "CONTACT")} pos={transform.position}, "
+                       + $"moved={moved:F4}, velocity={velocity}, "
+                       + $"grounded={isGrounded}/{controller.isGrounded}, "
+                       + $"slopeLimit={controller.slopeLimit:F1}, slideMin={roofSlideMinAngle:F1}, "
+                       + $"cachedGround={hasCurrentGroundSurface}, radius={worldRadius:F2}; "
+                       + groundInfo + "; " + contactInfo;
+        if (stuck) Debug.LogWarning(message, this);
+        else Debug.Log(message, this);
     }
 
     void MoveWithWallCollision(Vector3 displacement)
@@ -675,7 +878,7 @@ public class ODMController : MonoBehaviour
             // Let CharacterController resolve real roof slopes.  The custom
             // wall slide below is for vertical walls; applying it to a roof
             // would erase the uphill component and trap the player in place.
-            if (isGrounded && hit.normal.y > 0.1f)
+            if (isGrounded && hit.normal.y > 0.55f)
             {
                 controller.Move(displacement);
                 return;
@@ -888,9 +1091,12 @@ public class ODMController : MonoBehaviour
     {
         Ray ray = new Ray(cameraTransform.position, cameraTransform.forward);
 
-        bool found = Physics.Raycast(ray, out hit, maxHookRange, hookableLayer, QueryTriggerInteraction.Ignore);
+        // Titan body colliders are triggers so they cannot physically pin the
+        // player. Hook casts deliberately include them; movement casts ignore
+        // triggers and therefore continue to collide only with world geometry.
+        bool found = Physics.Raycast(ray, out hit, maxHookRange, hookableLayer, QueryTriggerInteraction.Collide);
         if (!found && assistRadius > 0f)
-            found = Physics.SphereCast(ray, assistRadius, out hit, maxHookRange, hookableLayer, QueryTriggerInteraction.Ignore);
+            found = Physics.SphereCast(ray, assistRadius, out hit, maxHookRange, hookableLayer, QueryTriggerInteraction.Collide);
 
         if (found && (hip == null || HipClear(hip, hit.point)))
             return true;
@@ -929,7 +1135,7 @@ public class ODMController : MonoBehaviour
                 float roll = 360f * k / samples + ((r % 2) * 0.5f * 360f / samples);
                 Vector3 dir = Quaternion.AngleAxis(roll, fwd) * tilted;
 
-                if (!Physics.Raycast(origin, dir, out RaycastHit h, maxHookRange, hookableLayer, QueryTriggerInteraction.Ignore))
+                if (!Physics.Raycast(origin, dir, out RaycastHit h, maxHookRange, hookableLayer, QueryTriggerInteraction.Collide))
                     continue;
                 if (h.distance < minHookDistance) continue;
                 if (hip != null && !HipClear(hip, h.point)) continue;

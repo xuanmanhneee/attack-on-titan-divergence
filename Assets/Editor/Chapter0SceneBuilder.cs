@@ -31,7 +31,7 @@ public static class Chapter0SceneBuilder
         Transform environment = new GameObject("Chapter0_Environment").transform;
         BuildCamp(environment, terrain);
 
-        ODMController player = Object.FindFirstObjectByType<ODMController>();
+        ODMController player = Object.FindAnyObjectByType<ODMController>();
         if (player == null) throw new System.InvalidOperationException("SampleScene has no ODMController player.");
         CharacterController controller = player.GetComponent<CharacterController>();
         if (controller != null) controller.enabled = false;

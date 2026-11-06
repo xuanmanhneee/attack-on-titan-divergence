@@ -367,6 +367,11 @@ public class Titan : MonoBehaviour
         cap.direction = 1;
         cap.height = 10f;
         cap.radius = 1.3f;
+        // The attack is resolved explicitly in DoHit. Keeping the Titan body
+        // solid lets a kinematic Titan pin the player's CharacterController
+        // against roofs and walls with no escape. A trigger remains hookable
+        // and slashable without participating in movement collision.
+        cap.isTrigger = true;
         BodyColliders.Add(cap);
 
         // Điểm yếu ở gáy (quả cầu đỏ)
@@ -472,7 +477,11 @@ public class Titan : MonoBehaviour
         r.material = m;
 
         var col = go.GetComponent<Collider>();
-        if (solid) BodyColliders.Add(col);
+        if (solid)
+        {
+            col.isTrigger = true;
+            BodyColliders.Add(col);
+        }
         else Destroy(col);
         return go;
     }
@@ -599,8 +608,52 @@ public class Titan : MonoBehaviour
         transform.rotation = Quaternion.RotateTowards(transform.rotation, want, turnSpeed * dt);
 
         if (dir.magnitude < 2f) return; // đã sát mục tiêu, không đi xuyên qua
-        transform.position += transform.forward * speed * dt;
-        moving = true;
+        Vector3 displacement = transform.forward * speed * dt;
+        if (TryMoveWithoutTunneling(displacement)) moving = true;
+    }
+
+    bool TryMoveWithoutTunneling(Vector3 displacement)
+    {
+        if (displacement.sqrMagnitude < 0.000001f) return false;
+        if (ObstacleMask == 0)
+        {
+            transform.position += displacement;
+            return true;
+        }
+
+        float radius = Mathf.Max(0.45f, 1.05f * k);
+        Vector3 bottom = transform.position + Vector3.up * radius;
+        Vector3 top = transform.position + Vector3.up * Mathf.Max(radius, 4.5f * k);
+        Vector3 direction = displacement.normalized;
+        float distance = displacement.magnitude;
+        const float skin = 0.08f;
+
+        if (!Physics.CapsuleCast(bottom, top, radius, direction, out RaycastHit hit,
+                                 distance + skin, ObstacleMask, QueryTriggerInteraction.Ignore))
+        {
+            transform.position += displacement;
+            return true;
+        }
+
+        float safeDistance = Mathf.Max(0f, hit.distance - skin);
+        if (safeDistance > 0f) transform.position += direction * safeDistance;
+
+        Vector3 remaining = displacement - direction * safeDistance;
+        Vector3 slide = Vector3.ProjectOnPlane(remaining, hit.normal);
+        slide.y = 0f;
+        if (slide.sqrMagnitude < 0.000001f) return safeDistance > 0f;
+
+        Vector3 slideDirection = slide.normalized;
+        float slideDistance = slide.magnitude;
+        bottom = transform.position + Vector3.up * radius;
+        top = transform.position + Vector3.up * Mathf.Max(radius, 4.5f * k);
+        if (Physics.CapsuleCast(bottom, top, radius, slideDirection, out RaycastHit slideHit,
+                                slideDistance + skin, ObstacleMask, QueryTriggerInteraction.Ignore))
+            slideDistance = Mathf.Max(0f, slideHit.distance - skin);
+
+        if (slideDistance <= 0f) return safeDistance > 0f;
+        transform.position += slideDirection * slideDistance;
+        return true;
     }
 
     void FaceTarget(float dt)
