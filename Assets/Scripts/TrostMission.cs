@@ -47,14 +47,45 @@ public class TrostMission : MonoBehaviour
     public void Init(GameManager manager, ODMController player, PlayerCombat pc, TrostMap trostMap)
     {
         gm = manager; odm = player; combat = pc; map = trostMap;
+        depots.Clear();
         foreach (var p in map.depots) depots.Add(new Depot { pos = p, stock = depotStock });
 
-        Titan.Killed += OnKilled;
+        SubscribeTitanEvents();
         SpawnClearWave();
         gm.Say("Trost: titan đã lọt vào khu phố! Gas cạn thì chạy tới cột sáng xanh để tiếp tế.");
     }
 
-    void OnDestroy() { Titan.Killed -= OnKilled; }
+    void OnEnable() { SubscribeTitanEvents(); }
+    void OnDisable() { Titan.Killed -= OnKilled; }
+
+    void SubscribeTitanEvents()
+    {
+        Titan.Killed -= OnKilled;
+        Titan.Killed += OnKilled;
+    }
+
+    bool RestoreRuntimeReferences()
+    {
+        if (gm == null) gm = FindAnyObjectByType<GameManager>();
+        if (odm == null) odm = FindAnyObjectByType<ODMController>();
+        if (odm != null && combat == null) combat = odm.GetComponent<PlayerCombat>();
+
+        if (map == null && odm != null)
+        {
+            TrostMapAuthoring authored = FindAnyObjectByType<TrostMapAuthoring>();
+            if (authored != null)
+            {
+                map = authored.CreateRuntimeMap(odm.transform.position);
+                depots.Clear();
+                foreach (Vector3 position in map.depots)
+                    depots.Add(new Depot { pos = position, stock = depotStock });
+                SubscribeTitanEvents();
+                Debug.Log("[TrostMission] Restored runtime map references after script reload.", this);
+            }
+        }
+
+        return gm != null && odm != null && combat != null && map != null;
+    }
 
     // ================= SINH TITAN =================
     Titan Spawn(Vector3 pos, TitanModelDef def, float height)
@@ -120,6 +151,10 @@ public class TrostMission : MonoBehaviour
 
     void Update()
     {
+        // Compiling scripts during Play Mode clears non-serialized runtime
+        // references while this component survives. Rebind from the baked
+        // scene metadata instead of throwing once per frame.
+        if (!RestoreRuntimeReferences()) return;
         if (gm.Current != GameManager.State.Playing) return;
         float dt = Time.deltaTime;
 

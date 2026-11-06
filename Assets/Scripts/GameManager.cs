@@ -59,11 +59,11 @@ public class GameManager : MonoBehaviour
 
     static void AutoCreate()
     {
-        if (FindFirstObjectByType<GameManager>() != null) return;
+        if (FindAnyObjectByType<GameManager>() != null) return;
         // Chapter 0 has its own non-combat progression and HUD.  Do not start
         // Trost (or spawn combat waves) merely because it reuses ODMController.
-        if (FindFirstObjectByType<Chapter0Training>() != null) return;
-        if (FindFirstObjectByType<ODMController>() == null) return;
+        if (FindAnyObjectByType<Chapter0Training>() != null) return;
+        if (FindAnyObjectByType<ODMController>() == null) return;
         new GameObject("GameManager").AddComponent<GameManager>();
     }
 
@@ -72,7 +72,7 @@ public class GameManager : MonoBehaviour
         Time.timeScale = 1f;
         Titan.ResetAll();
 
-        odm = FindFirstObjectByType<ODMController>();
+        odm = FindAnyObjectByType<ODMController>();
         cam = odm.cameraTransform != null ? odm.cameraTransform.GetComponent<Camera>() : Camera.main;
 
         // Titans use the player's first hookable layer so ODM raycasts can hit them
@@ -108,13 +108,13 @@ public class GameManager : MonoBehaviour
         if (mask == 0) Debug.LogWarning("[Trost] hookableLayer đang trống, dùng layer 3.");
 
         // Tắt các khối thử nghiệm cũ trong scene
-        foreach (var go in FindObjectsByType<GameObject>(FindObjectsSortMode.None))
+        foreach (var go in FindObjectsByType<GameObject>())
             if (go.transform.parent == null && System.Text.RegularExpressions.Regex.IsMatch(go.name, @"^Cube( \(\d+\))?$"))
                 go.SetActive(false);
 
         // Chapter 1 is a baked Unity scene.  Keep the procedural builder only
         // as a fallback for legacy/test scenes which have no authored map.
-        TrostMapAuthoring authoredMap = FindFirstObjectByType<TrostMapAuthoring>();
+        TrostMapAuthoring authoredMap = FindAnyObjectByType<TrostMapAuthoring>();
         var map = authoredMap != null
             ? authoredMap.CreateRuntimeMap(odm.transform.position)
             : TrostCity.Build(odm.transform.position, layer);

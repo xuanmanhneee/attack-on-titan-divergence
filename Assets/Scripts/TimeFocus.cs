@@ -29,7 +29,7 @@ public class TimeFocus : MonoBehaviour
 
     void Update()
     {
-        if (gm == null) gm = FindFirstObjectByType<GameManager>();
+        if (gm == null) gm = FindAnyObjectByType<GameManager>();
         // Chỉ điều khiển thời gian khi đang chơi; pause/thắng/thua do GameManager quản lý
         if (gm != null && gm.Current != GameManager.State.Playing) { current = 1f; Active = false; return; }
 

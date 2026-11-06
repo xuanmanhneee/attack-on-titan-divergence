@@ -31,7 +31,7 @@ public static class WRADSwordViewmodelSetup
         foreach (string path in ScenePaths)
         {
             Scene scene = EditorSceneManager.OpenScene(path, OpenSceneMode.Single);
-            ODMController odm = UnityEngine.Object.FindFirstObjectByType<ODMController>();
+            ODMController odm = UnityEngine.Object.FindAnyObjectByType<ODMController>();
             if (odm == null) throw new InvalidOperationException(path + " has no ODMController.");
 
             FirstPersonSwordViewmodel component = odm.GetComponent<FirstPersonSwordViewmodel>();

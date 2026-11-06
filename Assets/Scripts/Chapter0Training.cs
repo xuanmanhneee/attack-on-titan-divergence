@@ -35,7 +35,7 @@ public class Chapter0Training : MonoBehaviour
 
     void Start()
     {
-        if (player == null) player = FindFirstObjectByType<ODMController>();
+        if (player == null) player = FindAnyObjectByType<ODMController>();
         if (player == null) { enabled = false; return; }
 
         respawnPosition = player.transform.position;
