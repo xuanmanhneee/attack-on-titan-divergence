@@ -14,10 +14,11 @@ public static class GameSettings
     public static bool InvertY = false;
     public static float Fov = 75f;
     public static bool SlowMo = true;       // làm chậm thời gian khi ở trên không
-    public static bool SmartAim = true;     // ngắm hỗ trợ
-    public static bool AutoReel = true;     // tự thu dây nhẹ khi nhìn về phía móc
-    public static bool AutoRelease = true;  // tự nhả dây khi vượt điểm neo
-    public static bool AnchorLift = true;   // nâng điểm neo lên mái nhà
+    // Mặc định TẮT cả bốn: ODM của codex được chỉnh theo kiểu thủ công (móc đúng chỗ ngắm, tự nhả/thu dây do người chơi)
+    public static bool SmartAim = false;    // ngắm hỗ trợ
+    public static bool AutoReel = false;    // tự thu dây nhẹ khi nhìn về phía móc
+    public static bool AutoRelease = false; // tự nhả dây khi vượt điểm neo
+    public static bool AnchorLift = false;  // nâng điểm neo lên mái nhà
 
     // ---------- Âm thanh ----------
     // Dùng chung với menu codex (GameVolumeSettings) để một thanh âm lượng duy nhất cho cả game
@@ -88,6 +89,13 @@ public static class GameSettings
         AutoReel = PlayerPrefs.GetInt(P + "autoReel", AutoReel ? 1 : 0) == 1;
         AutoRelease = PlayerPrefs.GetInt(P + "autoRelease", AutoRelease ? 1 : 0) == 1;
         AnchorLift = PlayerPrefs.GetInt(P + "anchorLift", AnchorLift ? 1 : 0) == 1;
+
+        // Bản cũ lưu mặc định BẬT cho 4 trợ giúp ODM; ODM của codex chạy thủ công nên đưa về TẮT một lần.
+        if (PlayerPrefs.GetInt(P + "ver", 1) < 2)
+        {
+            SmartAim = AutoReel = AutoRelease = AnchorLift = false;
+            PlayerPrefs.SetInt(P + "ver", 2);
+        }
 
         Quality = PlayerPrefs.GetInt(P + "quality", QualitySettings.GetQualityLevel());
         Fullscreen = PlayerPrefs.GetInt(P + "fullscreen", Fullscreen ? 1 : 0) == 1;
@@ -182,11 +190,11 @@ public static class GameSettings
         {
             case 0:
                 MouseSens = 1f; InvertY = false; Fov = 75f; SlowMo = true;
-                SmartAim = true; AutoReel = true; AutoRelease = true; AnchorLift = true;
+                SmartAim = false; AutoReel = false; AutoRelease = false; AnchorLift = false;
                 Commit();
                 break;
             case 1:
-                Master = 1f; Music = 0.7f; Sfx = 0.9f;
+                Master = 1f; Music = 0.75f; Sfx = 1f;
                 Commit();
                 break;
             case 2:

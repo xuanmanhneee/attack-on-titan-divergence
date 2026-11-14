@@ -242,6 +242,7 @@ public class ODMController : MonoBehaviour
         autoReel = GameSettings.AutoReel;
         autoRelease = GameSettings.AutoRelease;
         liftAnchorToRoof = GameSettings.AnchorLift;
+        if (backgroundMusicAudio != null) backgroundMusicAudio.volume = backgroundMusicVolume * GameSettings.Music;
     }
 
     void Start()
@@ -281,7 +282,7 @@ public class ODMController : MonoBehaviour
             backgroundMusicAudio.playOnAwake = false;
             backgroundMusicAudio.loop = false;
             backgroundMusicAudio.spatialBlend = 0f;
-            backgroundMusicAudio.volume = backgroundMusicVolume;
+            backgroundMusicAudio.volume = backgroundMusicVolume * GameSettings.Music;
             backgroundMusicAudio.Play();
         }
     }
@@ -1093,7 +1094,7 @@ public class ODMController : MonoBehaviour
         if (hookAudio == null || clip == null) return;
         hookAudio.panStereo = side * 0.18f;
         hookAudio.pitch = Random.Range(0.97f, 1.03f);
-        hookAudio.PlayOneShot(clip, volume);
+        hookAudio.PlayOneShot(clip, volume * GameSettings.Sfx);
     }
 
     void RefreshAnchor(HookState hook)
