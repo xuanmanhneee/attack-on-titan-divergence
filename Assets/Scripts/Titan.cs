@@ -1,0 +1,818 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+// Titan dựng hoàn toàn bằng code từ các khối cơ bản (placeholder), không cần prefab hay NavMesh.
+// Sau này có model Mixamo thì thay phần BuildBody(), giữ nguyên AI và điểm yếu ở gáy (Nape).
+// AI: lang thang -> thấy người chơi thì đuổi -> vào tầm thì vung tay đập (có thời gian gồng).
+// Bay cao hơn tầm tay (~7.5 * kích thước) thì không bị đánh trúng.
+public class Titan : MonoBehaviour
+{
+    public static readonly List<Titan> All = new List<Titan>();
+    public static event Action<Titan> Killed;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    static void ClearStatics() { All.Clear(); Killed = null; ObstacleMask = 0; HookableLayer = -1; GroundSampler = null; HasField = false; }
+
+    // Layer của công trình mà titan phải tránh (đặt bởi bản đồ). 0 = không tránh.
+    public static int ObstacleMask;
+
+    // Layer used by ODM raycasts. Set by GameManager from the player's hook mask.
+    // -1 keeps the old Ignore Raycast fallback for scenes without a manager.
+    public static int HookableLayer = -1;
+
+    // Hàm cho biết độ cao mặt đất tại một vị trí (đặt bởi bản đồ). null = dùng Terrain.
+    public static Func<Vector3, float> GroundSampler;
+
+    // Vùng đi lại của titan (mặt phẳng XZ). Titan không được bước ra khỏi khu phố.
+    public static Rect Field;
+    public static bool HasField;
+
+    public static void ResetAll() { All.Clear(); ObstacleMask = 0; GroundSampler = null; HasField = false; }
+
+    [Header("Movement")]
+    public float walkSpeed = 2.5f;
+    // A normal ODM runner tops out around 9 m/s.  Titans must outrun a simple
+    // sprint so the player is forced to use hooks, gas, and rooftops.
+    public float runSpeed = 17.5f;
+    public float turnSpeed = 100f;
+    public float detectRange = 80f;
+    public float loseRange = 140f;
+
+    [Header("Attack")]
+    public float attackDamage = 35f;
+    public float windupTime = 0.9f;
+    public float recoverTime = 1.6f;
+
+    public Transform Nape { get; private set; }
+    public readonly List<Collider> BodyColliders = new List<Collider>();
+    public bool IsDead => health == null || health.IsDead;
+    public float Height => 10f * k;
+
+    enum State { Wander, Chase, Windup, Recover, Dead }
+
+    Health health;
+    Transform target;
+    float k = 1f; // hệ số kích thước (mô hình gốc cao 10m)
+    State state = State.Wander;
+    float stateTimer;
+    Vector3 wanderPoint;
+    float wanderTimer;
+    bool moving;
+    float walkPhase;
+    Transform armL, armR, legL, legR;
+    TitanModelDef def;        // null = dùng placeholder dựng bằng khối
+    Transform sway;           // pivot để lắc nhẹ khi dùng model thật chưa có animation
+    TitanClipPlayer clips;    // animation (clip) nếu có
+    TitanProceduralAnim proc; // animation bằng code cho rig Humanoid nếu không có clip
+    TitanFootGrounder feet;   // giữ chân chạm đất (rig Humanoid)
+    float bornTime;
+    bool logged;
+
+    float AttackReach => 4.5f * k;
+    float ArmHeight => 7.5f * k;
+
+    // ================= TẠO TITAN =================
+    public static Titan Create(Vector3 groundPos, float heightMeters, Transform target, TitanModelDef def = null)
+    {
+        var root = new GameObject("Titan");
+        root.transform.position = groundPos;
+
+        var t = root.AddComponent<Titan>();
+        t.k = heightMeters / 10f;
+        t.target = target;
+        t.def = def;
+        // Vary the chase speed per Titan while keeping every one faster than a
+        // player's 9 m/s ground sprint.
+        t.runSpeed = UnityEngine.Random.Range(15f, 20f);
+        t.BuildBody();
+        root.transform.rotation = Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 360f), 0f); // xoay sau khi dựng để tính bounds đúng
+        root.transform.localScale = Vector3.one * t.k;
+
+        // Put every body collider on the same layer used by ODM anchors so the
+        // player can grapple directly to a Titan.
+        SetLayerRecursively(root, HookableLayer >= 0 ? HookableLayer : 2);
+
+        var rb = root.AddComponent<Rigidbody>();
+        rb.isKinematic = true;
+        // Titan only turns around the world-up axis. Keeping pitch/roll locked also
+        // protects the gameplay root if physics settings are changed later.
+        rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+
+        t.health = root.AddComponent<Health>();
+        t.health.Init((80f + heightMeters * 6f) * (def != null ? def.healthMultiplier : 1f));
+        t.health.Died += t.Die;
+
+        All.Add(t);
+        return t;
+    }
+
+    void BuildBody()
+    {
+        if (def != null && BuildFromModel()) return;
+
+        if (def != null && !string.IsNullOrEmpty(def.proceduralStyle))
+        {
+            BuildPureTitan(def.proceduralStyle);
+            return;
+        }
+
+        Color skin = new Color(0.78f, 0.58f, 0.45f);
+        Color dark = new Color(0.62f, 0.44f, 0.34f);
+
+        legL = Pivot("LegL_Pivot", new Vector3(-0.8f, 4.4f, 0f));
+        legR = Pivot("LegR_Pivot", new Vector3(0.8f, 4.4f, 0f));
+        Part(PrimitiveType.Capsule, legL, new Vector3(0f, -2.2f, 0f), new Vector3(1.3f, 2.2f, 1.3f), dark, true);
+        Part(PrimitiveType.Capsule, legR, new Vector3(0f, -2.2f, 0f), new Vector3(1.3f, 2.2f, 1.3f), dark, true);
+
+        Part(PrimitiveType.Capsule, transform, new Vector3(0f, 6.2f, 0f), new Vector3(3.0f, 2.0f, 2.0f), skin, true);
+
+        armL = Pivot("ArmL_Pivot", new Vector3(-2.0f, 7.6f, 0f));
+        armR = Pivot("ArmR_Pivot", new Vector3(2.0f, 7.6f, 0f));
+        Part(PrimitiveType.Capsule, armL, new Vector3(0f, -1.8f, 0f), new Vector3(0.9f, 1.8f, 0.9f), skin, true);
+        Part(PrimitiveType.Capsule, armR, new Vector3(0f, -1.8f, 0f), new Vector3(0.9f, 1.8f, 0.9f), skin, true);
+
+        Part(PrimitiveType.Sphere, transform, new Vector3(0f, 9.0f, 0.1f), new Vector3(2.0f, 2.2f, 2.0f), skin, true);
+        Part(PrimitiveType.Cube, transform, new Vector3(0f, 8.9f, 1.15f), new Vector3(0.35f, 0.35f, 0.6f), dark, false);
+
+        // Điểm yếu ở gáy (phía sau cổ): quả cầu đỏ để dễ nhìn
+        var nape = Part(PrimitiveType.Sphere, transform, new Vector3(0f, 8.5f, -1.0f), Vector3.one * 0.9f,
+                        new Color(1f, 0.15f, 0.1f), false);
+        nape.name = "Nape";
+        Nape = nape.transform;
+    }
+
+    // Titan vô tri có tỷ lệ cơ thể và khuôn mặt cố tình bất thường. Các model này
+    // dùng chung animation khớp đơn giản, nhẹ hơn FBX và không chiếm vai trò của
+    // Titan Shifter (Tiến Công, Thiết Giáp, Búa Chiến).
+    void BuildPureTitan(string style)
+    {
+        Color skin = new Color(0.80f, 0.58f, 0.43f);
+        Color shadow = new Color(0.55f, 0.30f, 0.22f);
+        Color sclera = new Color(0.92f, 0.86f, 0.72f);
+        Color pupil = new Color(0.08f, 0.045f, 0.025f);
+        Color mouth = new Color(0.20f, 0.025f, 0.02f);
+        Color teeth = new Color(0.92f, 0.82f, 0.60f);
+
+        float shoulder = 1.85f;
+        float armLength = 1.9f;
+        float legWidth = 1.15f;
+        Vector3 torsoScale = new Vector3(2.75f, 2.05f, 1.75f);
+        Vector3 headScale = new Vector3(1.65f, 1.8f, 1.55f);
+        float headY = 8.9f;
+
+        switch (style)
+        {
+            case "longface":
+                skin = new Color(0.72f, 0.49f, 0.35f);
+                shoulder = 1.65f;
+                armLength = 2.2f;
+                torsoScale = new Vector3(2.35f, 2.0f, 1.55f);
+                headScale = new Vector3(1.35f, 2.35f, 1.35f);
+                headY = 8.75f;
+                break;
+            case "potbelly":
+                skin = new Color(0.86f, 0.64f, 0.49f);
+                shoulder = 2.1f;
+                armLength = 1.65f;
+                legWidth = 1.35f;
+                torsoScale = new Vector3(3.8f, 2.35f, 2.8f);
+                headScale = new Vector3(1.55f, 1.55f, 1.5f);
+                headY = 8.55f;
+                break;
+            case "pinhead":
+                skin = new Color(0.68f, 0.44f, 0.31f);
+                shoulder = 2.2f;
+                armLength = 2.35f;
+                torsoScale = new Vector3(3.25f, 2.25f, 1.9f);
+                headScale = new Vector3(1.0f, 1.15f, 1.0f);
+                headY = 9.25f;
+                break;
+        }
+
+        legL = Pivot("LegL_Pivot", new Vector3(-0.78f, 4.35f, 0f));
+        legR = Pivot("LegR_Pivot", new Vector3(0.78f, 4.35f, 0f));
+        Part(PrimitiveType.Capsule, legL, new Vector3(0f, -2.15f, 0f), new Vector3(legWidth, 2.15f, legWidth), shadow, true);
+        Part(PrimitiveType.Capsule, legR, new Vector3(0f, -2.15f, 0f), new Vector3(legWidth, 2.15f, legWidth), shadow, true);
+
+        Part(PrimitiveType.Capsule, transform, new Vector3(0f, 6.15f, 0f), torsoScale, skin, true);
+
+        armL = Pivot("ArmL_Pivot", new Vector3(-shoulder, 7.65f, 0f));
+        armR = Pivot("ArmR_Pivot", new Vector3(shoulder, 7.65f, 0f));
+        Part(PrimitiveType.Capsule, armL, new Vector3(0f, -armLength, 0f), new Vector3(0.82f, armLength, 0.82f), skin, true);
+        Part(PrimitiveType.Capsule, armR, new Vector3(0f, -armLength, 0f), new Vector3(0.82f, armLength, 0.82f), skin, true);
+
+        Part(PrimitiveType.Sphere, transform, new Vector3(0f, headY, 0.05f), headScale, skin, true);
+
+        float faceZ = headScale.z * 0.48f;
+        float eyeY = headY + (style == "longface" ? 0.35f : 0.22f);
+        float eyeGap = headScale.x * 0.35f;
+        float eyeSize = style == "pinhead" ? 0.22f : 0.30f;
+        Part(PrimitiveType.Sphere, transform, new Vector3(-eyeGap, eyeY, faceZ + 0.08f), Vector3.one * eyeSize, sclera, false);
+        Part(PrimitiveType.Sphere, transform, new Vector3(eyeGap, eyeY, faceZ + 0.08f), Vector3.one * eyeSize, sclera, false);
+        Part(PrimitiveType.Sphere, transform, new Vector3(-eyeGap, eyeY - 0.02f, faceZ + 0.22f), Vector3.one * eyeSize * 0.38f, pupil, false);
+        Part(PrimitiveType.Sphere, transform, new Vector3(eyeGap, eyeY - 0.02f, faceZ + 0.22f), Vector3.one * eyeSize * 0.38f, pupil, false);
+
+        float mouthY = headY - (style == "longface" ? 0.65f : 0.42f);
+        Vector3 mouthScale = style == "grinning"
+            ? new Vector3(1.20f, 0.38f, 0.16f)
+            : new Vector3(headScale.x * 0.48f, 0.30f, 0.14f);
+        Part(PrimitiveType.Cube, transform, new Vector3(0f, mouthY, faceZ + 0.10f), mouthScale, mouth, false);
+
+        if (style == "grinning" || style == "potbelly")
+        {
+            for (int i = -2; i <= 2; i++)
+                Part(PrimitiveType.Cube, transform,
+                    new Vector3(i * 0.22f, mouthY + 0.04f, faceZ + 0.20f),
+                    new Vector3(0.16f, 0.25f, 0.08f), teeth, false);
+        }
+
+        // Mũi lệch và tai quá khổ giúp silhouette không còn giống một Shifter đẹp/ngầu.
+        float noseSide = style == "longface" ? 0.16f : -0.08f;
+        Part(PrimitiveType.Sphere, transform,
+            new Vector3(noseSide, headY - 0.1f, faceZ + 0.18f),
+            new Vector3(0.26f, style == "longface" ? 0.58f : 0.36f, 0.32f), shadow, false);
+        Part(PrimitiveType.Sphere, transform, new Vector3(-headScale.x * 0.55f, headY, 0f), new Vector3(0.30f, 0.55f, 0.25f), skin, false);
+        Part(PrimitiveType.Sphere, transform, new Vector3(headScale.x * 0.55f, headY + 0.12f, 0f), new Vector3(0.38f, 0.68f, 0.25f), skin, false);
+
+        float napeY = def != null ? 10f * def.napeHeight : 8.5f;
+        float napeZ = def != null ? -def.napeBack : -1f;
+        var nape = Part(PrimitiveType.Sphere, transform,
+            new Vector3(0f, napeY, napeZ), Vector3.one * 0.7f,
+            new Color(1f, 0.15f, 0.1f), false);
+        nape.name = "Nape";
+        Nape = nape.transform;
+    }
+
+    // ================= MODEL THẬT (FBX trong Resources) =================
+    static Bounds CalcBounds(Renderer[] rs)
+    {
+        Bounds b = rs[0].bounds;
+        for (int i = 1; i < rs.Length; i++) b.Encapsulate(rs[i].bounds);
+        return b;
+    }
+
+    static bool IsWeaponRenderer(Renderer r)
+    {
+        string n = r.name.ToLowerInvariant();
+        if (n.Contains("wiqi") || n.Contains("weapon")) return true;
+        foreach (var m in r.sharedMaterials)
+        {
+            if (m == null) continue;
+            string mn = m.name.ToLowerInvariant();
+            if (mn.Contains("wiqi") || mn.Contains("weapon")) return true;
+        }
+        return false;
+    }
+
+    // Đo chính xác từ đỉnh lưới (bake pose hiện tại), bỏ qua vũ khí.
+    // Bounds mặc định của SkinnedMeshRenderer hay sai (lấy từ animation) -> titan bị lơ lửng hoặc nhỏ hơn dự tính.
+    static Bounds ExactBounds(Renderer[] rs)
+    {
+        bool has = false;
+        Bounds b = new Bounds();
+        var tmp = new Mesh();
+        var verts = new List<Vector3>();
+
+        foreach (var r in rs)
+        {
+            if (IsWeaponRenderer(r)) continue;
+
+            var smr = r as SkinnedMeshRenderer;
+            if (smr != null && smr.sharedMesh != null)
+            {
+                smr.BakeMesh(tmp, false);
+                verts.Clear();
+                tmp.GetVertices(verts);
+                Matrix4x4 m = r.transform.localToWorldMatrix;
+                for (int i = 0; i < verts.Count; i++)
+                {
+                    Vector3 w = m.MultiplyPoint3x4(verts[i]);
+                    if (!has) { b = new Bounds(w, Vector3.zero); has = true; }
+                    else b.Encapsulate(w);
+                }
+            }
+            else
+            {
+                if (!has) { b = r.bounds; has = true; }
+                else b.Encapsulate(r.bounds);
+            }
+        }
+
+        Destroy(tmp);
+        return has ? b : CalcBounds(rs);
+    }
+
+    static readonly Dictionary<string, Bounds> boundsCache = new Dictionary<string, Bounds>();
+
+    // Kết quả đo được lưu lại theo model để các titan sinh sau không phải bake lại
+    Bounds MeasureModel(Renderer[] renderers)
+    {
+        string key = def.modelPath + "|" + def.yawOffset;
+        if (boundsCache.TryGetValue(key, out Bounds rel))
+            return new Bounds(rel.center + transform.position, rel.size);
+
+        Bounds exact = ExactBounds(renderers);
+        Bounds quick = CalcBounds(renderers);
+        Debug.Log("[Titan] " + def.name + ": bounds mặc định cao " + quick.size.y.ToString("F2") +
+                  ", đo chính xác cao " + exact.size.y.ToString("F2") +
+                  " (đáy lệch " + (exact.min.y - quick.min.y).ToString("F2") + ")");
+
+        boundsCache[key] = new Bounds(exact.center - transform.position, exact.size);
+        return exact;
+    }
+
+    bool BuildFromModel()
+    {
+        if (def == null || string.IsNullOrEmpty(def.modelPath)) return false;
+        var prefab = Resources.Load<GameObject>(def.modelPath);
+        if (prefab == null) return false;
+
+        var visual = new GameObject("Visual").transform;
+        visual.SetParent(transform, false);
+
+        var model = Instantiate(prefab, visual);
+        model.name = def.name;
+        model.transform.localPosition = Vector3.zero;
+        // Imported FBX prefabs can contain a corrective root rotation (this Meshy
+        // model needs -90 degrees on X to convert Z-up to Unity's Y-up). Replacing
+        // that rotation with yaw made the Titan lie flat. Add yaw on top of the
+        // authored import rotation instead of discarding it.
+        Quaternion importRotation = model.transform.localRotation;
+        model.transform.localRotation = Quaternion.Euler(0f, def.yawOffset, 0f) * importRotation;
+        model.transform.localScale = Vector3.one;
+
+        foreach (var c in model.GetComponentsInChildren<Collider>()) Destroy(c);
+
+        var renderers = model.GetComponentsInChildren<Renderer>();
+        if (renderers.Length == 0 || CalcBounds(renderers).size.y < 0.0001f)
+        {
+            Destroy(visual.gameObject);
+            return false;
+        }
+
+        // Co giãn về cao 10 đơn vị, đặt chân chạm y=0 và căn giữa theo X/Z (root đang scale 1, chưa xoay)
+        Bounds b0 = MeasureModel(renderers);
+        if (b0.size.y < 0.0001f) b0 = CalcBounds(renderers);
+        float s = 10f / b0.size.y;
+        Vector3 centerRel = (b0.center - transform.position) * s;
+        float minY = centerRel.y - b0.extents.y * s;
+        model.transform.localScale = Vector3.one * s;
+        model.transform.localPosition = new Vector3(-centerRel.x, -minY, -centerRel.z);
+
+        ApplyMaterials(renderers);
+
+        // Va chạm đơn giản: một viên nang bao quanh thân
+        var colGo = new GameObject("BodyCollider");
+        colGo.transform.SetParent(transform, false);
+        colGo.transform.localPosition = new Vector3(0f, 5f, 0f);
+        var cap = colGo.AddComponent<CapsuleCollider>();
+        cap.direction = 1;
+        cap.height = 10f;
+        cap.radius = 1.3f;
+        // The attack is resolved explicitly in DoHit. Keeping the Titan body
+        // solid lets a kinematic Titan pin the player's CharacterController
+        // against roofs and walls with no escape. A trigger remains hookable
+        // and slashable without participating in movement collision.
+        cap.isTrigger = true;
+        BodyColliders.Add(cap);
+
+        // Điểm yếu ở gáy (quả cầu đỏ)
+        var nape = Part(PrimitiveType.Sphere, transform,
+                        new Vector3(0f, 10f * def.napeHeight, -def.napeBack), Vector3.one * 0.7f,
+                        new Color(1f, 0.15f, 0.1f), false);
+        nape.name = "Nape";
+        Nape = nape.transform;
+
+        sway = visual;
+        clips = TitanClipPlayer.TryCreate(model, def.modelPath);
+        if (clips == null) proc = TitanProceduralAnim.TryCreate(model);
+        feet = TitanFootGrounder.TryCreate(model, transform, visual);
+        return true;
+    }
+
+    void ApplyMaterials(Renderer[] renderers)
+    {
+        Shader lit = Shader.Find("Universal Render Pipeline/Lit");
+        var cache = new Dictionary<string, Texture2D>();
+        Texture2D Tex(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return null;
+            if (!cache.TryGetValue(path, out var t)) cache[path] = t = Resources.Load<Texture2D>(path);
+            return t;
+        }
+
+        foreach (var r in renderers)
+        {
+            var mats = r.sharedMaterials;
+            for (int i = 0; i < mats.Length; i++)
+            {
+                Material source = mats[i];
+                string n = source != null ? source.name.ToLowerInvariant() : "";
+                string path = def.bodyTex;
+                if (n.Contains("hair") && !string.IsNullOrEmpty(def.hairTex)) path = def.hairTex;
+                else if ((n.Contains("face") || n.Contains("head")) && !string.IsNullOrEmpty(def.faceTex)) path = def.faceTex;
+                else if ((n.Contains("wiqi") || n.Contains("weapon")) && !string.IsNullOrEmpty(def.weaponTex)) path = def.weaponTex;
+
+                // Preserve a prefab's authored textures. Switching an imported material to URP used to
+                // create a blank Lit material here, which made Meshy models turn completely white.
+                Texture sourceBase = null;
+                Texture sourceNormal = null;
+                if (source != null)
+                {
+                    if (source.HasProperty("_BaseMap")) sourceBase = source.GetTexture("_BaseMap");
+                    if (sourceBase == null && source.HasProperty("_MainTex")) sourceBase = source.GetTexture("_MainTex");
+                    if (source.HasProperty("_BumpMap")) sourceNormal = source.GetTexture("_BumpMap");
+                }
+
+                Material m = source != null
+                    ? new Material(source)
+                    : new Material(lit != null ? lit : Shader.Find("Standard"));
+                if (lit != null && m.shader != lit) m.shader = lit;
+
+                var tex = Tex(path);
+                Texture baseMap = tex != null ? tex : sourceBase;
+                if (baseMap != null)
+                {
+                    if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", baseMap);
+                    if (m.HasProperty("_MainTex")) m.SetTexture("_MainTex", baseMap);
+                    if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", Color.white);
+                }
+                if (sourceNormal != null && m.HasProperty("_BumpMap"))
+                {
+                    m.SetTexture("_BumpMap", sourceNormal);
+                    m.EnableKeyword("_NORMALMAP");
+                }
+                if (n.Contains("hair") && m.HasProperty("_AlphaClip"))
+                {
+                    m.SetFloat("_AlphaClip", 1f);
+                    m.SetFloat("_Cutoff", 0.5f);
+                    m.SetFloat("_Cull", 0f);
+                    m.EnableKeyword("_ALPHATEST_ON");
+                }
+                if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.15f);
+                m.name = n;
+                mats[i] = m;
+            }
+            r.sharedMaterials = mats;
+        }
+    }
+
+    Transform Pivot(string n, Vector3 localPos)
+    {
+        var go = new GameObject(n);
+        go.transform.SetParent(transform, false);
+        go.transform.localPosition = localPos;
+        return go.transform;
+    }
+
+    GameObject Part(PrimitiveType type, Transform parent, Vector3 localPos, Vector3 localScale, Color color, bool solid)
+    {
+        var go = GameObject.CreatePrimitive(type);
+        go.transform.SetParent(parent, false);
+        go.transform.localPosition = localPos;
+        go.transform.localScale = localScale;
+
+        var r = go.GetComponent<Renderer>();
+        var m = new Material(r.sharedMaterial);
+        if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", color);
+        if (m.HasProperty("_Color")) m.SetColor("_Color", color);
+        r.material = m;
+
+        var col = go.GetComponent<Collider>();
+        if (solid)
+        {
+            col.isTrigger = true;
+            BodyColliders.Add(col);
+        }
+        else Destroy(col);
+        return go;
+    }
+
+    static void SetLayerRecursively(GameObject go, int layer)
+    {
+        go.layer = layer;
+        foreach (Transform c in go.transform) SetLayerRecursively(c.gameObject, layer);
+    }
+
+    // ================= AI =================
+    void Update()
+    {
+        if (IsDead || target == null) return;
+        float dt = Time.deltaTime;
+        moving = false;
+
+        if (!logged)
+        {
+            if (bornTime == 0f) bornTime = Time.time;
+            if (Time.time - bornTime > 2f)
+            {
+                logged = true;
+                Debug.Log("[Titan] " + (def != null ? def.name : "placeholder") + " cao " + Height.ToString("F1") +
+                          "m, y=" + transform.position.y.ToString("F2") +
+                          (GroundSampler != null ? ", mặt đất=" + GroundSampler(transform.position).ToString("F2") : "") +
+                          (feet != null ? ", dịch chân=" + feet.Shift.ToString("F2") : ", không có Humanoid"));
+            }
+        }
+
+        Vector3 to = target.position - transform.position;
+        to.y = 0f;
+        float dist = to.magnitude;
+        bool inArmHeight = target.position.y - transform.position.y < ArmHeight;
+
+        switch (state)
+        {
+            case State.Wander:
+                if (dist < detectRange)
+                {
+                    state = State.Chase;
+                    GameAudio.Play(Sfx.Roar, transform.position + Vector3.up * Height * 0.8f, Mathf.Clamp(Height / 12f, 0.5f, 1.3f), Mathf.Clamp(14f / Height, 0.7f, 1.3f));
+                    break;
+                }
+                wanderTimer -= dt;
+                Vector3 toPoint = wanderPoint - transform.position; toPoint.y = 0f;
+                if (wanderTimer <= 0f || toPoint.magnitude < 2f)
+                {
+                    Vector2 r = UnityEngine.Random.insideUnitCircle * 40f;
+                    wanderPoint = transform.position + new Vector3(r.x, 0f, r.y);
+                    wanderTimer = UnityEngine.Random.Range(5f, 9f);
+                }
+                MoveToward(wanderPoint, walkSpeed, dt);
+                SetArms(0f);
+                break;
+
+            case State.Chase:
+                if (dist > loseRange) { state = State.Wander; break; }
+                if (dist <= AttackReach && inArmHeight)
+                {
+                    state = State.Windup;
+                    stateTimer = windupTime;
+                    break;
+                }
+                MoveToward(target.position, runSpeed, dt);
+                SetArms(0f);
+                break;
+
+            case State.Windup:
+                FaceTarget(dt);
+                stateTimer -= dt;
+                SetArms(Mathf.Lerp(0f, -150f, 1f - Mathf.Clamp01(stateTimer / windupTime)));
+                if (stateTimer <= 0f)
+                {
+                    DoHit();
+                    state = State.Recover;
+                    stateTimer = recoverTime;
+                }
+                break;
+
+            case State.Recover:
+                stateTimer -= dt;
+                SetArms(Mathf.Lerp(0f, 30f, Mathf.Clamp01(stateTimer / recoverTime)));
+                if (stateTimer <= 0f) state = State.Chase;
+                break;
+        }
+
+        SnapToGround(dt);
+        AnimateLegs(dt);
+
+        if (moving)
+        {
+            stepTimer -= dt * (state == State.Chase ? 1.8f : 1f);
+            if (stepTimer <= 0f)
+            {
+                stepTimer = 0.9f;
+                if (Camera.main != null && (Camera.main.transform.position - transform.position).sqrMagnitude < 150f * 150f)
+                    GameAudio.Play(Sfx.Footstep, transform.position, Mathf.Clamp(Height / 14f, 0.4f, 1.2f), Mathf.Clamp(14f / Height, 0.7f, 1.4f));
+            }
+        }
+
+        if (clips != null)
+        {
+            bool attacking = state == State.Windup || state == State.Recover;
+            clips.SetRole(attacking ? TitanClipPlayer.Role.Attack : moving ? TitanClipPlayer.Role.Walk : TitanClipPlayer.Role.Idle);
+        }
+    }
+
+    float stepTimer;
+
+    void DoHit()
+    {
+        GameAudio.Play(Sfx.TitanSmash, transform.position + transform.forward * AttackReach, Mathf.Clamp(Height / 12f, 0.6f, 1.3f));
+        Vector3 to = target.position - transform.position;
+        float flat = new Vector2(to.x, to.z).magnitude;
+        if (flat > AttackReach * 1.3f || target.position.y - transform.position.y > ArmHeight) return;
+
+        var h = target.GetComponent<Health>();
+        if (h != null) h.TakeDamage(attackDamage);
+    }
+
+    void MoveToward(Vector3 point, float speed, float dt)
+    {
+        Vector3 dir = point - transform.position;
+        dir.y = 0f;
+        if (dir.sqrMagnitude < 0.01f) return;
+
+        Vector3 dirN = dir.normalized;
+
+        // Né công trình: có nhà chắn phía trước thì trượt dọc theo mặt nhà
+        if (ObstacleMask != 0)
+        {
+            Vector3 o = transform.position + Vector3.up * (3f * k);
+            if (Physics.SphereCast(o, 1.2f * k, dirN, out RaycastHit hit, 6f * k, ObstacleMask, QueryTriggerInteraction.Ignore))
+            {
+                Vector3 slide = Vector3.ProjectOnPlane(dirN, hit.normal);
+                slide.y = 0f;
+                dirN = slide.sqrMagnitude > 0.01f ? slide.normalized : Vector3.Cross(Vector3.up, hit.normal).normalized;
+            }
+        }
+
+        Quaternion want = Quaternion.LookRotation(dirN, Vector3.up);
+        transform.rotation = Quaternion.RotateTowards(transform.rotation, want, turnSpeed * dt);
+
+        if (dir.magnitude < 2f) return; // đã sát mục tiêu, không đi xuyên qua
+        Vector3 displacement = transform.forward * speed * dt;
+        if (TryMoveWithoutTunneling(displacement)) moving = true;
+        if (HasField)
+        {
+            Vector3 fp = transform.position;
+            fp.x = Mathf.Clamp(fp.x, Field.xMin + 3f, Field.xMax - 3f);
+            fp.z = Mathf.Clamp(fp.z, Field.yMin + 3f, Field.yMax - 3f);
+            transform.position = fp;
+        }
+    }
+
+    bool TryMoveWithoutTunneling(Vector3 displacement)
+    {
+        if (displacement.sqrMagnitude < 0.000001f) return false;
+        if (ObstacleMask == 0)
+        {
+            transform.position += displacement;
+            return true;
+        }
+
+        float radius = Mathf.Max(0.45f, 1.05f * k);
+        Vector3 bottom = transform.position + Vector3.up * radius;
+        Vector3 top = transform.position + Vector3.up * Mathf.Max(radius, 4.5f * k);
+        Vector3 direction = displacement.normalized;
+        float distance = displacement.magnitude;
+        const float skin = 0.08f;
+
+        if (!Physics.CapsuleCast(bottom, top, radius, direction, out RaycastHit hit,
+                                 distance + skin, ObstacleMask, QueryTriggerInteraction.Ignore))
+        {
+            transform.position += displacement;
+            return true;
+        }
+
+        float safeDistance = Mathf.Max(0f, hit.distance - skin);
+        if (safeDistance > 0f) transform.position += direction * safeDistance;
+
+        Vector3 remaining = displacement - direction * safeDistance;
+        Vector3 slide = Vector3.ProjectOnPlane(remaining, hit.normal);
+        slide.y = 0f;
+        if (slide.sqrMagnitude < 0.000001f) return safeDistance > 0f;
+
+        Vector3 slideDirection = slide.normalized;
+        float slideDistance = slide.magnitude;
+        bottom = transform.position + Vector3.up * radius;
+        top = transform.position + Vector3.up * Mathf.Max(radius, 4.5f * k);
+        if (Physics.CapsuleCast(bottom, top, radius, slideDirection, out RaycastHit slideHit,
+                                slideDistance + skin, ObstacleMask, QueryTriggerInteraction.Ignore))
+            slideDistance = Mathf.Max(0f, slideHit.distance - skin);
+
+        if (slideDistance <= 0f) return safeDistance > 0f;
+        transform.position += slideDirection * slideDistance;
+        return true;
+    }
+
+    void FaceTarget(float dt)
+    {
+        Vector3 dir = target.position - transform.position;
+        dir.y = 0f;
+        if (dir.sqrMagnitude < 0.01f) return;
+        Quaternion want = Quaternion.LookRotation(dir.normalized, Vector3.up);
+        transform.rotation = Quaternion.RotateTowards(transform.rotation, want, turnSpeed * dt);
+    }
+
+
+    void SnapToGround(float dt)
+    {
+        if (GroundSampler != null)
+        {
+            Vector3 q = transform.position;
+            float gy = GroundSampler(q);
+            q.y = Mathf.Abs(q.y - gy) > 1f
+                ? gy
+                : Mathf.Lerp(q.y, gy, 10f * dt);
+            transform.position = q;
+            return;
+        }
+
+        var terr = Terrain.activeTerrain;
+        if (terr == null) return;
+
+        Vector3 p = transform.position;
+        float terrainY = terr.SampleHeight(p) + terr.transform.position.y;
+        p.y = Mathf.Lerp(p.y, terrainY, 10f * dt);
+        transform.position = p;
+    }
+
+
+    // ================= HOẠT ẢNH ĐƠN GIẢN =================
+    void AnimateLegs(float dt)
+    {
+        if (moving)
+        {
+            float speed = state == State.Chase ? runSpeed : walkSpeed;
+            walkPhase += speed * dt * 0.9f / Mathf.Max(0.3f, k);
+        }
+
+        if (proc != null)
+        {
+            proc.walkPhase = walkPhase;
+            proc.moveAmount = moving ? 1f : 0f;
+            proc.attackRaise = state == State.Windup ? 1f - Mathf.Clamp01(stateTimer / windupTime) : 0f;
+            proc.attackSlam = state == State.Recover ? Mathf.Clamp01(stateTimer / recoverTime) : 0f;
+            return;
+        }
+
+        // Model thật: nếu không có animation riêng thì lắc nhẹ cả thân (bước nặng nề, ngả người khi đập)
+        if (legL == null)
+        {
+            if (sway != null && clips == null)
+            {
+                float bob = moving ? Mathf.Abs(Mathf.Sin(walkPhase)) * 0.3f : 0f;
+                float roll = moving ? Mathf.Sin(walkPhase) * 4f : 0f;
+                float pitch = 0f;
+                if (state == State.Windup) pitch = -10f * (1f - Mathf.Clamp01(stateTimer / windupTime));
+                else if (state == State.Recover) pitch = Mathf.Lerp(0f, 20f, Mathf.Clamp01(stateTimer / recoverTime));
+                sway.localPosition = new Vector3(0f, bob, 0f);
+                sway.localRotation = Quaternion.Euler(pitch, 0f, roll);
+            }
+            return;
+        }
+        float swing = moving ? Mathf.Sin(walkPhase) * 30f : 0f;
+        legL.localRotation = Quaternion.Euler(swing, 0f, 0f);
+        legR.localRotation = Quaternion.Euler(-swing, 0f, 0f);
+    }
+
+    void SetArms(float pitch)
+    {
+        if (armL == null) return;
+        float idle = moving ? -Mathf.Sin(walkPhase) * 20f : 0f;
+        bool attacking = state == State.Windup || state == State.Recover;
+        float p = attacking ? pitch : idle;
+        armL.localRotation = Quaternion.Euler(p, 0f, 0f);
+        armR.localRotation = Quaternion.Euler(attacking ? p : -p, 0f, 0f);
+    }
+
+    // ================= SÁT THƯƠNG =================
+    public void Damage(float amount)
+    {
+        if (health != null) health.TakeDamage(amount);
+    }
+
+    public void KillByNape()
+    {
+        if (health != null) health.TakeDamage(9999f);
+    }
+
+    void Die()
+    {
+        state = State.Dead;
+        if (clips != null) clips.Stop();
+        All.Remove(this);
+        Killed?.Invoke(this);
+        GameAudio.Play(Sfx.Kill, transform.position + Vector3.up * Height * 0.8f, 1f);
+        GameVfx.Steam(transform.position + Vector3.up * Height * 0.5f, Height * 0.22f, 6f);
+        StartCoroutine(FallRoutine());
+    }
+
+    IEnumerator FallRoutine()
+    {
+        Quaternion start = transform.rotation;
+        Quaternion end = start * Quaternion.Euler(90f, 0f, 0f); // ngã úp về phía trước
+        float t = 0f;
+        while (t < 1f)
+        {
+            t += Time.deltaTime / 1.2f;
+            float e = Mathf.Clamp01(t);
+            transform.rotation = Quaternion.Slerp(start, end, e * e);
+            yield return null;
+        }
+        GameAudio.Play(Sfx.Thud, transform.position, Mathf.Clamp(Height / 12f, 0.6f, 1.3f));
+        GameVfx.Burst(transform.position + Vector3.up * 0.5f, new Color(0.75f, 0.72f, 0.65f, 0.7f), 24, 7f, Height * 0.12f, 1.2f);
+        yield return new WaitForSeconds(4f);
+
+        Vector3 p0 = transform.position;
+        float s = 0f;
+        while (s < 3f)
+        {
+            s += Time.deltaTime;
+            transform.position = p0 + Vector3.down * s * 1.5f * k;
+            yield return null;
+        }
+        Destroy(gameObject);
+    }
+}
