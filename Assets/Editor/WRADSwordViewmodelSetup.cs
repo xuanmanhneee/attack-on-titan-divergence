@@ -7,14 +7,15 @@ using UnityEngine.SceneManagement;
 
 public static class WRADSwordViewmodelSetup
 {
-    const string ArmsPath = "Assets/Models/Player/WRADArms/wrad-arms-main/arms.fbx";
-    const string ArmsTexturePath = "Assets/Models/Player/WRADArms/wrad-arms-main/arm_albedo_pale.png";
+    const string ArmsPath = "Assets/Models/Player/FPSArmsRig/fps_arms_rig.fbx";
+    const string ArmsTexturePath = "Assets/Models/Player/FPSArmsRig/new_diff.png";
     const string SwordPath = "Assets/Models/Weapons/AOTGearSword/scene.gltf";
 
     static readonly string[] ScenePaths =
     {
         "Assets/Scenes/SampleScene.unity",
-        "Assets/Scenes/Chapter0_TrainingCamp.unity"
+        "Assets/Scenes/Chapter0_TrainingCamp.unity",
+        "Assets/Scenes/Chapter1_BattleOfTrost.unity"
     };
 
     [MenuItem("Attack on Titan/Install WRAD Sword Viewmodel")]
@@ -34,8 +35,11 @@ public static class WRADSwordViewmodelSetup
             ODMController odm = UnityEngine.Object.FindAnyObjectByType<ODMController>();
             if (odm == null) throw new InvalidOperationException(path + " has no ODMController.");
 
-            FirstPersonSwordViewmodel component = odm.GetComponent<FirstPersonSwordViewmodel>();
-            if (component == null) component = odm.gameObject.AddComponent<FirstPersonSwordViewmodel>();
+            // Recreate the component so stale serialized tuning values never
+            // override the current defaults.
+            FirstPersonSwordViewmodel existing = odm.GetComponent<FirstPersonSwordViewmodel>();
+            if (existing != null) UnityEngine.Object.DestroyImmediate(existing);
+            FirstPersonSwordViewmodel component = odm.gameObject.AddComponent<FirstPersonSwordViewmodel>();
             Camera camera = odm.cameraTransform != null ? odm.cameraTransform.GetComponent<Camera>() : null;
             if (camera == null) throw new InvalidOperationException(path + " has no first-person Camera.");
             component.Configure(odm, camera, arms, sword, texture);

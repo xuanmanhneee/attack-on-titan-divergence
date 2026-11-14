@@ -1142,6 +1142,14 @@ MonoBehaviour:
   groundBoostSpeed: 17
   groundGasDrainFactor: 0.5
   groundAccel: 45
+  walkableSlopeLimit: 65
+  gasSlopeLimit: 89
+  roofSlideMinAngle: 6
+  roofSlideAcceleration: 24
+  roofSlideMaxSpeed: 14
+  roofSurfaceGrip: 1.5
+  gasRoofProbeDistance: 1.8
+  gasRoofProbeHeight: 3.5
   gravity: -12
   landingMomentumRetention: 0.65
   bracedLandingMomentumRetention: 0.25
@@ -1221,6 +1229,7 @@ MonoBehaviour:
   backgroundMusicVolume: 0.24
   backgroundMusicLoopEnd: 142
   showDebugGizmos: 1
+  logRoofCollisionDebug: 1
 --- !u!143 &1643340618
 CharacterController:
   m_ObjectHideFlags: 0
@@ -1256,23 +1265,30 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9d2a4f716ef7477096bd5c31cbfc344f, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FirstPersonSwordViewmodel
   odm: {fileID: 1643340617}
   viewCamera: {fileID: 330585545}
-  armsPrefab: {fileID: 919132149155446097, guid: b613aa8d39bc36144880b8d55aafcc11, type: 3}
+  armsPrefab: {fileID: 919132149155446097, guid: b384ef9fbf3d23543b66a23a0d8253e5, type: 3}
   swordPrefab: {fileID: -6689036041284674117, guid: 1100d4bec2cf6de46b87d313e339ba0e, type: 3}
-  armsAlbedo: {fileID: 2800000, guid: 4af8f95ce34ca04439ae261dbf877378, type: 3}
-  wristMidpoint: {x: 0, y: -0.48, z: 0.6}
-  wristSeparation: 0.58
-  swordLength: 1.15
-  armRigRotationCorrection: {x: 0, y: 0, z: 0}
-  armRigPositionCorrection: {x: 0, y: 0, z: 0.02}
-  cropForearmsToHands: 1
-  retainedForearmLength: 0.28
-  swordPitch: 0
-  swordRoll: 270
-  swordPositionOffset: {x: 0, y: 0, z: 0}
+  armsAlbedo: {fileID: 2800000, guid: ba24807892fbb244c80130b61b4767ff, type: 3}
+  armsPosition: {x: 0, y: 0, z: 0.3}
+  armsScale: 0.8
+  swordLength: 1
+  alwaysVisible: 0
+  handPosition: {x: -0.26, y: -0.2, z: 0.5}
+  forearmDirection: {x: 0.25, y: 0.35, z: 0.9}
+  forearmRoll: 0
+  bladeDirection: {x: 0.02, y: 0.6, z: 0.8}
+  fingerDirection: {x: 0.25, y: 0.3, z: 0.9}
+  fingerCurl: {x: 70, y: 85, z: 60}
+  thumbCurl: {x: 20, y: 30, z: 30}
+  leftCurlSign: 1
+  rightCurlSign: 1
+  leftGripOffset: {x: 0.55, y: 0.85, z: 0.1}
+  rightGripOffset: {x: 0.1, y: 0.85, z: 0.1}
+  leftGripEuler: {x: 0, y: 0, z: 0}
+  rightGripEuler: {x: 0, y: 0, z: 0}
   revealPitch: 0.48
   lookDownLift: 0.34
 --- !u!1 &1675263298

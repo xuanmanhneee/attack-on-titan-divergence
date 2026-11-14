@@ -1055,18 +1055,18 @@ public class MangaMenu : MonoBehaviour
         var list = pageItems[Page.Pause];
         Backdrop(page, false, new Color(1f, 1f, 1f, 0.1f), 0.3f);
 
-        var banner = Panel(page, "Banner", new Vector2(-430f, 335f), new Vector2(940f, 170f), Paper, 46f, 8f, 14f);
-        banner.rectTransform.localRotation = Quaternion.Euler(0f, 0f, 2f);
-        banner.gameObject.AddComponent<MangaSlideIn>().Init(new Vector2(-1100f, 0f), 0.02f);
-        Txt(banner.transform, "TẠM DỪNG", 112, Ink, TextAnchor.MiddleCenter, false, FontStyle.BoldAndItalic);
-        var strip = Panel(page, "Strip", new Vector2(-390f, 232f), new Vector2(700f, 24f), Red, 46f, 0f, 0f);
-        strip.rectTransform.localRotation = Quaternion.Euler(0f, 0f, 2f);
-        strip.gameObject.AddComponent<MangaSlideIn>().Init(new Vector2(-1100f, 0f), 0.08f);
+        // Tiêu đề phẳng kiểu codex: font Ditty, thanh nhấn đồng bên dưới
+        var title = TextAt(page, "TẠM DỪNG", 110, Ink, TextAnchor.MiddleLeft, new Vector2(-420f, 330f), new Vector2(900f, 150f), false, FontStyle.Bold);
+        title.font = MangaStyle.TitleFont;
+        Stroke(title, new Color(0f, 0f, 0f, 0.9f), 4f).useGraphicAlpha = false;
+        Bar(page, "TitleRule", new Vector2(-420f, 250f), new Vector2(900f, 4f), Red);
 
-        list.Add(MakeButton(page, "TIẾP TỤC", new Vector2(-560f, 90f), new Vector2(640f, 96f), 30f, () => { if (Resume != null) Resume(); }, 0.15f, 46));
-        list.Add(MakeButton(page, "CÀI ĐẶT", new Vector2(-510f, -20f), new Vector2(640f, 96f), 30f, () => OpenSettings(Page.Pause), 0.22f, 46));
-        list.Add(MakeButton(page, "VỀ MENU CHÍNH", new Vector2(-460f, -130f), new Vector2(640f, 96f), 30f, () => { if (MainMenu != null) MainMenu(); }, 0.29f, 42));
-        list.Add(MakeButton(page, "THOÁT GAME", new Vector2(-410f, -240f), new Vector2(640f, 96f), 30f, () => { if (Quit != null) Quit(); }, 0.36f, 42));
+        float bx = -560f, bw = 600f, bh = 70f, y0 = 120f, step = 82f;
+        list.Add(MakeButton(page, "TIẾP TỤC", new Vector2(bx, y0), new Vector2(bw, bh), 0f, () => { if (Resume != null) Resume(); }, 0.05f, 30));
+        list.Add(MakeButton(page, "CHƠI LẠI", new Vector2(bx, y0 - step), new Vector2(bw, bh), 0f, () => { if (Restart != null) Restart(); }, 0.10f, 30));
+        list.Add(MakeButton(page, "CÀI ĐẶT", new Vector2(bx, y0 - 2 * step), new Vector2(bw, bh), 0f, () => OpenSettings(Page.Pause), 0.15f, 30));
+        list.Add(MakeButton(page, "VỀ MENU CHÍNH", new Vector2(bx, y0 - 3 * step), new Vector2(bw, bh), 0f, () => { if (MainMenu != null) MainMenu(); }, 0.20f, 30));
+        list.Add(MakeButton(page, "THOÁT GAME", new Vector2(bx, y0 - 4 * step), new Vector2(bw, bh), 0f, () => { if (Quit != null) Quit(); }, 0.25f, 30));
 
         var keys = Panel(page, "Keys", new Vector2(510f, 30f), new Vector2(720f, 700f), Paper, -10f, 8f, 14f);
         keys.gameObject.AddComponent<MangaSlideIn>().Init(new Vector2(900f, 0f), 0.2f);
@@ -1084,7 +1084,7 @@ public class MangaMenu : MonoBehaviour
             "<color=" + RedHex + ">" + K(0) + " / " + K(1) + "</color>  Bắn móc trái / phải (giữ)\n" +
             "<color=" + RedHex + ">" + K(2) + "</color>  Thu dây mạnh\n" +
             "<color=" + RedHex + ">" + K(3) + "</color>  Gas: tăng tốc, lái theo hướng nhìn\n" +
-            "<color=" + RedHex + ">" + K(4) + "</color>  Chém (xa thì lướt tới gáy)\n" +
+            "<color=" + RedHex + ">" + K(4) + "</color>  Chém gáy\n" +
             "<color=" + RedHex + ">" + K(5) + "</color>  Thay kiếm\n" +
             "<color=" + RedHex + ">" + K(6) + "</color>  Bật/tắt làm chậm thời gian\n" +
             "<color=" + RedHex + ">Esc</color>  Tạm dừng / tiếp tục";

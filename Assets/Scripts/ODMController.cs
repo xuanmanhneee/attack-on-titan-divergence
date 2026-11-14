@@ -152,6 +152,27 @@ public class ODMController : MonoBehaviour
     public bool RightHookActive => hookRight.active;
     public void RefillGas(float amount) { gas = Mathf.Min(maxGas, gas + amount); }
 
+    // TitanForm tạm "đóng băng" bộ cơ động: không nhìn, không di chuyển, không móc.
+    // Dùng cờ thay vì enabled=false để nhạc nền vẫn lặp và GameManager (pause) không bật lại nhầm.
+    [HideInInspector] public bool suspended;
+    public float Yaw { get => yaw; set => yaw = value; }
+    public float Pitch { get => pitch; set => pitch = value; }
+
+    public void ReleaseAllHooks()
+    {
+        ReleaseHook(hookLeft, -1f);
+        ReleaseHook(hookRight, 1f);
+        if (lineLeft != null) lineLeft.enabled = false;
+        if (lineRight != null) lineRight.enabled = false;
+    }
+
+    public void ResetMotion()
+    {
+        velocity = Vector3.zero;
+        airborneTime = 0f;
+        landingBrakeWindow = 0f;
+    }
+
     public void RecoverTo(Vector3 position)
     {
         if (controller == null) controller = GetComponent<CharacterController>();
@@ -159,6 +180,8 @@ public class ODMController : MonoBehaviour
         transform.position = position;
         controller.enabled = true;
         velocity = Vector3.zero;
+        safeHistoryCount = 0;
+        embeddedSteps = 0;
         airborneTime = 0f;
         landingBrakeWindow = 0f;
     }
@@ -190,6 +213,18 @@ public class ODMController : MonoBehaviour
     private bool loggedRoofContactSample;
     private RaycastHit currentGroundSurface;
     private bool hasCurrentGroundSurface;
+
+    private const int embeddedStepsBeforeRecover = 3;
+    private static readonly Vector3[] InsideProbeDirections =
+    {
+        Vector3.up, Vector3.down, Vector3.forward, Vector3.back, Vector3.left, Vector3.right
+    };
+    private readonly RaycastHit[] insideProbeHits = new RaycastHit[16];
+    private readonly Vector3[] safeHistory = new Vector3[12];
+    private int safeHistoryHead;
+    private int safeHistoryCount;
+    private float nextSafeRecordTime;
+    private int embeddedSteps;
 
     private class HookState
     {
@@ -229,7 +264,6 @@ public class ODMController : MonoBehaviour
     void OnDisable()
     {
         GameSettings.Changed -= ApplySettings;
-        GameAudio.SetLoops(0f, 0f);
     }
 
     // Cài đặt người chơi (menu Cài đặt) ghi đè lên các thông số trong Inspector
@@ -289,6 +323,12 @@ public class ODMController : MonoBehaviour
 
     void Update()
     {
+        if (suspended)
+        {
+            UpdateBackgroundMusic();
+            return;
+        }
+
         Vector3 frameStartPosition = transform.position;
         float dt = Time.deltaTime;
 
@@ -317,7 +357,10 @@ public class ODMController : MonoBehaviour
         {
             float step = Mathf.Min(remaining, stepLimit);
             SimulateMovement(step);
-            MoveWithWallCollision(velocity * step);
+            Vector3 requested = velocity * step;
+            Vector3 before = transform.position;
+            MoveWithWallCollision(requested);
+            TrackEmbedding(requested, transform.position - before);
             remaining -= step;
         }
 
@@ -415,11 +458,193 @@ public class ODMController : MonoBehaviour
         }
 
         if (correction.sqrMagnitude < 0.000001f) return;
-        correction = Vector3.ClampMagnitude(correction, 0.75f);
+        // ComputePenetration against a single-sided (non-convex) house mesh can
+        // point to the back side of a facade. A large teleport along that
+        // direction drops the capsule inside the building, where the
+        // CharacterController can no longer move in any direction. Keep the
+        // push small and refuse one that would end inside geometry.
+        correction = Vector3.ClampMagnitude(correction, worldRadius * 0.5f);
+        Vector3 target = transform.position + correction + correction.normalized * 0.015f;
+        Vector3 targetCenter = center + (target - transform.position);
+        if (IsInsideGeometry(targetCenter) && !IsInsideGeometry(center)) return;
+
         controller.enabled = false;
-        transform.position += correction + correction.normalized * 0.015f;
+        transform.position = target;
         controller.enabled = true;
         velocity = Vector3.ProjectOnPlane(velocity, correction.normalized);
+    }
+
+    // ================= ANTI-STUCK (nhà / mái) =================
+    // Mesh nhà là single-sided. Nếu capsule lọt vào sau mặt tường/mái thì
+    // CharacterController.Move trả về 0 theo mọi hướng => người chơi "dính" vào nhà.
+    // Phát hiện trạng thái đó và đưa người chơi về vị trí an toàn gần nhất.
+    void TrackEmbedding(Vector3 requested, Vector3 actual)
+    {
+        if (controller == null || !controller.enabled) return;
+
+        // Đứng trên đất luôn có lực ghì xuống (-2 m/s) mà không di chuyển: bỏ thành phần đó.
+        if (isGrounded)
+        {
+            if (requested.y < 0f) requested.y = 0f;
+            if (actual.y < 0f) actual.y = 0f;
+        }
+
+        float req = requested.magnitude;
+        float moved = actual.magnitude;
+        float now = Time.time;
+
+        if (req < 0.003f || moved >= req * 0.15f)
+        {
+            embeddedSteps = 0;
+            if (req < 0.003f || moved >= req * 0.5f)
+                RecordSafePosition(now);
+            return;
+        }
+
+        // Không đi được theo hướng mong muốn. Áp sát tường thì vẫn lùi ra được;
+        // bị kẹt trong mesh thì hướng nào cũng bị chặn.
+        Vector3 dir = requested / req;
+        if (ProbeMove(-dir) || ProbeMove(Vector3.up) || ProbeMove(Vector3.down))
+        {
+            embeddedSteps = 0;
+            return;
+        }
+
+        embeddedSteps++;
+        if (embeddedSteps >= embeddedStepsBeforeRecover)
+        {
+            embeddedSteps = 0;
+            RecoverFromEmbedding(dir);
+        }
+    }
+
+    bool ProbeMove(Vector3 dir)
+    {
+        const float probeDistance = 0.04f;
+        Vector3 start = transform.position;
+        controller.Move(dir * probeDistance);
+        float moved = (transform.position - start).magnitude;
+        controller.enabled = false;
+        transform.position = start;
+        controller.enabled = true;
+        return moved >= probeDistance * 0.3f;
+    }
+
+    void RecordSafePosition(float now)
+    {
+        if (now < nextSafeRecordTime) return;
+        Vector3 center = transform.TransformPoint(controller.center);
+        if (IsInsideGeometry(center)) return;
+        nextSafeRecordTime = now + 0.1f;
+        safeHistory[safeHistoryHead] = transform.position;
+        safeHistoryHead = (safeHistoryHead + 1) % safeHistory.Length;
+        safeHistoryCount = Mathf.Min(safeHistoryCount + 1, safeHistory.Length);
+    }
+
+    void RecoverFromEmbedding(Vector3 stuckDir)
+    {
+        Vector3 from = transform.position;
+        Vector3 offset = transform.TransformPoint(controller.center) - from;
+
+        bool found = false;
+        Vector3 target = from;
+
+        // 1) Vị trí an toàn gần đây nhất (mới -> cũ).
+        for (int i = 1; i <= safeHistoryCount && !found; i++)
+        {
+            int idx = (safeHistoryHead - i + safeHistory.Length) % safeHistory.Length;
+            Vector3 p = safeHistory[idx];
+            if ((p - from).sqrMagnitude < 0.0025f) continue;
+            if (IsFreeSpot(p + offset)) { target = p; found = true; }
+        }
+
+        // 2) Không có lịch sử hợp lệ: tìm chỗ trống quanh người chơi.
+        if (!found)
+        {
+            Vector3 back = -stuckDir;
+            Vector3[] dirs =
+            {
+                Vector3.up, back, new Vector3(back.x, 0f, back.z).normalized,
+                Vector3.forward, Vector3.back, Vector3.left, Vector3.right,
+                (Vector3.forward + Vector3.left).normalized, (Vector3.forward + Vector3.right).normalized,
+                (Vector3.back + Vector3.left).normalized, (Vector3.back + Vector3.right).normalized,
+                Vector3.down
+            };
+            float[] distances = { 0.5f, 1f, 1.5f, 2.5f, 4f };
+            for (int d = 0; d < distances.Length && !found; d++)
+                for (int k = 0; k < dirs.Length && !found; k++)
+                {
+                    if (dirs[k].sqrMagnitude < 0.0001f) continue;
+                    Vector3 p = from + dirs[k] * distances[d];
+                    if (IsFreeSpot(p + offset)) { target = p; found = true; }
+                }
+        }
+
+        if (!found)
+        {
+            Debug.LogWarning($"[ODM] Kẹt trong collider tại {from} nhưng không tìm được chỗ thoát.", this);
+            return;
+        }
+
+        controller.enabled = false;
+        transform.position = target;
+        controller.enabled = true;
+        velocity = Vector3.zero;
+
+        // Dây không được giật người chơi ngược lại chỗ vừa kẹt.
+        if (hookLeft.active) hookLeft.ropeLength = Mathf.Max(hookLeft.ropeLength, Vector3.Distance(target, hookLeft.anchorPoint));
+        if (hookRight.active) hookRight.ropeLength = Mathf.Max(hookRight.ropeLength, Vector3.Distance(target, hookRight.anchorPoint));
+
+        if (logRoofCollisionDebug)
+            Debug.Log($"[ODM] Thoát kẹt: {from} -> {target}", this);
+    }
+
+    bool IsFreeSpot(Vector3 worldCenter)
+    {
+        Vector3 scale = transform.lossyScale;
+        float worldHeight = controller.height * Mathf.Abs(scale.y);
+        float worldRadius = controller.radius * Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.z));
+        float r = worldRadius + controller.skinWidth;
+        float halfSegment = Mathf.Max(0f, worldHeight * 0.5f - worldRadius);
+        int count = Physics.OverlapCapsuleNonAlloc(worldCenter - Vector3.up * halfSegment,
+                                                   worldCenter + Vector3.up * halfSegment, r,
+                                                   overlapHits, movementCollisionMask,
+                                                   QueryTriggerInteraction.Ignore);
+        for (int i = 0; i < count; i++)
+        {
+            Collider other = overlapHits[i];
+            if (other == null || other == controller || other.transform.IsChildOf(transform)) continue;
+            return false;
+        }
+        return !IsInsideGeometry(worldCenter);
+    }
+
+    // Ở trong một mesh kín (single-sided) thì tia bắn ra sẽ chạm MẶT SAU của tam giác.
+    // Từ 2 hướng trở lên thấy mặt sau => đang nằm bên trong nhà.
+    bool IsInsideGeometry(Vector3 point)
+    {
+        bool previous = Physics.queriesHitBackfaces;
+        Physics.queriesHitBackfaces = true;
+        int backfaces = 0;
+        for (int d = 0; d < InsideProbeDirections.Length && backfaces < 2; d++)
+        {
+            Vector3 dir = InsideProbeDirections[d];
+            int count = Physics.RaycastNonAlloc(point, dir, insideProbeHits, 6f,
+                                                movementCollisionMask, QueryTriggerInteraction.Ignore);
+            float nearest = float.PositiveInfinity;
+            Vector3 nearestNormal = Vector3.zero;
+            for (int i = 0; i < count; i++)
+            {
+                RaycastHit h = insideProbeHits[i];
+                if (h.collider == null || h.collider == controller || h.transform.IsChildOf(transform)) continue;
+                if (h.distance <= 0f) continue;
+                if (h.distance < nearest) { nearest = h.distance; nearestNormal = h.normal; }
+            }
+            if (nearest < float.PositiveInfinity && Vector3.Dot(nearestNormal, dir) > 0.05f)
+                backfaces++;
+        }
+        Physics.queriesHitBackfaces = previous;
+        return backfaces >= 2;
     }
 
     void ApplyLandingBrake(bool braced)
@@ -993,12 +1218,13 @@ public class ODMController : MonoBehaviour
     // ================= HOOK INPUT =================
     void HandleHookInput()
     {
-        bool leftDown  = GameInput.GetMouseButtonDown(0);
-        bool leftHeld  = GameInput.GetMouseButton(0);
-        bool leftUp    = GameInput.GetMouseButtonUp(0);
-        bool rightDown = GameInput.GetMouseButtonDown(1);
-        bool rightHeld = GameInput.GetMouseButton(1);
-        bool rightUp   = GameInput.GetMouseButtonUp(1);
+        // Chuột trái/phải hoặc phím móc trái/phải trong Cài đặt (mặc định Q/E, GameInput tự đổi theo phím đã gán).
+        bool leftHeld = GameInput.GetMouseButton(0) || GameInput.GetKey(KeyCode.Q);
+        bool rightHeld = GameInput.GetMouseButton(1) || GameInput.GetKey(KeyCode.E);
+        bool leftDown = GameInput.GetMouseButtonDown(0) || GameInput.GetKeyDown(KeyCode.Q);
+        bool rightDown = GameInput.GetMouseButtonDown(1) || GameInput.GetKeyDown(KeyCode.E);
+        bool leftUp = (GameInput.GetMouseButtonUp(0) || GameInput.GetKeyUp(KeyCode.Q)) && !leftHeld;
+        bool rightUp = (GameInput.GetMouseButtonUp(1) || GameInput.GetKeyUp(KeyCode.E)) && !rightHeld;
 
         if (toggleHooks)
         {
@@ -1021,6 +1247,10 @@ public class ODMController : MonoBehaviour
 
             if (rightDown) TryFireHook(hookRight, hipOriginRight);
             if (rightUp) ReleaseHook(hookRight, 1f);
+
+            // Nhả phím lúc đang tạm dừng thì sự kiện "nhả" bị bỏ lỡ -> kiểm tra theo trạng thái giữ phím.
+            if (hookLeft.active && !leftHeld) ReleaseHook(hookLeft, -1f);
+            if (hookRight.active && !rightHeld) ReleaseHook(hookRight, 1f);
         }
 
         // Nhả phím lúc đang tạm dừng thì sự kiện "nhả" bị bỏ lỡ -> kiểm tra theo trạng thái giữ phím
