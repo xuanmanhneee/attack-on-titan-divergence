@@ -127,6 +127,7 @@ public static class MangaTextures
 
 // Khung truyện: hình bình hành (skew), viền mực dày, bóng đổ đặc lệch xuống phải.
 // Màu `color` là màu nền; viền và bóng luôn là mực.
+[RequireComponent(typeof(CanvasRenderer))]
 public class MangaPanel : MaskableGraphic
 {
     public float skew = 0f;                              // > 0: nghiêng kiểu "/", < 0: kiểu "\"
@@ -180,6 +181,7 @@ public class MangaPanel : MaskableGraphic
 }
 
 // Đường tốc độ tỏa ra từ tâm. Mỗi ~0.1 giây đổi hạt giống một lần cho cảm giác nét vẽ tay rung nhẹ.
+[RequireComponent(typeof(CanvasRenderer))]
 public class MangaSpeedLines : MaskableGraphic
 {
     public int count = 90;
@@ -234,6 +236,7 @@ public class MangaSpeedLines : MaskableGraphic
 }
 
 // Ngôi sao nổ nhiều cạnh nhọn (khung chữ tượng thanh kiểu "ẦM!!")
+[RequireComponent(typeof(CanvasRenderer))]
 public class MangaBurst : MaskableGraphic
 {
     public int points = 16;
