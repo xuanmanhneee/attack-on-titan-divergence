@@ -3,9 +3,9 @@ using UnityEngine;
 
 // Nhiệm vụ "Trận Trost" (3 giai đoạn):
 //  1) Dọn titan đã lọt vào khu phố.
-//  2) Titan tràn qua lỗ hổng trên tường (có một Armored Titan).
+//  2) Titan tràn qua lỗ hổng trên tường (có một Pure Titan khổng lồ).
 //  3) Tới cổng, trụ lại trong vùng cổng đủ lâu để chặn lỗ hổng trong khi titan tiếp tục kéo tới.
-// Gas gần như không hồi lại khi đứng yên: phải chạy tới điểm tiếp tế (cột sáng xanh) để nạp gas và kiếm.
+// Gas không tự hồi: phải chạy tới điểm tiếp tế (cột sáng xanh) để nạp gas và kiếm.
 public class TrostMission : MonoBehaviour
 {
     public enum Phase { Clear, Reinforce, Seal, Done }
@@ -25,10 +25,9 @@ public class TrostMission : MonoBehaviour
     public float minSpawnDistance = 90f;
 
     [Header("Tiếp tế")]
-    public float scarceGasRegen = 8f;    // hồi gas rất chậm ngoài điểm tiếp tế
-    public float depotStock = 150f;
-    public float depotFillRate = 70f;
-    public float depotRegen = 3f;
+    public float depotStock = 600f;
+    public float depotFillRate = 250f;
+    public float depotRegen = 30f;
     public float depotRadius = 9f;
 
     ODMController odm;
@@ -51,15 +50,45 @@ public class TrostMission : MonoBehaviour
     public void Init(GameManager manager, ODMController player, PlayerCombat pc, TrostMap trostMap)
     {
         gm = manager; odm = player; combat = pc; map = trostMap;
-        odm.gasRegen = scarceGasRegen;
+        depots.Clear();
         foreach (var p in map.depots) depots.Add(new Depot { pos = p, stock = depotStock });
 
-        Titan.Killed += OnKilled;
+        SubscribeTitanEvents();
         SpawnClearWave();
         gm.Say("Trost: titan đã lọt vào khu phố! Gas cạn thì chạy tới cột sáng xanh để tiếp tế.");
     }
 
-    void OnDestroy() { Titan.Killed -= OnKilled; }
+    void OnEnable() { SubscribeTitanEvents(); }
+    void OnDisable() { Titan.Killed -= OnKilled; }
+
+    void SubscribeTitanEvents()
+    {
+        Titan.Killed -= OnKilled;
+        Titan.Killed += OnKilled;
+    }
+
+    bool RestoreRuntimeReferences()
+    {
+        if (gm == null) gm = FindAnyObjectByType<GameManager>();
+        if (odm == null) odm = FindAnyObjectByType<ODMController>();
+        if (odm != null && combat == null) combat = odm.GetComponent<PlayerCombat>();
+
+        if (map == null && odm != null)
+        {
+            TrostMapAuthoring authored = FindAnyObjectByType<TrostMapAuthoring>();
+            if (authored != null)
+            {
+                map = authored.CreateRuntimeMap(odm.transform.position);
+                depots.Clear();
+                foreach (Vector3 position in map.depots)
+                    depots.Add(new Depot { pos = position, stock = depotStock });
+                SubscribeTitanEvents();
+                Debug.Log("[TrostMission] Restored runtime map references after script reload.", this);
+            }
+        }
+
+        return gm != null && odm != null && combat != null && map != null;
+    }
 
     // ================= SINH TITAN =================
     Titan Spawn(Vector3 pos, TitanModelDef def, float height)
@@ -81,7 +110,7 @@ public class TrostMission : MonoBehaviour
             if (spawned >= clearTitans) break;
             Vector3 d = p - odm.transform.position; d.y = 0f;
             if (d.magnitude < minSpawnDistance) continue;
-            Spawn(p, TitanModels.PickRandom(), Random.Range(12f, 20f));
+            Spawn(p, TitanModels.PickRandom(), Random.Range(10f, 15f));
             spawned++;
         }
     }
@@ -107,11 +136,11 @@ public class TrostMission : MonoBehaviour
 
     void SpawnReinforcements()
     {
-        var armored = TitanModels.Get("ArmoredTitan");
+        var abnormal = TitanModels.Get("MeshyGluttonousTitan");
         for (int i = 0; i < reinforceTitans; i++)
         {
-            bool boss = (i == 0 && armored != null);
-            Spawn(GatePoint(), boss ? armored : TitanModels.PickRandom(), boss ? Random.Range(20f, 24f) : Random.Range(12f, 20f));
+            bool boss = (i == 0 && abnormal != null);
+            Spawn(GatePoint(), boss ? abnormal : TitanModels.PickRandom(), boss ? 15f : Random.Range(9f, 15f));
         }
     }
 
@@ -125,6 +154,10 @@ public class TrostMission : MonoBehaviour
 
     void Update()
     {
+        // Compiling scripts during Play Mode clears non-serialized runtime
+        // references while this component survives. Rebind from the baked
+        // scene metadata instead of throwing once per frame.
+        if (!RestoreRuntimeReferences()) return;
         if (gm.Current != GameManager.State.Playing) return;
         float dt = Time.deltaTime;
 
@@ -174,7 +207,7 @@ public class TrostMission : MonoBehaviour
         if (respawnTimer <= 0f && Titan.All.Count < 5)
         {
             respawnTimer = 10f;
-            for (int i = 0; i < 2; i++) Spawn(GatePoint(), TitanModels.PickRandom(), Random.Range(12f, 18f));
+            for (int i = 0; i < 2; i++) Spawn(GatePoint(), TitanModels.PickRandom(), Random.Range(10f, 15f));
         }
 
         if (sealProgress >= sealSeconds)

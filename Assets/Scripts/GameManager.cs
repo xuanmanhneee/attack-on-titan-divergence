@@ -13,8 +13,10 @@ public class GameManager : MonoBehaviour
     public int totalWaves = 3;
     public int firstWaveTitans = 2;
     public int titansPerWave = 2;
+    // Attack on Titan scale: ordinary Titans reach roughly 3-15 m. This combat
+    // pool favours the imposing 9-15 m classes; smaller Titans can be added separately.
     public float minTitanHeight = 9f;
-    public float maxTitanHeight = 18f;
+    public float maxTitanHeight = 15f;
     public float spawnMinDist = 50f;
     public float spawnMaxDist = 90f;
     public float timeBetweenWaves = 4f;
@@ -42,6 +44,7 @@ public class GameManager : MonoBehaviour
     PlayerCombat combat;
     Health playerHealth;
     Camera cam;
+    TrostMap activeTrostMap;
 
     int wave;
     bool waitingNextWave;
@@ -71,6 +74,9 @@ public class GameManager : MonoBehaviour
     static void AutoCreate()
     {
         if (FindAnyObjectByType<GameManager>() != null) return;
+        // Chapter 0 has its own non-combat progression and HUD.  Do not start
+        // Trost (or spawn combat waves) merely because it reuses ODMController.
+        if (FindAnyObjectByType<Chapter0Training>() != null) return;
         if (FindAnyObjectByType<ODMController>() == null) return;
         new GameObject("GameManager").AddComponent<GameManager>();
     }
@@ -84,6 +90,13 @@ public class GameManager : MonoBehaviour
 
         odm = FindAnyObjectByType<ODMController>();
         cam = odm.cameraTransform != null ? odm.cameraTransform.GetComponent<Camera>() : Camera.main;
+
+        // Titans use the player's first hookable layer so ODM raycasts can hit them
+        // in every game mode, not only during the Trost mission.
+        int hookMask = odm.hookableLayer.value;
+        Titan.HookableLayer = -1;
+        for (int i = 0; i < 32; i++)
+            if ((hookMask & (1 << i)) != 0) { Titan.HookableLayer = i; break; }
 
         combat = odm.GetComponent<PlayerCombat>();
         if (combat == null) combat = odm.gameObject.AddComponent<PlayerCombat>();
@@ -187,7 +200,14 @@ public class GameManager : MonoBehaviour
             if (go.transform.parent == null && System.Text.RegularExpressions.Regex.IsMatch(go.name, @"^Cube( \(\d+\))?$"))
                 go.SetActive(false);
 
-        var map = TrostCity.Build(odm.transform.position, layer);
+        // Chapter 1 is a baked Unity scene.  Keep the procedural builder only
+        // as a fallback for legacy/test scenes which have no authored map.
+        TrostMapAuthoring authoredMap = FindAnyObjectByType<TrostMapAuthoring>();
+        var map = authoredMap != null
+            ? authoredMap.CreateRuntimeMap(odm.transform.position)
+            : TrostCity.Build(odm.transform.position, layer);
+        activeTrostMap = map;
+        layer = map.buildingLayer;
         Titan.ObstacleMask = 1 << layer;
         Titan.GroundSampler = p => map.GroundAt(p);
         Titan.Field = map.floorRect;
@@ -226,7 +246,14 @@ public class GameManager : MonoBehaviour
         if (Current != State.Playing) return;
         playTime += Time.unscaledDeltaTime;
 
-        if (odm.transform.position.y < voidY) playerHealth.TakeDamage(9999f);
+        if (activeTrostMap != null && odm.transform.position.y < activeTrostMap.groundY - 10f)
+        {
+            // Recover from a missed roof/floor seam instead of dropping out of
+            // the chapter. The authored map owns the safe rooftop start point.
+            odm.RecoverTo(activeTrostMap.playerStart);
+            Say("Mất thăng bằng — trở lại nóc nhà.");
+        }
+        else if (odm.transform.position.y < voidY) playerHealth.TakeDamage(9999f);
 
         if (waitingNextWave)
         {

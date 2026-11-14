@@ -2,8 +2,8 @@ using System;
 using UnityEngine;
 
 // Chiến đấu bằng kiếm. F (hoặc chuột giữa) = chém. R = thay kiếm.
-// Chém đúng gáy khi đang bay đủ nhanh (killSpeed) => hạ gục ngay.
-// Chém gáy nhưng chậm => chỉ gây sát thương nhỏ. Chém thân => sát thương nhỏ, cần tốc độ tối thiểu.
+// Chém đúng gáy trong tầm và góc nhìn => hạ gục ngay, không phụ thuộc tốc độ bay.
+// Chém thân chỉ gây sát thương nhỏ.
 // Mỗi nhát chém làm mòn kiếm; hết độ bền phải thay kiếm (có số lượng kiếm dự phòng).
 [RequireComponent(typeof(ODMController))]
 public class PlayerCombat : MonoBehaviour
@@ -14,16 +14,7 @@ public class PlayerCombat : MonoBehaviour
     public float slashAngle = 80f;
 
     [Header("Sát thương")]
-    public float killSpeed = 9f;        // tốc độ tối thiểu để chém gáy hạ gục ngay
-    public float napeWeakDamage = 40f;   // chém gáy nhưng chưa đủ tốc độ
     public float bodyDamage = 8f;
-    public float bodyMinSpeed = 6f;
-
-    [Header("Hỗ trợ lướt (aim assist)")]
-    public bool lungeAssist = true;      // bấm chém khi gáy còn xa: lao tới gáy thay vì chém hụt
-    public float lungeRange = 35f;
-    public float lungeAngle = 45f;
-    public float lungeSpeed = 16f;
 
     [Header("Kiếm")]
     public float slashCooldown = 0.45f;
@@ -37,7 +28,23 @@ public class PlayerCombat : MonoBehaviour
     public float Durability { get; private set; } = 100f;
     public int Spare => spareBlades;
     public bool IsReloading { get; private set; }
-    public bool CanKillNow => odm != null && odm.Speed >= killSpeed;
+
+    // Có gáy titan nào trong tầm và góc chém không (HUD dùng để báo "chém được")
+    public bool CanKillNow
+    {
+        get
+        {
+            if (odm == null || odm.cameraTransform == null) return false;
+            Transform cam = odm.cameraTransform;
+            foreach (Titan t in Titan.All)
+            {
+                if (t == null || t.IsDead || t.Nape == null) continue;
+                Vector3 to = t.Nape.position - cam.position;
+                if (to.magnitude <= napeReach && Vector3.Angle(cam.forward, to) <= slashAngle) return true;
+            }
+            return false;
+        }
+    }
 
     ODMController odm;
     float cooldown;
@@ -94,11 +101,9 @@ public class PlayerCombat : MonoBehaviour
         if (Durability <= 0f) { Feedback?.Invoke("Kiếm gãy! Nhấn R để thay"); return; }
         cooldown = slashCooldown;
         GameAudio.Play2D(Sfx.Slash, 0.8f, UnityEngine.Random.Range(0.95f, 1.1f));
+        GetComponent<FirstPersonSwordViewmodel>()?.PlaySlash();
 
         Transform cam = odm.cameraTransform;
-        float speed = odm.Speed;
-
-        if (lungeAssist && TryLunge(cam)) return;
 
         foreach (Titan t in Titan.All.ToArray())
         {
@@ -108,21 +113,11 @@ public class PlayerCombat : MonoBehaviour
             Vector3 toNape = t.Nape.position - cam.position;
             if (toNape.magnitude <= napeReach && Vector3.Angle(cam.forward, toNape) <= slashAngle)
             {
-                if (speed >= killSpeed)
-                {
-                    t.KillByNape();
-                    GameAudio.Play2D(Sfx.SlashHit, 1f);
-                    GameVfx.Burst(t.Nape.position, new Color(1f, 1f, 1f, 0.85f), 18, 6f, 0.7f, 0.8f);
-                    Durability -= durabilityOnNapeKill;
-                    Feedback?.Invoke("CHÉM GÁY! Hạ gục titan");
-                }
-                else
-                {
-                    t.Damage(napeWeakDamage);
-                    GameAudio.Play2D(Sfx.SlashHit, 0.7f);
-                    Durability -= durabilityPerSlash;
-                    Feedback?.Invoke("Trúng gáy nhưng chưa đủ tốc độ (" + speed.ToString("F0") + "/" + killSpeed.ToString("F0") + ")");
-                }
+                t.KillByNape();
+                GameAudio.Play2D(Sfx.SlashHit, 1f);
+                GameVfx.Burst(t.Nape.position, new Color(1f, 1f, 1f, 0.85f), 18, 6f, 0.7f, 0.8f);
+                Durability -= durabilityOnNapeKill;
+                Feedback?.Invoke("CHÉM GÁY! Hạ gục titan");
                 continue;
             }
 
@@ -134,7 +129,8 @@ public class PlayerCombat : MonoBehaviour
                 Vector3 to = p - cam.position;
                 if (to.magnitude <= bodyReach && Vector3.Angle(cam.forward, to) <= slashAngle)
                 {
-                    if (speed >= bodyMinSpeed) { t.Damage(bodyDamage); GameAudio.Play2D(Sfx.SlashHit, 0.5f, 0.85f); }
+                    t.Damage(bodyDamage);
+                    GameAudio.Play2D(Sfx.SlashHit, 0.5f, 0.85f);
                     Durability -= durabilityPerSlash;
                     break;
                 }
@@ -145,33 +141,4 @@ public class PlayerCombat : MonoBehaviour
         if (Durability <= 0f) Feedback?.Invoke("Kiếm gãy! Nhấn R để thay");
     }
 
-    // Gáy trong tầm nhìn nhưng chưa tới tầm chém: lướt thẳng về phía gáy gần nhất.
-    // Bấm F lần nữa khi đã tới gần sẽ chém thật.
-    bool TryLunge(Transform cam)
-    {
-        bool anyInReach = false;
-        Titan best = null;
-        float bestDist = float.MaxValue;
-
-        foreach (Titan t in Titan.All)
-        {
-            if (t == null || t.IsDead) continue;
-            Vector3 to = t.Nape.position - cam.position;
-            float d = to.magnitude;
-            if (d <= napeReach && Vector3.Angle(cam.forward, to) <= slashAngle) anyInReach = true;
-            if (d > napeReach && d <= lungeRange && Vector3.Angle(cam.forward, to) <= lungeAngle && d < bestDist)
-            {
-                best = t; bestDist = d;
-            }
-        }
-
-        if (anyInReach || best == null) return false;
-
-        Vector3 dir = (best.Nape.position - cam.position).normalized;
-        odm.AddVelocity(dir * lungeSpeed);
-        GameAudio.Play2D(Sfx.GasBurst, 0.9f);
-        cooldown = slashCooldown;
-        Feedback?.Invoke("Lướt tới gáy!");
-        return true;
-    }
 }
