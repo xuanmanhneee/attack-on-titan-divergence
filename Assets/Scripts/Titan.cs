@@ -497,8 +497,8 @@ public class Titan : MonoBehaviour
         if (GroundSampler != null)
         {
             Vector3 q = transform.position;
-            float gy = GroundSampler(q);
-            q.y = Mathf.Abs(q.y - gy) > 1f ? gy : Mathf.Lerp(q.y, gy, 10f * dt); // lệch nhiều thì đặt thẳng xuống đất, không trôi từ từ
+            float sampledGroundY = GroundSampler(q);
+            q.y = Mathf.Abs(q.y - sampledGroundY) > 1f ? sampledGroundY : Mathf.Lerp(q.y, sampledGroundY, 10f * dt); // lệch nhiều thì đặt thẳng xuống đất, không trôi từ từ
             transform.position = q;
             return;
         }
@@ -506,8 +506,8 @@ public class Titan : MonoBehaviour
         var terr = Terrain.activeTerrain;
         if (terr == null) return;
         Vector3 p = transform.position;
-        float gy = terr.SampleHeight(p) + terr.transform.position.y;
-        p.y = Mathf.Lerp(p.y, gy, 10f * dt);
+        float terrainGroundY = terr.SampleHeight(p) + terr.transform.position.y;
+        p.y = Mathf.Lerp(p.y, terrainGroundY, 10f * dt);
         transform.position = p;
     }
 

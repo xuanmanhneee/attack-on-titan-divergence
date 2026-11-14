@@ -70,8 +70,8 @@ public class GameManager : MonoBehaviour
 
     static void AutoCreate()
     {
-        if (FindFirstObjectByType<GameManager>() != null) return;
-        if (FindFirstObjectByType<ODMController>() == null) return;
+        if (FindAnyObjectByType<GameManager>() != null) return;
+        if (FindAnyObjectByType<ODMController>() == null) return;
         new GameObject("GameManager").AddComponent<GameManager>();
     }
 
@@ -82,7 +82,7 @@ public class GameManager : MonoBehaviour
         GameAudio.Battle(false);
         GameAudio.SetLoops(0f, 0f);
 
-        odm = FindFirstObjectByType<ODMController>();
+        odm = FindAnyObjectByType<ODMController>();
         cam = odm.cameraTransform != null ? odm.cameraTransform.GetComponent<Camera>() : Camera.main;
 
         combat = odm.GetComponent<PlayerCombat>();
@@ -183,7 +183,7 @@ public class GameManager : MonoBehaviour
         }
 
         // Tắt các khối thử nghiệm cũ trong scene
-        foreach (var go in FindObjectsByType<GameObject>(FindObjectsSortMode.None))
+        foreach (var go in FindObjectsByType<GameObject>())
             if (go.transform.parent == null && System.Text.RegularExpressions.Regex.IsMatch(go.name, @"^Cube( \(\d+\))?$"))
                 go.SetActive(false);
 
