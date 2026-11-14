@@ -245,6 +245,40 @@ public class ODMController : MonoBehaviour
     private AudioSource hookAudio;
     private AudioSource backgroundMusicAudio;
 
+    // Giá trị gốc (từ scene) để nhân / cộng với cài đặt của người chơi
+    private float defSens, defBaseFov, defMaxFov;
+
+    void Awake()
+    {
+        defSens = mouseSensitivity;
+        defBaseFov = baseFov;
+        defMaxFov = maxFov;
+    }
+
+    void OnEnable()
+    {
+        GameSettings.Changed += ApplySettings;
+        ApplySettings();
+    }
+
+    void OnDisable()
+    {
+        GameSettings.Changed -= ApplySettings;
+    }
+
+    // Cài đặt người chơi (menu Cài đặt) ghi đè lên các thông số trong Inspector
+    void ApplySettings()
+    {
+        mouseSensitivity = defSens * GameSettings.MouseSens;
+        baseFov = GameSettings.Fov;
+        maxFov = Mathf.Max(baseFov + 5f, defMaxFov + (GameSettings.Fov - defBaseFov));
+        smartAim = GameSettings.SmartAim;
+        autoReel = GameSettings.AutoReel;
+        autoRelease = GameSettings.AutoRelease;
+        liftAnchorToRoof = GameSettings.AnchorLift;
+        if (backgroundMusicAudio != null) backgroundMusicAudio.volume = backgroundMusicVolume * GameSettings.Music;
+    }
+
     void Start()
     {
         controller = GetComponent<CharacterController>();
@@ -281,7 +315,7 @@ public class ODMController : MonoBehaviour
             backgroundMusicAudio.playOnAwake = false;
             backgroundMusicAudio.loop = false;
             backgroundMusicAudio.spatialBlend = 0f;
-            backgroundMusicAudio.volume = backgroundMusicVolume;
+            backgroundMusicAudio.volume = backgroundMusicVolume * GameSettings.Music;
             backgroundMusicAudio.Play();
         }
     }
@@ -641,7 +675,7 @@ public class ODMController : MonoBehaviour
     void HandleLook()
     {
         yaw += GameInput.GetAxis("Mouse X") * mouseSensitivity;
-        pitch -= GameInput.GetAxis("Mouse Y") * mouseSensitivity;
+        pitch -= GameInput.GetAxis("Mouse Y") * mouseSensitivity * (GameSettings.InvertY ? -1f : 1f);
         pitch = Mathf.Clamp(pitch, -80f, 80f);
 
         transform.rotation = Quaternion.Euler(0f, yaw, 0f);
@@ -1166,12 +1200,13 @@ public class ODMController : MonoBehaviour
     // ================= HOOK INPUT =================
     void HandleHookInput()
     {
-        bool leftDown  = GameInput.GetMouseButtonDown(0);
-        bool leftHeld  = GameInput.GetMouseButton(0);
-        bool leftUp    = GameInput.GetMouseButtonUp(0);
-        bool rightDown = GameInput.GetMouseButtonDown(1);
-        bool rightHeld = GameInput.GetMouseButton(1);
-        bool rightUp   = GameInput.GetMouseButtonUp(1);
+        // Chuột trái/phải hoặc phím móc trái/phải trong Cài đặt (mặc định Q/E, GameInput tự đổi theo phím đã gán).
+        bool leftHeld  = GameInput.GetMouseButton(0) || GameInput.GetKey(KeyCode.Q);
+        bool rightHeld = GameInput.GetMouseButton(1) || GameInput.GetKey(KeyCode.E);
+        bool leftDown  = GameInput.GetMouseButtonDown(0) || GameInput.GetKeyDown(KeyCode.Q);
+        bool rightDown = GameInput.GetMouseButtonDown(1) || GameInput.GetKeyDown(KeyCode.E);
+        bool leftUp    = (GameInput.GetMouseButtonUp(0) || GameInput.GetKeyUp(KeyCode.Q)) && !leftHeld;
+        bool rightUp   = (GameInput.GetMouseButtonUp(1) || GameInput.GetKeyUp(KeyCode.E)) && !rightHeld;
 
         if (toggleHooks)
         {
@@ -1194,6 +1229,10 @@ public class ODMController : MonoBehaviour
 
             if (rightDown) TryFireHook(hookRight, hipOriginRight);
             if (rightUp) ReleaseHook(hookRight, 1f);
+
+            // Nhả phím lúc đang tạm dừng thì sự kiện "nhả" bị bỏ lỡ -> kiểm tra theo trạng thái giữ phím.
+            if (hookLeft.active && !leftHeld) ReleaseHook(hookLeft, -1f);
+            if (hookRight.active && !rightHeld) ReleaseHook(hookRight, 1f);
         }
 
         AutoReleaseCheck(hookLeft);
@@ -1260,7 +1299,7 @@ public class ODMController : MonoBehaviour
         if (hookAudio == null || clip == null) return;
         hookAudio.panStereo = side * 0.18f;
         hookAudio.pitch = Random.Range(0.97f, 1.03f);
-        hookAudio.PlayOneShot(clip, volume);
+        hookAudio.PlayOneShot(clip, volume * GameSettings.Sfx);
     }
 
     void RefreshAnchor(HookState hook)
