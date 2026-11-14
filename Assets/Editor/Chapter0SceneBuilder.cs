@@ -131,11 +131,53 @@ public static class Chapter0SceneBuilder
         return layer;
     }
 
+    // Regenerates Chapter0Terrain.asset and re-wires the Terrain already in the
+    // open Chapter 0 scene.  Heights/splatmaps are procedural and deterministic,
+    // so every object placed with Ground() still sits on the surface.  Use this
+    // when the terrain asset fails to import (TerrainData becomes null and the
+    // player falls through the world) without rebuilding the whole scene.
+    [MenuItem("Attack on Titan/Repair Chapter 0 Terrain (keep scene)")]
+    public static void RepairTerrainFromMenu()
+    {
+        EnsureFolders();
+        Scene scene = SceneManager.GetActiveScene();
+        if (scene.path != ScenePath)
+        {
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+            scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+        }
+
+        Terrain terrain = Object.FindAnyObjectByType<Terrain>();
+        if (terrain == null) throw new System.InvalidOperationException("Chapter 0 scene has no Terrain.");
+        TerrainData data = CreateTerrainData();
+        terrain.terrainData = data;
+        TerrainCollider terrainCollider = terrain.GetComponent<TerrainCollider>();
+        if (terrainCollider != null) terrainCollider.terrainData = data;
+        EditorUtility.SetDirty(terrain);
+        EditorSceneManager.MarkSceneDirty(scene);
+        EditorSceneManager.SaveScene(scene);
+        AssetDatabase.SaveAssets();
+        Debug.Log("[Chapter 0] Terrain data regenerated and re-assigned.");
+    }
+
     static Terrain CreateTerrain()
     {
+        TerrainData data = CreateTerrainData();
+        GameObject go = Terrain.CreateTerrainGameObject(data);
+        go.name = "Chapter0_Terrain";
+        go.transform.position = new Vector3(-250f, -2f, -250f);
+        Terrain terrain = go.GetComponent<Terrain>();
+        terrain.drawInstanced = true;
+        terrain.heightmapPixelError = 8f;
+        return terrain;
+    }
+
+    static TerrainData CreateTerrainData()
+    {
         string dataPath = RootPath + "/Terrain/Chapter0Terrain.asset";
-        TerrainData old = AssetDatabase.LoadAssetAtPath<TerrainData>(dataPath);
-        if (old != null) AssetDatabase.DeleteAsset(dataPath);
+        // Delete unconditionally: a corrupt asset loads as null, so a null
+        // check would skip the delete and CreateAsset would clash with it.
+        AssetDatabase.DeleteAsset(dataPath);
 
         TerrainData data = new TerrainData
         {
@@ -181,14 +223,8 @@ public static class Chapter0SceneBuilder
                 for (int i = 0; i < 3; i++) splat[z, x, i] /= sum;
             }
         data.SetAlphamaps(0, 0, splat);
-
-        GameObject go = Terrain.CreateTerrainGameObject(data);
-        go.name = "Chapter0_Terrain";
-        go.transform.position = new Vector3(-250f, -2f, -250f);
-        Terrain terrain = go.GetComponent<Terrain>();
-        terrain.drawInstanced = true;
-        terrain.heightmapPixelError = 8f;
-        return terrain;
+        EditorUtility.SetDirty(data);
+        return data;
     }
 
     static float Ground(Terrain terrain, float x, float z) => terrain.SampleHeight(new Vector3(x, 0f, z)) + terrain.transform.position.y;
@@ -217,16 +253,23 @@ public static class Chapter0SceneBuilder
         Transform dressing = new GameObject("Environment_Dressing").transform;
         dressing.SetParent(root);
 
-        // Timber perimeter, with an open approach at the south end.
-        for (int i = -10; i <= 10; i++)
+        // Timber perimeter: a symmetric 22 x 42 post ring on an 11 m pitch.
+        // Both axes share the same pitch and the corners are posts, so the
+        // fence closes without gaps (the old version had the south/north
+        // runs at different distances from centre and stopped short of the
+        // corners).
+        const float postPitch = 11f;
+        const int halfX = 10;          // x = +/-110 (the side fences sit at 118)
+        const int halfZ = 21;          // z = +/-231
+        for (int i = -halfX; i <= halfX; i++)
         {
-            float x = i * 11f;
-            Post(dressing, terrain, x, -238f, 7f);
-            Post(dressing, terrain, x, 232f, 7f);
+            float x = i * postPitch;
+            Post(dressing, terrain, x, -halfZ * postPitch, 7f);
+            Post(dressing, terrain, x, halfZ * postPitch, 7f);
         }
-        for (int i = -20; i <= 20; i++)
+        for (int i = -halfZ; i <= halfZ; i++)
         {
-            float z = i * 11f;
+            float z = i * postPitch;
             Post(dressing, terrain, -118f, z, 7f);
             Post(dressing, terrain, 118f, z, 7f);
         }

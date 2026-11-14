@@ -6,6 +6,9 @@ public class Health : MonoBehaviour
 {
     public float maxHealth = 100f;
 
+    // Hệ số sát thương nhận vào (TitanForm dùng: 0 = bất tử khi biến hình, 0.5 = trâu hơn).
+    [NonSerialized] public float DamageMultiplier = 1f;
+
     public float Current { get; private set; }
     public bool IsDead => Current <= 0f;
     public float Normalized => maxHealth > 0f ? Current / maxHealth : 0f;
@@ -28,6 +31,8 @@ public class Health : MonoBehaviour
     public void TakeDamage(float amount)
     {
         if (IsDead || amount <= 0f) return;
+        amount *= DamageMultiplier;
+        if (amount <= 0f) return;
         Current = Mathf.Max(0f, Current - amount);
         Damaged?.Invoke(amount);
         if (Current <= 0f) Died?.Invoke();

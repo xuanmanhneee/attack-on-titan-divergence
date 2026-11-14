@@ -20,8 +20,8 @@ public static class PlayerModelSetup
     const string MaterialFolder = "Assets/Models/Player/ErenHuman/MaterialsURP";
     const string PrefabPath = "Assets/Models/Player/ErenHuman/ErenHuman_PlayerVisual.prefab";
     const string ScenePath = "Assets/Scenes/SampleScene.unity";
-    const string FpsArmsPath = "Assets/Models/Player/WRADArms/wrad-arms-main/arms.fbx";
-    const string FpsArmsTexturePath = "Assets/Models/Player/WRADArms/wrad-arms-main/arm_albedo_pale.png";
+    const string FpsArmsPath = "Assets/Models/Player/FPSArmsRig/fps_arms_rig.fbx";
+    const string FpsArmsTexturePath = "Assets/Models/Player/FPSArmsRig/new_diff.png";
     const string RealisticOdmPath = "Assets/Models/Weapons/odm_gear.glb";
 
     [MenuItem("Attack on Titan/Setup Eren Player Visual")]

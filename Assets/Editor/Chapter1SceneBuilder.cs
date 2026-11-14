@@ -13,7 +13,46 @@ public static class Chapter1SceneBuilder
     const string RootPath = "Assets/Chapter1";
     const string PackageRoot = "Assets/EmaceArt/Slavic World Free";
     const int Hookable = 3;
-    static readonly Vector3 Chapter1PlayerStart = new Vector3(-180.241f, 19.708f, -25.488f);
+
+    // Single source of truth for the city grid. Roads, house blocks, walls,
+    // floor and mission markers are all derived from these values so they
+    // cannot drift apart.  Roads cross at x = 0 so the central avenue lines up
+    // with the breached gate; house blocks sit in the 46 m cells between roads.
+    const float RoadWidth = 14f;
+    const float BlockPitch = 60f;
+    const float WallInnerX = 251f;      // inner face of Wall_Left / Wall_Right
+    const float WallSouthZ = -220f;
+    const float WallNorthZ = 350f;
+    const float WallThickness = 18f;
+    const float WallHeight = 50f;
+    const float GateWidth = 42f;
+    const float FloorTopY = -1.88f;
+    // Deliberately authored rooftop start: the player spawns on top of this
+    // house.  Rebuilding the city keeps the spawn on the same house.
+    const string SpawnHouse = "Trost_House_20";
+
+    static readonly float[] RoadXs = Steps(-180f, 180f, BlockPitch);
+    static readonly float[] RoadZs = Steps(-165f, 315f, BlockPitch);
+    static readonly float[] BlockXs = Centres(RoadXs, true);    // -210 .. 210 (8 cells)
+    static readonly float[] BlockZs = Centres(RoadZs, false);   // -135 .. 285 (8 cells)
+
+    static float[] Steps(float from, float to, float step)
+    {
+        var list = new List<float>();
+        for (float v = from; v <= to + 0.01f; v += step) list.Add(v);
+        return list.ToArray();
+    }
+
+    // Cell centres between consecutive roads, plus one cell beyond each end
+    // when includeOuter is set (the outermost cells next to the side walls).
+    static float[] Centres(float[] roads, bool includeOuter)
+    {
+        var list = new List<float>();
+        if (includeOuter) list.Add(roads[0] - BlockPitch * 0.5f);
+        for (int i = 0; i + 1 < roads.Length; i++) list.Add((roads[i] + roads[i + 1]) * 0.5f);
+        if (includeOuter) list.Add(roads[roads.Length - 1] + BlockPitch * 0.5f);
+        return list.ToArray();
+    }
 
     static readonly string[] HousePaths =
     {
@@ -48,54 +87,21 @@ public static class Chapter1SceneBuilder
             if (sceneRoot.name == "Terrain" || sceneRoot.name.StartsWith("Cube") || sceneRoot.name == "Chapter1_Trost")
                 UnityEngine.Object.DestroyImmediate(sceneRoot);
 
-        Material stone = MaterialAsset("TrostWall", new Color(0.47f, 0.43f, 0.37f));
-        Material road = MaterialAsset("TrostRoad", new Color(0.25f, 0.22f, 0.18f));
-        Material ground = MaterialAsset("TrostGround", new Color(0.31f, 0.36f, 0.18f));
         Terrain terrain = CreateTerrain();
         Transform root = new GameObject("Chapter1_Trost").transform;
         Transform city = new GameObject("Baked_City").transform;
         city.SetParent(root);
         Transform markers = new GameObject("Mission_Markers").transform;
         markers.SetParent(root);
-
-        // A baked dirt-and-grass plaza keeps the traversable city readable;
-        // the imported terrain remains visible around it as the outer hills.
-        // Keep a collision safety floor under the playable district.  Only the
-        // decorative road slabs below are non-colliding.
-        Box(city, "Trost_Ground", new Vector3(0f, -1.97f, 70f), new Vector3(500f, .18f, 550f), ground, 0);
-        BuildRoads(city, road);
-        BuildHouses(city, terrain);
-        BuildWalls(city, terrain, stone);
-        BuildDressing(city, terrain);
+        PopulateCity(city, terrain);
 
         ODMController player = UnityEngine.Object.FindAnyObjectByType<ODMController>();
         if (player == null) throw new InvalidOperationException("SampleScene has no ODMController player.");
-        // Deliberately authored rooftop start. Do not infer this from the
-        // tallest prefab: rebuilding the city must preserve the chosen spawn.
-        MovePlayer(player, Chapter1PlayerStart);
-        player.groundLayer = ~0;
-        player.hookableLayer = 1 << Hookable;
-        player.maxHookRange = 105f;
+        ConfigurePlayer(player);
+        PlaceOnSpawnRooftop(player, city);
 
         TrostMapAuthoring map = root.gameObject.AddComponent<TrostMapAuthoring>();
-        map.buildingLayer = Hookable;
-        map.groundY = terrain.transform.position.y;
-        map.floorRect = new Rect(-250f, -220f, 500f, 620f);
-        map.playerStart = Marker(markers, "Player_Start", player.transform.position);
-        map.gate = Marker(markers, "Breached_Gate", new Vector3(0f, Ground(terrain, 0f, 330f), 330f));
-        map.sealPoint = Marker(markers, "Seal_Point", new Vector3(0f, Ground(terrain, 0f, 303f), 303f));
-        map.depots = new[]
-        {
-            Marker(markers, "Gas_Depot_West", new Vector3(-150f, Ground(terrain, -150f, 10f), 10f)),
-            Marker(markers, "Gas_Depot_East", new Vector3(150f, Ground(terrain, 150f, 120f), 120f)),
-            Marker(markers, "Gas_Depot_North", new Vector3(-95f, Ground(terrain, -95f, 260f), 260f))
-        };
-        map.intersections = new[]
-        {
-            Marker(markers, "Intersection_South", new Vector3(0f, Ground(terrain, 0f, -70f), -70f)),
-            Marker(markers, "Intersection_Centre", new Vector3(0f, Ground(terrain, 0f, 75f), 75f)),
-            Marker(markers, "Intersection_North", new Vector3(0f, Ground(terrain, 0f, 220f), 220f))
-        };
+        ConfigureMap(map, markers, terrain, player.transform.position);
 
         EditorSceneManager.SaveScene(scene, ScenePath, false);
         SetBuildScenes();
@@ -103,6 +109,137 @@ public static class Chapter1SceneBuilder
         AssetDatabase.Refresh();
         Selection.activeObject = root.gameObject;
         Debug.Log("[Chapter 1] Baked Trost scene at " + ScenePath);
+    }
+
+    // Re-lays the city on the unified grid inside the EXISTING Chapter 1
+    // scene.  Unlike Build() it does not start from SampleScene, so the player,
+    // HUD, lighting and any hand edits outside Baked_City are left untouched.
+    [MenuItem("Attack on Titan/Realign Chapter 1 City (keep scene)")]
+    public static void RealignFromMenu() => Realign();
+
+    public static void RealignBatch()
+    {
+        Realign();
+        EditorApplication.Exit(0);
+    }
+
+    static void Realign()
+    {
+        if (!AssetDatabase.IsValidFolder(PackageRoot))
+            throw new InvalidOperationException("Slavic World Free has not been imported yet.");
+        Scene scene = SceneManager.GetActiveScene();
+        if (scene.path != ScenePath)
+        {
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+            scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+        }
+
+        GameObject rootObject = GameObject.Find("Chapter1_Trost");
+        Terrain terrain = UnityEngine.Object.FindAnyObjectByType<Terrain>();
+        ODMController player = UnityEngine.Object.FindAnyObjectByType<ODMController>();
+        if (rootObject == null || terrain == null || player == null)
+            throw new InvalidOperationException("Chapter 1 scene is missing Chapter1_Trost, a Terrain or the player.");
+
+        Transform root = rootObject.transform;
+        Transform city = root.Find("Baked_City");
+        if (city == null) { city = new GameObject("Baked_City").transform; city.SetParent(root); }
+        Transform markers = root.Find("Mission_Markers");
+        if (markers == null) { markers = new GameObject("Mission_Markers").transform; markers.SetParent(root); }
+
+        for (int i = city.childCount - 1; i >= 0; i--)
+            UnityEngine.Object.DestroyImmediate(city.GetChild(i).gameObject);
+
+        PopulateCity(city, terrain);
+        PlaceOnSpawnRooftop(player, city);
+        TrostMapAuthoring map = rootObject.GetComponent<TrostMapAuthoring>();
+        if (map == null) map = rootObject.AddComponent<TrostMapAuthoring>();
+        ConfigureMap(map, markers, terrain, player.transform.position);
+
+        EditorSceneManager.MarkSceneDirty(scene);
+        EditorSceneManager.SaveScene(scene);
+        AssetDatabase.SaveAssets();
+        Debug.Log("[Chapter 1] City realigned on the unified grid; player re-seated on " + SpawnHouse + ".");
+    }
+
+    static void PopulateCity(Transform city, Terrain terrain)
+    {
+        Material stone = MaterialAsset("TrostWall", new Color(0.47f, 0.43f, 0.37f));
+        Material road = MaterialAsset("TrostRoad", new Color(0.25f, 0.22f, 0.18f));
+        Material ground = MaterialAsset("TrostGround", new Color(0.31f, 0.36f, 0.18f));
+
+        // Collision safety floor under the whole walled district, out to the
+        // outer faces of the side/south/north walls so nothing ends on a void
+        // edge.  Only the decorative road slabs are non-colliding.
+        float floorMinZ = WallSouthZ - WallThickness * 0.5f;
+        float floorMaxZ = WallNorthZ + WallThickness * 0.5f;
+        float floorHalfX = WallInnerX + WallThickness;
+        Box(city, "Trost_Ground", new Vector3(0f, FloorTopY - .09f, (floorMinZ + floorMaxZ) * .5f),
+            new Vector3(floorHalfX * 2f, .18f, floorMaxZ - floorMinZ), ground, 0);
+        BuildRoads(city, road);
+        BuildHouses(city, terrain);
+        BuildWalls(city, terrain, stone);
+        BuildDressing(city, terrain);
+    }
+
+    static void ConfigurePlayer(ODMController player)
+    {
+        player.groundLayer = ~0;
+        player.hookableLayer = 1 << Hookable;
+        player.maxHookRange = 105f;
+    }
+
+    // Every marker sits on the road grid: three crossings of the central
+    // avenue (x = 0), three depots on side-street crossings, and the gate at
+    // the north end of the avenue.
+    static void ConfigureMap(TrostMapAuthoring map, Transform markers, Terrain terrain, Vector3 playerStart)
+    {
+        float gateZ = WallNorthZ - 20f;
+        float sealZ = gateZ - 27f;
+        float floorMinZ = WallSouthZ - WallThickness * 0.5f;
+        float floorMaxZ = WallNorthZ + WallThickness * 0.5f;
+        float floorHalfX = WallInnerX + WallThickness;
+
+        map.buildingLayer = Hookable;
+        map.groundY = terrain.transform.position.y;
+        map.floorRect = new Rect(-floorHalfX, floorMinZ, floorHalfX * 2f, floorMaxZ - floorMinZ);
+        map.playerStart = Marker(markers, "Player_Start", playerStart);
+        map.gate = Marker(markers, "Breached_Gate", OnGround(terrain, 0f, gateZ));
+        map.sealPoint = Marker(markers, "Seal_Point", OnGround(terrain, 0f, sealZ));
+        map.depots = new[]
+        {
+            Marker(markers, "Gas_Depot_West", OnGround(terrain, RoadXs[1], RoadZs[2])),   // (-120, -45)
+            Marker(markers, "Gas_Depot_East", OnGround(terrain, RoadXs[5], RoadZs[5])),   // ( 120, 135)
+            Marker(markers, "Gas_Depot_North", OnGround(terrain, RoadXs[2], RoadZs[7]))   // ( -60, 255)
+        };
+        map.intersections = new[]
+        {
+            Marker(markers, "Intersection_South", OnGround(terrain, 0f, RoadZs[2])),     // (0, -45)
+            Marker(markers, "Intersection_Centre", OnGround(terrain, 0f, RoadZs[4])),    // (0,  75)
+            Marker(markers, "Intersection_North", OnGround(terrain, 0f, RoadZs[6]))      // (0, 195)
+        };
+        EditorUtility.SetDirty(map);
+    }
+
+    static Vector3 OnGround(Terrain terrain, float x, float z) => new Vector3(x, Ground(terrain, x, z), z);
+
+    static void PlaceOnSpawnRooftop(ODMController player, Transform city)
+    {
+        Transform house = city.Find(SpawnHouse);
+        if (house == null)
+        {
+            Debug.LogWarning("[Chapter 1] Spawn house '" + SpawnHouse + "' not found; leaving the player where it is.");
+            return;
+        }
+
+        Renderer[] renderers = house.GetComponentsInChildren<Renderer>(true);
+        Bounds bounds = renderers[0].bounds;
+        for (int i = 1; i < renderers.Length; i++) bounds.Encapsulate(renderers[i].bounds);
+        Vector3 above = new Vector3(bounds.center.x, bounds.max.y + 2f, bounds.center.z);
+        Physics.SyncTransforms();
+        Vector3 spawn = above;
+        if (Physics.Raycast(above, Vector3.down, out RaycastHit hit, bounds.size.y + 10f))
+            spawn = hit.point + Vector3.up * 1.2f;
+        MovePlayer(player, spawn);
     }
 
     static void EnsureFolder(string path)
@@ -136,8 +273,12 @@ public static class Chapter1SceneBuilder
 
     static void BuildRoads(Transform parent, Material material)
     {
-        for (int z = -165; z <= 315; z += 60) Box(parent, "Cross_Road", new Vector3(0f, -1.86f, z), new Vector3(500f, .25f, 14f), material, 0, false);
-        for (int x = -210; x <= 210; x += 60) Box(parent, "Main_Road", new Vector3(x, -1.86f, 70f), new Vector3(14f, .25f, 550f), material, 0, false);
+        float minZ = WallSouthZ + WallThickness * 0.5f;
+        float maxZ = WallNorthZ - WallThickness * 0.5f;
+        foreach (float z in RoadZs)
+            Box(parent, "Cross_Road", new Vector3(0f, -1.86f, z), new Vector3(WallInnerX * 2f, .25f, RoadWidth), material, 0, false);
+        foreach (float x in RoadXs)
+            Box(parent, "Main_Road", new Vector3(x, -1.86f, (minZ + maxZ) * .5f), new Vector3(RoadWidth, .25f, maxZ - minZ), material, 0, false);
     }
 
     static void BuildHouses(Transform parent, Terrain terrain)
@@ -151,15 +292,18 @@ public static class Chapter1SceneBuilder
         if (prefabs.Count == 0) throw new InvalidOperationException("Town house prefabs were not found in imported package.");
 
         int index = 0;
-        // 60 m blocks give the player a fresh hook target before the previous
-        // swing runs out, while the 14 m roads leave clear recovery corridors.
-        for (int x = -210; x <= 210; x += 55)
-            for (int z = -145; z <= 275; z += 55)
+        // 60 m road pitch gives the player a fresh hook target before the
+        // previous swing runs out, while the 14 m roads leave clear recovery
+        // corridors.  Houses are centred in the 46 m cells between roads, two
+        // per cell, so no house straddles a road.
+        foreach (float x in BlockXs)
+            foreach (float z in BlockZs)
             {
-                // Four lanes of larger town buildings, with broad roads for ODM traversal.
                 foreach (int side in new[] { -1, 1 })
                 {
-                    Vector3 position = new Vector3(x + side * 20f, Ground(terrain, x + side * 20f, z), z + ((index % 2 == 0) ? 9f : -9f));
+                    float houseX = x + side * 11f;
+                    float houseZ = z + ((index % 2 == 0) ? 4f : -4f);
+                    Vector3 position = new Vector3(houseX, Ground(terrain, houseX, houseZ), houseZ);
                     GameObject instance = PrefabUtility.InstantiatePrefab(prefabs[index % prefabs.Count], parent) as GameObject;
                     instance.name = "Trost_House_" + index.ToString("D2");
                     float groundY = position.y;
@@ -169,7 +313,7 @@ public static class Chapter1SceneBuilder
                     // house silhouette at distance.
                     KeepVisibleAtDistance(instance);
                     instance.transform.localScale = Vector3.one * (1.45f + (index % 3) * .10f);
-                    SnapBottomToGround(instance, groundY);
+                    FitHouseToCell(instance, x, houseZ, side, groundY);
                     MakeHookable(instance);
                     TrostMapAuthoring.EnsureSolidHouseBody(instance.transform, Hookable);
                     index++;
@@ -179,16 +323,26 @@ public static class Chapter1SceneBuilder
 
     static void BuildWalls(Transform parent, Terrain terrain, Material material)
     {
-        const float z = 350f;
-        const float height = 50f;
-        const float gateWidth = 42f;
-        Box(parent, "Wall_West", new Vector3(-(250f + gateWidth) * .5f, Ground(terrain, -136f, z) + height * .5f, z), new Vector3(250f - gateWidth * .5f, height, 18f), material, Hookable);
-        Box(parent, "Wall_East", new Vector3((250f + gateWidth) * .5f, Ground(terrain, 136f, z) + height * .5f, z), new Vector3(250f - gateWidth * .5f, height, 18f), material, Hookable);
-        Box(parent, "Wall_South", new Vector3(0f, Ground(terrain, 0f, -220f) + height * .5f, -220f), new Vector3(520f, height, 18f), material, Hookable);
-        Box(parent, "Wall_Left", new Vector3(-260f, Ground(terrain, -260f, 65f) + height * .5f, 65f), new Vector3(18f, height, 590f), material, Hookable);
-        Box(parent, "Wall_Right", new Vector3(260f, Ground(terrain, 260f, 65f) + height * .5f, 65f), new Vector3(18f, height, 590f), material, Hookable);
+        const float z = WallNorthZ;
+        const float height = WallHeight;
+        const float halfGate = GateWidth * .5f;
+        // The north wall runs from the inner face of each side wall to the
+        // edge of the gate opening, leaving exactly GateWidth between the two
+        // halves.  (The old values left a 63 m gap instead of 42 m.)
+        float segmentLength = WallInnerX - halfGate;
+        float segmentCentre = halfGate + segmentLength * .5f;
+        float sideZMin = WallSouthZ - WallThickness * .5f;
+        float sideZMax = WallNorthZ + WallThickness * .5f;
+        float sideLength = sideZMax - sideZMin;
+        float sideCentreZ = (sideZMin + sideZMax) * .5f;
+        float sideCentreX = WallInnerX + WallThickness * .5f;
+        Box(parent, "Wall_West", new Vector3(-segmentCentre, Ground(terrain, -segmentCentre, z) + height * .5f, z), new Vector3(segmentLength, height, WallThickness), material, Hookable);
+        Box(parent, "Wall_East", new Vector3(segmentCentre, Ground(terrain, segmentCentre, z) + height * .5f, z), new Vector3(segmentLength, height, WallThickness), material, Hookable);
+        Box(parent, "Wall_South", new Vector3(0f, Ground(terrain, 0f, WallSouthZ) + height * .5f, WallSouthZ), new Vector3(sideCentreX * 2f, height, WallThickness), material, Hookable);
+        Box(parent, "Wall_Left", new Vector3(-sideCentreX, Ground(terrain, -sideCentreX, sideCentreZ) + height * .5f, sideCentreZ), new Vector3(WallThickness, height, sideLength), material, Hookable);
+        Box(parent, "Wall_Right", new Vector3(sideCentreX, Ground(terrain, sideCentreX, sideCentreZ) + height * .5f, sideCentreZ), new Vector3(WallThickness, height, sideLength), material, Hookable);
         for (int i = -3; i <= 3; i++)
-            Box(parent, "Gate_Rubble", new Vector3(i * 6f, Ground(terrain, i * 6f, 337f) + 2f, 337f - Mathf.Abs(i) * 2f), new Vector3(7f, 4f + Mathf.Abs(i), 6f), material, Hookable);
+            Box(parent, "Gate_Rubble", new Vector3(i * 6f, Ground(terrain, i * 6f, z - 13f) + 2f, z - 13f - Mathf.Abs(i) * 2f), new Vector3(7f, 4f + Mathf.Abs(i), 6f), material, Hookable);
     }
 
     static void BuildDressing(Transform parent, Terrain terrain)
@@ -328,6 +482,45 @@ public static class Chapter1SceneBuilder
         return renderers.ToArray();
     }
 
+    // Cell is BlockPitch - RoadWidth = 46 m wide.  Keep 3 m clear of each road
+    // edge and 3 m between the two houses, which leaves 18.5 m per house.
+    const float CellHalfWidth = (BlockPitch - RoadWidth) * 0.5f;
+    const float RoadClearance = 3f;
+    const float MaxHouseWidth = (CellHalfWidth * 2f - RoadClearance * 2f - 3f) * 0.5f;
+
+    // The source prefabs have very different footprints, so a fixed offset
+    // makes some straddle roads and others collide.  Rotate so the shorter
+    // footprint side lies across the cell, shrink anything that is still too
+    // wide, then push each house against its own side of the cell.
+    static void FitHouseToCell(GameObject house, float cellX, float centreZ, int side, float groundY)
+    {
+        Bounds bounds = RendererBounds(house);
+        if (bounds.size.x > bounds.size.z)
+        {
+            house.transform.RotateAround(bounds.center, Vector3.up, 90f);
+            bounds = RendererBounds(house);
+        }
+        if (bounds.size.x > MaxHouseWidth)
+        {
+            house.transform.localScale *= MaxHouseWidth / bounds.size.x;
+            bounds = RendererBounds(house);
+        }
+
+        float inner = CellHalfWidth - RoadClearance;
+        float targetX = side < 0 ? cellX - inner + bounds.extents.x : cellX + inner - bounds.extents.x;
+        Vector3 delta = new Vector3(targetX - bounds.center.x, 0f, centreZ - bounds.center.z);
+        house.transform.position += delta;
+        SnapBottomToGround(house, groundY);
+    }
+
+    static Bounds RendererBounds(GameObject root)
+    {
+        Renderer[] renderers = root.GetComponentsInChildren<Renderer>(true);
+        Bounds bounds = renderers[0].bounds;
+        for (int i = 1; i < renderers.Length; i++) bounds.Encapsulate(renderers[i].bounds);
+        return bounds;
+    }
+
     static void SnapBottomToGround(GameObject root, float groundY)
     {
         Renderer[] renderers = root.GetComponentsInChildren<Renderer>(true);
@@ -339,10 +532,15 @@ public static class Chapter1SceneBuilder
 
     static Transform Marker(Transform parent, string name, Vector3 position)
     {
-        GameObject marker = new GameObject(name);
-        marker.transform.SetParent(parent);
-        marker.transform.position = position;
-        return marker.transform;
+        // Reuse an existing marker so Realign keeps references and hierarchy.
+        Transform marker = parent.Find(name);
+        if (marker == null)
+        {
+            marker = new GameObject(name).transform;
+            marker.SetParent(parent);
+        }
+        marker.position = position;
+        return marker;
     }
 
     static float Ground(Terrain terrain, float x, float z) => terrain.SampleHeight(new Vector3(x, 0f, z)) + terrain.transform.position.y;

@@ -17,28 +17,33 @@ public sealed class FirstPersonSwordViewmodel : MonoBehaviour
     [SerializeField] Texture2D armsAlbedo;
 
     [Header("Presentation")]
-    [SerializeField] Vector3 wristMidpoint = new Vector3(0f, -0.48f, 0.60f);
-    [SerializeField, Min(0.2f)] float wristSeparation = 0.58f;
-    [SerializeField, Min(0.2f)] float swordLength = 1.15f;
-    [Tooltip("Corrects the imported arm rig after its wrists are aligned to the camera. Use this only for the first-person rig.")]
-    // Keep the imported forearm pose after aligning the wrists. A 180-degree roll
-    // puts the elbows above the hands and makes the arms cover the swords.
-    [SerializeField] Vector3 armRigRotationCorrection = Vector3.zero;
-    [Tooltip("Small local offset applied after the rig correction, useful for keeping the forearms out of the camera clip plane.")]
-    [SerializeField] Vector3 armRigPositionCorrection = new Vector3(0f, 0f, 0.02f);
-    [Tooltip("Keeps only wrist/hand/finger-weighted triangles from the imported arm mesh.")]
-    [SerializeField] bool cropForearmsToHands = true;
-    [Tooltip("Length of forearm retained next to each wrist, in imported arm-model units.")]
-    [SerializeField, Min(0f)] float retainedForearmLength = 0.28f;
-    [Tooltip("Pitch of the sword toward/away from the camera.")]
-    [SerializeField] float swordPitch = 0f;
-    [Tooltip("Rolls the blade around its length so the blade face is vertical in the hand.")]
-    [SerializeField] float swordRoll = 270f;
-    [Tooltip("Moves the sword relative to the wrist socket in camera-local space.")]
-    [SerializeField] Vector3 swordPositionOffset = Vector3.zero;
-    // Do not reveal the full arm model for a small camera pitch. The arms should
-    // appear only when the player deliberately looks down; slashes still force
-    // them visible through slashTime below.
+    [SerializeField] Vector3 armsPosition = new Vector3(0f, 0f, 0.30f);
+    [SerializeField, Min(0.1f)] float armsScale = 0.8f;
+    [SerializeField, Min(0.2f)] float swordLength = 1.0f;
+    [Tooltip("Show the viewmodel all the time (tuning aid).")]
+    [SerializeField] bool alwaysVisible = false;
+    [Header("Arm pose (view space, left arm; the right arm is mirrored)")]
+    [Tooltip("Wrist position relative to the camera.")]
+    [SerializeField] Vector3 handPosition = new Vector3(-0.26f, -0.20f, 0.50f);
+    [Tooltip("Direction from elbow to wrist. The elbow sits below the screen.")]
+    [SerializeField] Vector3 forearmDirection = new Vector3(0.25f, 0.35f, 0.9f);
+    [SerializeField] float forearmRoll = 0f;
+    [Tooltip("Direction the sword blade points.")]
+    [SerializeField] Vector3 bladeDirection = new Vector3(0.02f, 0.6f, 0.8f);
+    [Tooltip("Direction the fingers point (wrist to fingertips).")]
+    [SerializeField] Vector3 fingerDirection = new Vector3(0.25f, 0.3f, 0.9f);
+    [Header("Grip")]
+    [Tooltip("Flexion of finger segments 1/2/3 around the bone's local X axis.")]
+    [SerializeField] Vector3 fingerCurl = new Vector3(70f, 85f, 60f);
+    [SerializeField] Vector3 thumbCurl = new Vector3(20f, 30f, 30f);
+    [SerializeField] float leftCurlSign = 1f;
+    [SerializeField] float rightCurlSign = 1f;
+    [Tooltip("Sword grip point in the hand bone's local space.")]
+    [SerializeField] Vector3 leftGripOffset = new Vector3(0.55f, 0.85f, 0.1f);
+    [SerializeField] Vector3 rightGripOffset = new Vector3(0.1f, 0.85f, 0.1f);
+    [Tooltip("Sword rotation relative to the hand bone (blade = +Z).")]
+    [SerializeField] Vector3 leftGripEuler = new Vector3(0f, 0f, 0f);
+    [SerializeField] Vector3 rightGripEuler = new Vector3(0f, 0f, 0f);
     [SerializeField, Range(0f, 1f)] float revealPitch = 0.48f;
     [SerializeField, Min(0f)] float lookDownLift = 0.34f;
 
@@ -95,6 +100,20 @@ public sealed class FirstPersonSwordViewmodel : MonoBehaviour
             Destroy(viewRoot.gameObject);
     }
 
+    class Joint
+    {
+        public Transform bone;
+        public Quaternion bind;
+    }
+
+    // Per side (0 = left, 1 = right).
+    readonly Transform[] upperBones = new Transform[2];
+    readonly Transform[] forearmBones = new Transform[2];
+    readonly Transform[] handBones = new Transform[2];
+    readonly Quaternion[] forearmBind = new Quaternion[2]; // in view space
+    float forearmLength;                                   // rig units
+    Joint[][] fingerJoints; // [0]=left, [1]=right; each 4 fingers x 3 + thumb x 3
+
     void Build()
     {
         if (viewRoot != null || viewCamera == null || armsPrefab == null || swordPrefab == null)
@@ -108,31 +127,42 @@ public sealed class FirstPersonSwordViewmodel : MonoBehaviour
         baseRootPosition = Vector3.zero;
 
         GameObject armsObject = Instantiate(armsPrefab, viewRoot);
-        armsObject.name = "WRAD_Arms";
+        armsObject.name = "FPS_Arms";
         armsInstance = armsObject.transform;
-        armsInstance.localPosition = Vector3.zero;
+        armsInstance.localPosition = armsPosition;
         armsInstance.localRotation = Quaternion.identity;
-        armsInstance.localScale = Vector3.one;
+        armsInstance.localScale = Vector3.one * armsScale;
 
-        Transform leftWrist = FindDeep(armsInstance, "wrist.l");
-        Transform rightWrist = FindDeep(armsInstance, "wrist.r");
-        // The imported socket helpers are positioned for the source arm rig and
-        // do not sit in the palm after the viewmodel is fitted to the camera.
-        // Anchor the sword grip to the actual wrist bones instead.
-        leftSocket = leftWrist;
-        rightSocket = rightWrist;
-        if (leftWrist == null || rightWrist == null || leftSocket == null || rightSocket == null)
+        leftSocket = FindDeep(armsInstance, "hand.L");
+        rightSocket = FindDeep(armsInstance, "hand.R");
+        if (leftSocket == null || rightSocket == null)
         {
-            Debug.LogError("WRAD arms are missing wrist/socket bones.", this);
+            Debug.LogError("FPS arms are missing hand bones.", this);
             return;
         }
 
-        FitArmsToCamera(leftWrist, rightWrist);
-        if (cropForearmsToHands)
-            CropForearmsToHands(leftWrist, rightWrist);
+        // The rig drives the hands with separate IK controls. Without IK the
+        // hands would stay behind when the arm is posed, so attach them to the
+        // forearms and drive the whole arm with plain forward kinematics.
+        AttachHand(leftSocket, "forearm.L_end");
+        AttachHand(rightSocket, "forearm.R_end");
+
+        upperBones[0] = FindDeep(armsInstance, "upper_arm.L");
+        upperBones[1] = FindDeep(armsInstance, "upper_arm.R");
+        forearmBones[0] = FindDeep(armsInstance, "forearm.L");
+        forearmBones[1] = FindDeep(armsInstance, "forearm.R");
+        handBones[0] = leftSocket;
+        handBones[1] = rightSocket;
+        for (int side = 0; side < 2; side++)
+            forearmBind[side] = Quaternion.Inverse(viewRoot.rotation) * forearmBones[side].rotation;
+        Transform forearmEnd = FindDeep(armsInstance, "forearm.L_end");
+        forearmLength = Vector3.Distance(armsInstance.InverseTransformPoint(forearmBones[0].position),
+                                         armsInstance.InverseTransformPoint(forearmEnd.position));
+
+        fingerJoints = new[] { CollectFingers(".L"), CollectFingers(".R") };
+
         ApplyArmsMaterial();
-        CurlGripFingers(".l", -1f);
-        CurlGripFingers(".r", 1f);
+        ApplyPose();
 
         leftSword = BuildSword("Left_ImportedSword", leftSocket);
         rightSword = BuildSword("Right_ImportedSword", rightSocket);
@@ -142,32 +172,82 @@ public sealed class FirstPersonSwordViewmodel : MonoBehaviour
         {
             renderer.shadowCastingMode = ShadowCastingMode.Off;
             renderer.receiveShadows = false;
+            if (renderer is SkinnedMeshRenderer skinned) skinned.updateWhenOffscreen = true;
             renderers.Add(renderer);
         }
         viewRenderers = renderers.ToArray();
-        SetVisible(false);
+        SetVisible(alwaysVisible);
     }
 
-    void FitArmsToCamera(Transform leftWrist, Transform rightWrist)
+    void AttachHand(Transform hand, string endBoneName)
     {
-        Vector3 left = armsInstance.InverseTransformPoint(leftWrist.position);
-        Vector3 right = armsInstance.InverseTransformPoint(rightWrist.position);
-        Vector3 span = right - left;
-        if (span.sqrMagnitude < 0.000001f) return;
+        Transform control = hand.parent;
+        Transform end = FindDeep(armsInstance, endBoneName);
+        if (control == null || end == null) return;
+        control.SetParent(end, true);
+    }
 
-        // Align the wrist line to the camera's X axis first. The old implementation
-        // used FromToRotation alone, which leaves the roll around that axis
-        // under-constrained; depending on the imported FBX orientation the arms
-        // could end up facing backward or twisting the swords away from the hands.
-        Quaternion alignAcrossView = Quaternion.FromToRotation(span.normalized, Vector3.right);
-        Quaternion correctedRotation = Quaternion.Euler(armRigRotationCorrection) * alignAcrossView;
-        float scale = wristSeparation / span.magnitude;
-        Vector3 midpoint = (left + right) * 0.5f;
-        armsInstance.localRotation = correctedRotation;
-        armsInstance.localScale = Vector3.one * scale;
-        armsInstance.localPosition = wristMidpoint
-            - correctedRotation * (midpoint * scale)
-            + armRigPositionCorrection;
+    Joint MakeJoint(string boneName)
+    {
+        Transform bone = FindDeep(armsInstance, boneName);
+        return new Joint { bone = bone, bind = bone != null ? bone.localRotation : Quaternion.identity };
+    }
+
+    Joint[] CollectFingers(string suffix)
+    {
+        List<Joint> list = new List<Joint>();
+        foreach (string finger in new[] { "f_index", "f_middle", "f_ring", "f_pinky", "thumb" })
+            for (int i = 1; i <= 3; i++)
+                list.Add(MakeJoint(finger + ".0" + i + suffix));
+        return list.ToArray();
+    }
+
+    static Vector3 Mirror(Vector3 v, int side) => side == 0 ? v : new Vector3(-v.x, v.y, v.z);
+
+    // Poses are re-applied every frame so the Inspector values can be tuned live.
+    void ApplyPose()
+    {
+        if (forearmBones[0] == null || fingerJoints == null) return;
+        for (int side = 0; side < 2; side++)
+        {
+            Transform forearm = forearmBones[side];
+            Transform upper = upperBones[side];
+            Transform hand = handBones[side];
+            if (forearm == null || hand == null) continue;
+
+            Vector3 dir = Mirror(forearmDirection, side).normalized;
+            Vector3 wrist = Mirror(handPosition, side);
+            Vector3 elbow = wrist - dir * (forearmLength * armsScale);
+            Quaternion bind = forearmBind[side];
+            float roll = side == 0 ? forearmRoll : -forearmRoll;
+            Quaternion q = Quaternion.AngleAxis(roll, dir)
+                         * Quaternion.FromToRotation(bind * Vector3.up, dir) * bind;
+
+            Quaternion worldRot = viewRoot.rotation * q;
+            Vector3 worldPos = viewRoot.TransformPoint(elbow);
+            // The mesh has no real upper arm; keep it rigid with the forearm so
+            // the blend zone at the elbow does not stretch back to the shoulder.
+            if (upper != null) { upper.position = worldPos; upper.rotation = worldRot; }
+            forearm.position = worldPos;
+            forearm.rotation = worldRot;
+
+            Vector3 blade = Mirror(bladeDirection, side).normalized;
+            Vector3 fingers = Mirror(fingerDirection, side);
+            hand.rotation = viewRoot.rotation * Quaternion.LookRotation(blade, fingers);
+        }
+        for (int side = 0; side < 2; side++)
+        {
+            float sign = side == 0 ? leftCurlSign : rightCurlSign;
+            Joint[] joints = fingerJoints[side];
+            for (int j = 0; j < joints.Length; j++)
+            {
+                if (joints[j].bone == null) continue;
+                bool thumb = j >= 12;
+                Vector3 curl = thumb ? thumbCurl : fingerCurl;
+                float angle = (j % 3) == 0 ? curl.x : (j % 3) == 1 ? curl.y : curl.z;
+                joints[j].bone.localRotation = joints[j].bind * Quaternion.Euler(angle * sign, 0f, 0f);
+            }
+        }
     }
 
     void ApplyArmsMaterial()
@@ -177,7 +257,7 @@ public sealed class FirstPersonSwordViewmodel : MonoBehaviour
         if (shader == null) shader = Shader.Find("Standard");
         if (shader == null) return;
 
-        Material material = new Material(shader) { name = "WRAD_Arms_Viewmodel" };
+        Material material = new Material(shader) { name = "FPS_Arms_Viewmodel" };
         if (material.HasProperty("_BaseMap")) material.SetTexture("_BaseMap", armsAlbedo);
         if (material.HasProperty("_MainTex")) material.SetTexture("_MainTex", armsAlbedo);
         if (material.HasProperty("_Smoothness")) material.SetFloat("_Smoothness", 0.18f);
@@ -187,115 +267,6 @@ public sealed class FirstPersonSwordViewmodel : MonoBehaviour
             Material[] replacements = new Material[Mathf.Max(1, renderer.sharedMaterials.Length)];
             for (int i = 0; i < replacements.Length; i++) replacements[i] = material;
             renderer.sharedMaterials = replacements;
-        }
-    }
-
-    void CropForearmsToHands(Transform leftWrist, Transform rightWrist)
-    {
-        foreach (SkinnedMeshRenderer renderer in armsInstance.GetComponentsInChildren<SkinnedMeshRenderer>(true))
-        {
-            Mesh source = renderer.sharedMesh;
-            if (source == null || source.subMeshCount == 0) continue;
-
-            bool[] handBones = new bool[renderer.bones.Length];
-            bool[] forearmBones = new bool[renderer.bones.Length];
-            for (int i = 0; i < renderer.bones.Length; i++)
-            {
-                string boneName = renderer.bones[i] != null
-                    ? renderer.bones[i].name.ToLowerInvariant()
-                    : string.Empty;
-                handBones[i] = boneName.Contains("wrist")
-                    || boneName.Contains("hand")
-                    || boneName.Contains("finger")
-                    || boneName.Contains("thumb")
-                    || boneName.Contains("index")
-                    || boneName.Contains("middle")
-                    || boneName.Contains("ring")
-                    || boneName.Contains("pinky");
-                forearmBones[i] = boneName.Contains("forearm");
-            }
-
-            Vector3[] wristPositions =
-            {
-                renderer.transform.InverseTransformPoint(leftWrist.position),
-                renderer.transform.InverseTransformPoint(rightWrist.position)
-            };
-
-            BoneWeight[] weights = source.boneWeights;
-            Mesh cropped = Instantiate(source);
-            cropped.name = source.name + "_HandsOnly";
-            cropped.subMeshCount = source.subMeshCount;
-
-            for (int subMesh = 0; subMesh < source.subMeshCount; subMesh++)
-            {
-                int[] indices = source.GetIndices(subMesh);
-                List<int> kept = new List<int>(indices.Length);
-                for (int i = 0; i + 2 < indices.Length; i += 3)
-                {
-                    int handVertices = 0;
-                    int shortForearmVertices = 0;
-                    if (HasHandInfluence(weights[indices[i]], handBones)) handVertices++;
-                    if (HasHandInfluence(weights[indices[i + 1]], handBones)) handVertices++;
-                    if (HasHandInfluence(weights[indices[i + 2]], handBones)) handVertices++;
-                    if (HasShortForearmInfluence(weights[indices[i]], source.vertices[indices[i]], forearmBones, wristPositions)) shortForearmVertices++;
-                    if (HasShortForearmInfluence(weights[indices[i + 1]], source.vertices[indices[i + 1]], forearmBones, wristPositions)) shortForearmVertices++;
-                    if (HasShortForearmInfluence(weights[indices[i + 2]], source.vertices[indices[i + 2]], forearmBones, wristPositions)) shortForearmVertices++;
-                    if (handVertices >= 2 || (handVertices >= 1 && shortForearmVertices >= 2))
-                    {
-                        kept.Add(indices[i]);
-                        kept.Add(indices[i + 1]);
-                        kept.Add(indices[i + 2]);
-                    }
-                }
-                cropped.SetIndices(kept, MeshTopology.Triangles, subMesh, false);
-            }
-
-            renderer.sharedMesh = cropped;
-        }
-    }
-
-    static bool HasHandInfluence(BoneWeight weight, bool[] handBones)
-    {
-        return (weight.weight0 > 0.2f && IsHandBone(weight.boneIndex0, handBones))
-            || (weight.weight1 > 0.2f && IsHandBone(weight.boneIndex1, handBones))
-            || (weight.weight2 > 0.2f && IsHandBone(weight.boneIndex2, handBones))
-            || (weight.weight3 > 0.2f && IsHandBone(weight.boneIndex3, handBones));
-    }
-
-    bool HasShortForearmInfluence(BoneWeight weight, Vector3 vertex, bool[] forearmBones, Vector3[] wristPositions)
-    {
-        bool forearmWeighted = (weight.weight0 > 0.2f && IsHandBone(weight.boneIndex0, forearmBones))
-            || (weight.weight1 > 0.2f && IsHandBone(weight.boneIndex1, forearmBones))
-            || (weight.weight2 > 0.2f && IsHandBone(weight.boneIndex2, forearmBones))
-            || (weight.weight3 > 0.2f && IsHandBone(weight.boneIndex3, forearmBones));
-        if (!forearmWeighted) return false;
-
-        float nearestWristDistance = Mathf.Min(
-            Vector3.Distance(vertex, wristPositions[0]),
-            Vector3.Distance(vertex, wristPositions[1]));
-        return nearestWristDistance <= retainedForearmLength;
-    }
-
-    static bool IsHandBone(int index, bool[] handBones)
-    {
-        return index >= 0 && index < handBones.Length && handBones[index];
-    }
-
-    void CurlGripFingers(string suffix, float side)
-    {
-        string[] names = { "finger_index1", "finger_middle1", "finger_ring1", "finger_pinky1" };
-        foreach (string prefix in names)
-        {
-            Transform first = FindDeep(armsInstance, prefix + suffix);
-            if (first == null) continue;
-            first.localRotation *= Quaternion.Euler(0f, 0f, -34f * side);
-            if (first.childCount > 0)
-            {
-                Transform second = first.GetChild(0);
-                second.localRotation *= Quaternion.Euler(0f, 0f, -42f * side);
-                if (second.childCount > 0)
-                    second.GetChild(0).localRotation *= Quaternion.Euler(0f, 0f, -34f * side);
-            }
         }
     }
 
@@ -315,7 +286,7 @@ public sealed class FirstPersonSwordViewmodel : MonoBehaviour
         float length = Axis(bounds.size, longAxis);
         float scale = swordLength / Mathf.Max(0.0001f, length);
         Vector3 grip = bounds.center;
-        SetAxis(ref grip, longAxis, Axis(bounds.min, longAxis) + length * 0.12f);
+        SetAxis(ref grip, longAxis, Axis(bounds.min, longAxis) + length * 0.22f);
         Vector3 bladeDirection = AxisVector(longAxis);
         Quaternion align = Quaternion.FromToRotation(bladeDirection, Vector3.forward);
         model.localRotation = align;
@@ -345,7 +316,7 @@ public sealed class FirstPersonSwordViewmodel : MonoBehaviour
         float lookDown = Mathf.Clamp01(Vector3.Dot(viewCamera.transform.forward, Vector3.down));
         // Keep the first-person weapon out of view during traversal. It appears
         // only for the slash itself, including when the player is airborne.
-        bool visible = slashTime >= 0f;
+        bool visible = alwaysVisible || slashTime >= 0f || lookDown >= revealPitch;
         SetVisible(visible);
 
         float lift = lookDownLift * Mathf.SmoothStep(0f, 1f,
@@ -376,19 +347,18 @@ public sealed class FirstPersonSwordViewmodel : MonoBehaviour
 
         viewRoot.localPosition = baseRootPosition + offset;
         viewRoot.localRotation = Quaternion.Euler(pitch, 0f, roll);
-        PoseSword(leftSword, leftSocket, -1f);
-        PoseSword(rightSword, rightSocket, 1f);
+        armsInstance.localPosition = armsPosition;
+        armsInstance.localScale = Vector3.one * armsScale;
+        ApplyPose();
+        PoseSword(leftSword, leftSocket, leftGripOffset, leftGripEuler);
+        PoseSword(rightSword, rightSocket, rightGripOffset, rightGripEuler);
     }
 
-    void PoseSword(Transform sword, Transform socket, float side)
+    void PoseSword(Transform sword, Transform hand, Vector3 gripOffset, Vector3 gripEuler)
     {
-        if (sword == null || socket == null) return;
-        sword.position = socket.position
-            + viewCamera.transform.right * swordPositionOffset.x
-            + viewCamera.transform.up * swordPositionOffset.y
-            + viewCamera.transform.forward * swordPositionOffset.z;
-
-        sword.rotation = viewCamera.transform.rotation * Quaternion.Euler(swordPitch, 0f, swordRoll + 7f * side);
+        if (sword == null || hand == null) return;
+        sword.position = hand.TransformPoint(gripOffset);
+        sword.rotation = hand.rotation * Quaternion.Euler(gripEuler);
     }
 
     void SetVisible(bool visible)
