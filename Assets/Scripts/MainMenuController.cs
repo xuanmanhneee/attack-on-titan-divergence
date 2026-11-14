@@ -678,6 +678,7 @@ public class MainMenuController : MonoBehaviour
     }
 }
 
+[RequireComponent(typeof(CanvasRenderer))]
 public class HorizontalGradientGraphic : MaskableGraphic
 {
     [SerializeField] Color leftColor = Color.black;

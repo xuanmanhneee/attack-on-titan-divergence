@@ -538,7 +538,7 @@ public class MangaMenu : MonoBehaviour
     {
         var bg = Stretch(NewRT("Background", page)).gameObject.AddComponent<RawImage>();
         bg.texture = MangaStyle.Background;
-        bg.color = bg.texture != null ? Paper : Paper;
+        bg.color = bg.texture != null ? Color.white : Paper;
         bg.raycastTarget = false;
         Fill(page, new Color(0.01f, 0.025f, 0.035f, 0.24f));
 
