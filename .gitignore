@@ -59,3 +59,9 @@ Desktop.ini
 
 # Asset tạm / không dùng, giữ ngoài repo
 _unused_assets/
+
+
+.mcp.json
+.claude/
+Assets/Plugins/
+Assets/Plugins.meta
