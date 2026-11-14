@@ -161,6 +161,7 @@ public class GameHud : MonoBehaviour
         DrawSpeed(s);
         DrawObjective(s);
         DrawNapeMarks(s);
+        DrawTitanHealth(s);
         DrawMissionMarks(s);
         DrawToast(s);
         DrawHint(s);
@@ -264,6 +265,24 @@ public class GameHud : MonoBehaviour
             GUI.color = c;
             GUI.DrawTexture(new Rect(sp.x - size / 2f, Screen.height - sp.y - size / 2f, size, size), crosshair != null ? crosshair : Texture2D.whiteTexture);
             GUI.color = old;
+        }
+    }
+
+    // ----- thanh máu trên đầu titan (titan còn sống trong 100 m) -----
+    void DrawTitanHealth(float s)
+    {
+        if (cam == null) return;
+        foreach (Titan t in Titan.All)
+        {
+            if (t == null || t.IsDead) continue;
+            float v = t.HealthNormalized;
+            Vector3 sp = cam.WorldToScreenPoint(t.transform.position + Vector3.up * (t.Height + 1.5f));
+            if (sp.z <= 0f || sp.z > 100f) continue;
+            float scale = Mathf.Clamp(60f / sp.z, 0.6f, 1.4f) * s;
+            float bw = 150f * scale, bh = 14f * scale;
+            var r = new Rect(sp.x - bw / 2f, Screen.height - sp.y - bh / 2f, bw, bh);
+            Tinted(plateStyle, new Rect(r.x - 4 * scale, r.y - 4 * scale, r.width + 8 * scale, r.height + 8 * scale), Plate);
+            Bar(r, v, barRedStyle);
         }
     }
 

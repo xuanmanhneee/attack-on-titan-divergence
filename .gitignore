@@ -65,3 +65,7 @@ _unused_assets/
 .claude/
 Assets/Plugins/
 Assets/Plugins.meta
+dotnet-tools.json
+# Anh chup man hinh do Unity-MCP sinh ra
+Assets/Screenshots/
+Assets/Screenshots.meta

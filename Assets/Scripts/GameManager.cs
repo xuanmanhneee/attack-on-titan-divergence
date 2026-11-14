@@ -117,7 +117,6 @@ public class GameManager : MonoBehaviour
         if (oldGas != null) oldGas.gameObject.SetActive(false);
         hud = GameHud.Create(this, odm, combat, playerHealth, cam);
         menu = MangaMenu.Create();
-        menu.Play += BeginLoading;
         menu.Resume += () => SetPaused(false);
         menu.Restart += Restart;
         menu.MainMenu += GoToMainMenu;
@@ -345,28 +344,6 @@ public class GameManager : MonoBehaviour
     void Restart()
     {
         ReloadScene();
-    }
-
-    void GoToMainMenu()
-    {
-        Time.timeScale = 1f;
-        Time.fixedDeltaTime = 0.02f;
-        SceneManager.LoadScene("MainMenu");
-    }
-
-    void ReloadScene()
-    {
-        ReloadScene();
-    }
-
-    void QuitGame()
-    {
-        GameSettings.Save();
-#if UNITY_EDITOR
-        UnityEditor.EditorApplication.isPlaying = false;
-#else
-        Application.Quit();
-#endif
     }
 
     void GoToMainMenu()

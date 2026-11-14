@@ -49,6 +49,7 @@ public class Titan : MonoBehaviour
     public readonly List<Collider> BodyColliders = new List<Collider>();
     public bool IsDead => health == null || health.IsDead;
     public float Height => 10f * k;
+    public float HealthNormalized => health != null ? health.Normalized : 0f;
 
     enum State { Wander, Chase, Windup, Recover, Dead }
 
