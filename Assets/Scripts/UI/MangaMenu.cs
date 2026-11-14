@@ -14,7 +14,7 @@ public class MangaMenu : MonoBehaviour
 {
     public enum Page { None, Title, Chapters, Credits, Settings, Briefing, Pause, Result }
 
-    public event Action Play, Resume, Restart, MainMenu, Quit;
+    public event Action Resume, Restart, MainMenu, Quit;
     public event Action<string> Chapter;   // tên scene chương được chọn ở menu chính
 
     public Page Current { get; private set; }
