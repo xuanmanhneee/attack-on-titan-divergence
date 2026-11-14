@@ -146,14 +146,14 @@ public class GameAudio : MonoBehaviour
     void Update()
     {
         float dt = Time.unscaledDeltaTime;
-        float sfxVol = 1f;
+        float sfxVol = GameSettings.Sfx;
 
         gasSrc.volume = Mathf.MoveTowards(gasSrc.volume, gasTarget * 0.55f * sfxVol, dt * 5f);
         windSrc.volume = Mathf.MoveTowards(windSrc.volume, windTarget * 0.5f * sfxVol, dt * 3f);
         windSrc.pitch = 0.75f + windTarget * 0.7f;
 
         musicLevel = Mathf.MoveTowards(musicLevel, musicTarget, dt * 0.7f);
-        musicSrc.volume = musicLevel * 1f * 0.6f;
+        musicSrc.volume = musicLevel * Mathf.Clamp01(GameSettings.Music) * 0.6f;
         if (musicLevel <= 0.001f && musicTarget <= 0f && musicSrc.isPlaying) musicSrc.Stop();
     }
 
@@ -187,7 +187,7 @@ public class GameAudio : MonoBehaviour
         busyUntil[slot] = now + delay + c.length / Mathf.Max(0.1f, pitch);
 
         a.clip = c;
-        a.volume = Mathf.Clamp01(vol * 1f);
+        a.volume = Mathf.Clamp01(vol * GameSettings.Sfx);
         a.pitch = pitch;
         if (spatial) { a.spatialBlend = 1f; a.transform.position = pos; }
         else a.spatialBlend = 0f;

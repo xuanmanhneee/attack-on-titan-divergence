@@ -51,6 +51,29 @@ public class MainMenuController : MonoBehaviour
         SetupMenuMusic();
         SetupUISounds();
         StartCoroutine(Intro());
+        HostMangaMenu();
+    }
+
+    MangaMenu mangaMenu;
+
+    // Menu chi tiết (chọn chương, cài đặt đầy đủ, đổi phím...) dùng MangaMenu, mang giao diện của menu này.
+    // Canvas dựng sẵn trong scene được ẩn đi; nhạc nền menu vẫn do controller này phát.
+    void HostMangaMenu()
+    {
+        if (rootGroup != null) rootGroup.gameObject.SetActive(false);
+        MangaSfx.ExternalMusic = menuAudio != null;
+        mangaMenu = MangaMenu.Create();
+        mangaMenu.Chapter += Load;
+        mangaMenu.Quit += Quit;
+        mangaMenu.ShowTitle();
+        GameSettings.Changed += RefreshMenuMusicVolume;
+    }
+
+    void OnDestroy()
+    {
+        GameSettings.Changed -= RefreshMenuMusicVolume;
+        MangaSfx.ExternalMusic = false;
+        if (mangaMenu != null) Destroy(mangaMenu.gameObject);
     }
 
     void Update()
