@@ -236,7 +236,7 @@ public class MangaHud : MonoBehaviour
         bool kill = combat.CanKillNow;
         killTagPanel.color = kill ? Red : Paper;
         killTag.color = kill ? Paper : Ink;
-        killTag.text = kill ? "CHÉM GÁY ĐƯỢC!" : "CẦN " + combat.killSpeed.ToString("F0") + "+ m/s";
+        killTag.text = kill ? "CHÉM GÁY ĐƯỢC!" : "NGẮM GÁY";
 
         titanTxt.text = "TITAN  <color=" + RedHex + ">" + Titan.All.Count + "</color>";
 

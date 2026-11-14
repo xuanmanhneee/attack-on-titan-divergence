@@ -42,8 +42,12 @@ public class TrostMap
 public static class TrostCity
 {
     const int Nx = 8, Nz = 9;
-    const float Pitch = 48f, Block = 34f, StartZ = 60f;
-    const float WallHeight = 60f, WallThickness = 26f, GateWidth = 30f;
+    // Mỗi block là một cụm nhà liền nhau; khoảng trống giữa các block là đường phố thật.
+    // Không tạo ngõ hẹp 2-3 m ở giữa cụm vì người chơi rất dễ rơi và mắc kẹt trong đó.
+    const float Pitch = 64f, Block = 40f, StartZ = 58f;
+    // Canon scale in metres: the Walls are 50 m high; Trost houses are mostly
+    // three to six storeys, with occasional taller civic buildings.
+    const float WallHeight = 50f, WallThickness = 26f, GateWidth = 30f;
 
     static readonly Color[] WallColors =
     {
@@ -113,18 +117,18 @@ public static class TrostCity
                 float half = Block / 2f;
                 var cells = new List<Vector4>(); // x,z,w,d (tâm và kích thước)
                 if (mode == 0) cells.Add(new Vector4(cx, cz, Block - 4f, Block - 4f));
-                else if (mode == 1) { cells.Add(new Vector4(cx - half / 2f, cz, half - 2f, Block - 4f)); cells.Add(new Vector4(cx + half / 2f, cz, half - 2f, Block - 4f)); }
-                else if (mode == 2) { cells.Add(new Vector4(cx, cz - half / 2f, Block - 4f, half - 2f)); cells.Add(new Vector4(cx, cz + half / 2f, Block - 4f, half - 2f)); }
+                else if (mode == 1) { cells.Add(new Vector4(cx - half / 2f, cz, half + 0.5f, Block - 4f)); cells.Add(new Vector4(cx + half / 2f, cz, half + 0.5f, Block - 4f)); }
+                else if (mode == 2) { cells.Add(new Vector4(cx, cz - half / 2f, Block - 4f, half + 0.5f)); cells.Add(new Vector4(cx, cz + half / 2f, Block - 4f, half + 0.5f)); }
                 else
                 {
                     for (int a = -1; a <= 1; a += 2)
                         for (int b = -1; b <= 1; b += 2)
-                            cells.Add(new Vector4(cx + a * half / 2f, cz + b * half / 2f, half - 2f, half - 2f));
+                            cells.Add(new Vector4(cx + a * half / 2f, cz + b * half / 2f, half + 0.5f, half + 0.5f));
                 }
                 foreach (var c in cells)
                 {
-                    float h = 9f + (float)rng.NextDouble() * 11f;   // nhà 9–20 m: thấp hơn titan
-                    if (rng.NextDouble() < 0.12) h += 8f;          // một vài tháp chuông cao hơn
+                    float h = 9f + (float)rng.NextDouble() * 9f;  // nhà 9–18 m: khoảng 3–6 tầng
+                    if (rng.NextDouble() < 0.15) h += 6f;         // một vài mốc cao 15–24 m
                     Building(tr, c.x, c.y, c.z, c.w, h, layer, rng, map, fb);
                 }
             }
@@ -146,7 +150,7 @@ public static class TrostCity
         {
             float x = origin.x + side * (GateWidth / 2f + segW / 2f);
             float g = map.GroundY(x, wallZ, fb);
-            Box(tr, new Vector3(x, g + WallHeight / 2f - 3f, wallZ), new Vector3(segW, WallHeight + 3f, WallThickness), stoneMat, layer);
+            Box(tr, new Vector3(x, g + WallHeight / 2f, wallZ), new Vector3(segW, WallHeight, WallThickness), stoneMat, layer);
         }
         // Tường bao hai bên và phía nam (giữ người chơi và titan trong khu phố)
         float len = wallZ - (origin.z - 40f);
@@ -155,12 +159,12 @@ public static class TrostCity
         {
             float x = origin.x + side * (totalW / 2f + 10f);
             float g = map.GroundY(x, midZ, fb);
-            Box(tr, new Vector3(x, g + 24f, midZ), new Vector3(20f, 50f, len), stoneMat, layer);
+            Box(tr, new Vector3(x, g + WallHeight / 2f, midZ), new Vector3(20f, WallHeight, len), stoneMat, layer);
         }
         {
             float z = origin.z - 40f;
             float g = map.GroundY(origin.x, z, fb);
-            Box(tr, new Vector3(origin.x, g + 24f, z), new Vector3(totalW + 40f, 50f, 20f), stoneMat, layer);
+            Box(tr, new Vector3(origin.x, g + WallHeight / 2f, z), new Vector3(totalW + 40f, WallHeight, 20f), stoneMat, layer);
         }
 
         // Đống đổ nát quanh lỗ hổng
@@ -207,7 +211,9 @@ public static class TrostCity
         float g = map.GroundY(x, z, fb);
         var body = Box(parent, new Vector3(x, g + h / 2f - 0.75f, z), new Vector3(w, h + 1.5f, d), wallMats[rng.Next(wallMats.Length)], layer);
         body.name = "Building";
-        Box(parent, new Vector3(x, g + h + 0.5f, z), new Vector3(w + 1.4f, 1f, d + 1.4f), roofMats[rng.Next(roofMats.Length)], layer, false).name = "Roof";
+        // Mái là bề mặt gameplay thật. Trước đây collider bị tắt nên phần diềm nhô ra
+        // nhìn như đứng được nhưng người chơi lại rơi xuyên qua mép mái.
+        Box(parent, new Vector3(x, g + h + 0.5f, z), new Vector3(w + 1.4f, 1f, d + 1.4f), roofMats[rng.Next(roofMats.Length)], layer).name = "Roof";
     }
 
     // Điểm tiếp tế: bệ xanh trên mặt đất và cột sáng cao để nhìn thấy từ xa
