@@ -13,6 +13,9 @@ public class TitanProceduralAnim : MonoBehaviour
     public float attackRaise;   // 0..1: giơ tay lên
     public float attackSlam;    // 0..1: vừa đập xuống, đang thu về
 
+    public float attackMaskL = 1f;  // 0..1: tay trái có tham gia đòn đánh không (TitanForm đấm luân phiên)
+    public float attackMaskR = 1f;
+
     public float legSwing = 0.55f;
     public float armSwing = 0.3f;
 
@@ -76,11 +79,11 @@ public class TitanProceduralAnim : MonoBehaviour
         Set("Right Upper Leg Front-Back", -legSwing * s * m);
 
         // Tay: hạ xuống khỏi chữ T; đi thì đánh ngược chân; tấn công thì giơ cao rồi đập xuống
-        float downUp = Mathf.Lerp(-0.95f, 0.95f, raise);
-        downUp = Mathf.Lerp(downUp, -0.3f, slam);
+        float downUpL = Mathf.Lerp(Mathf.Lerp(-0.95f, 0.95f, raise * attackMaskL), -0.3f, slam * attackMaskL);
+        float downUpR = Mathf.Lerp(Mathf.Lerp(-0.95f, 0.95f, raise * attackMaskR), -0.3f, slam * attackMaskR);
         float swing = armSwing * s * m * (1f - Mathf.Max(raise, slam));
-        Set("Left Arm Down-Up", downUp);
-        Set("Right Arm Down-Up", downUp);
+        Set("Left Arm Down-Up", downUpL);
+        Set("Right Arm Down-Up", downUpR);
         Set("Left Arm Front-Back", -swing);
         Set("Right Arm Front-Back", swing);
 

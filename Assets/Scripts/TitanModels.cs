@@ -19,6 +19,12 @@ public class TitanModelDef
     public float healthMultiplier = 1f;
     public float heightMultiplier = 1f;
     public int spawnWeight = 1;
+
+    // Dạng titan của người chơi (TitanForm): vị trí mắt so với xương Head, tính theo đơn vị model chưa scale
+    // (+Y lên, +Z trước mặt). Các renderer có tên chứa chuỗi trong hideInFirstPerson chỉ đổ bóng,
+    // không vẽ ra camera người chơi (tóc/mắt/răng che tầm nhìn).
+    public Vector3 eyeFromHead;
+    public string[] hideInFirstPerson;
 }
 
 public static class TitanModels
@@ -34,6 +40,19 @@ public static class TitanModels
             healthMultiplier = 1.2f,
             heightMultiplier = 1f,
             spawnWeight = 1,
+        },
+        // Titan Tiến Công (rig Mixamo + clip Punching): chỉ dùng cho dạng titan của người chơi (TitanForm),
+        // không sinh làm quái.
+        new TitanModelDef
+        {
+            name = "AttackTitan",
+            modelPath = "Titans/AttackTitanRigged/AttackTitan_Punching",
+            bodyTex = "Titans/RealisticTitan/Body_color",
+            napeHeight = 0.89f,
+            napeBack = 0.6f,
+            spawnWeight = 0,
+            eyeFromHead = new Vector3(0f, 1f, 3f), // trong đầu, ngang gò má: nắm đấm vươn ra giữa khung hình
+            hideInFirstPerson = new[] { "Hair", "Eyes", "Teeth" },
         },
     };
 
@@ -58,17 +77,18 @@ public static class TitanModels
     }
 
     // Chọn ngẫu nhiên theo trọng số trong các model tải được. Trả null nếu không có model nào (dùng placeholder).
+    // spawnWeight <= 0: model đặc biệt, không bao giờ được chọn ngẫu nhiên.
     public static TitanModelDef PickRandom()
     {
         int total = 0;
-        foreach (var d in All) if (IsAvailable(d)) total += Mathf.Max(1, d.spawnWeight);
+        foreach (var d in All) if (d.spawnWeight > 0 && IsAvailable(d)) total += d.spawnWeight;
         if (total == 0) return null;
 
         int r = Random.Range(0, total);
         foreach (var d in All)
         {
-            if (!IsAvailable(d)) continue;
-            r -= Mathf.Max(1, d.spawnWeight);
+            if (d.spawnWeight <= 0 || !IsAvailable(d)) continue;
+            r -= d.spawnWeight;
             if (r < 0) return d;
         }
         return null;

@@ -242,7 +242,7 @@ public class Titan : MonoBehaviour
     }
 
     // ================= MODEL THẬT (FBX trong Resources) =================
-    static Bounds CalcBounds(Renderer[] rs)
+    internal static Bounds CalcBounds(Renderer[] rs)
     {
         Bounds b = rs[0].bounds;
         for (int i = 1; i < rs.Length; i++) b.Encapsulate(rs[i].bounds);
@@ -264,7 +264,7 @@ public class Titan : MonoBehaviour
 
     // Đo chính xác từ đỉnh lưới (bake pose hiện tại), bỏ qua vũ khí.
     // Bounds mặc định của SkinnedMeshRenderer hay sai (lấy từ animation) -> titan bị lơ lửng hoặc nhỏ hơn dự tính.
-    static Bounds ExactBounds(Renderer[] rs)
+    internal static Bounds ExactBounds(Renderer[] rs)
     {
         bool has = false;
         Bounds b = new Bounds();
@@ -281,7 +281,9 @@ public class Titan : MonoBehaviour
                 smr.BakeMesh(tmp, false);
                 verts.Clear();
                 tmp.GetVertices(verts);
-                Matrix4x4 m = r.transform.localToWorldMatrix;
+                // BakeMesh(useScale: false) đã gồm scale của xương/renderer -> chỉ còn thiếu vị trí và hướng.
+                // Dùng localToWorldMatrix sẽ nhân scale hai lần (renderer FBX Mixamo thường có scale ~100-200).
+                Matrix4x4 m = Matrix4x4.TRS(r.transform.position, r.transform.rotation, Vector3.one);
                 for (int i = 0; i < verts.Count; i++)
                 {
                     Vector3 w = m.MultiplyPoint3x4(verts[i]);
@@ -357,7 +359,7 @@ public class Titan : MonoBehaviour
         model.transform.localScale = Vector3.one * s;
         model.transform.localPosition = new Vector3(-centerRel.x, -minY, -centerRel.z);
 
-        ApplyMaterials(renderers);
+        ApplyMaterials(renderers, def);
 
         // Va chạm đơn giản: một viên nang bao quanh thân
         var colGo = new GameObject("BodyCollider");
@@ -388,7 +390,7 @@ public class Titan : MonoBehaviour
         return true;
     }
 
-    void ApplyMaterials(Renderer[] renderers)
+    internal static void ApplyMaterials(Renderer[] renderers, TitanModelDef def)
     {
         Shader lit = Shader.Find("Universal Render Pipeline/Lit");
         var cache = new Dictionary<string, Texture2D>();
@@ -407,7 +409,8 @@ public class Titan : MonoBehaviour
                 Material source = mats[i];
                 string n = source != null ? source.name.ToLowerInvariant() : "";
                 string path = def.bodyTex;
-                if (n.Contains("hair") && !string.IsNullOrEmpty(def.hairTex)) path = def.hairTex;
+                bool hairPart = n.Contains("hair") || r.name.ToLowerInvariant().Contains("hair");
+                if (hairPart) path = def.hairTex; // không có texture tóc riêng thì giữ vật liệu gốc, không dán texture thân lên tóc
                 else if ((n.Contains("face") || n.Contains("head")) && !string.IsNullOrEmpty(def.faceTex)) path = def.faceTex;
                 else if ((n.Contains("wiqi") || n.Contains("weapon")) && !string.IsNullOrEmpty(def.weaponTex)) path = def.weaponTex;
 

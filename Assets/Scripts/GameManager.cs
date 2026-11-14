@@ -32,6 +32,7 @@ public class GameManager : MonoBehaviour
     ODMController odm;
     TrostMission mission;
     PlayerCombat combat;
+    TitanForm titanForm;
     Health playerHealth;
     Camera cam;
     TrostMap activeTrostMap;
@@ -86,6 +87,8 @@ public class GameManager : MonoBehaviour
         if (combat == null) combat = odm.gameObject.AddComponent<PlayerCombat>();
 
         if (odm.GetComponent<TimeFocus>() == null) odm.gameObject.AddComponent<TimeFocus>();
+        titanForm = odm.GetComponent<TitanForm>();
+        if (titanForm == null) titanForm = odm.gameObject.AddComponent<TitanForm>();
 
         playerHealth = odm.GetComponent<Health>();
         if (playerHealth == null) playerHealth = odm.gameObject.AddComponent<Health>();
@@ -338,8 +341,11 @@ public class GameManager : MonoBehaviour
         }
 
         // Gợi ý phím
+        string hint = titanForm != null && titanForm.IsTitan
+            ? "Chuột trái/F: đấm   Chuột phải: đấm mạnh (hai tay)   WASD: đi   Shift: chạy   Space: nhảy   G: trở lại người   Esc: tạm dừng"
+            : "F: chém gáy   R: thay kiếm   Giữ chuột trái/phải: móc, thả: nhả   Space: thu dây   Shift: gas + lái   G: hoá titan   V: đổi camera   T: slow-motion   Esc: tạm dừng";
         GUI.Label(new Rect(Screen.width / 2f - 450 * s, Screen.height - 50 * s, 900 * s, 36 * s),
-                  "F: chém gáy   R: thay kiếm   Giữ chuột trái/phải: móc, thả: nhả   Space: thu dây   Shift: gas + lái   V: đổi camera   T: slow-motion   Esc: tạm dừng",
+                  hint,
                   new GUIStyle(label) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(20 * s) });
     }
 
