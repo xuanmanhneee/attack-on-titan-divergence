@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -6,7 +7,7 @@ using UnityEngine.SceneManagement;
 // Esc = pause. R (khi thắng/thua) hoặc nút "Chơi lại" = tải lại scene.
 public class GameManager : MonoBehaviour
 {
-    public enum State { Playing, Paused, Won, Lost }
+    public enum State { Title, Loading, Playing, Paused, Won, Lost }
 
     [Header("Đợt titan")]
     public int totalWaves = 3;
@@ -27,7 +28,15 @@ public class GameManager : MonoBehaviour
     public float playerMaxHealth = 100f;
     public float voidY = -40f; // rơi xuống dưới mức này là thua
 
-    public State Current { get; private set; } = State.Playing;
+    [Header("Màn hình chờ")]
+    public float minBriefingSeconds = 4f;   // hiện màn giới thiệu nhiệm vụ ít nhất bấy nhiêu giây
+
+    public State Current { get; private set; } = State.Title;
+
+    public TrostMission Mission => mission;
+    public int Wave => wave;
+    public int TotalWaves => totalWaves;
+    public string Hint => hint;
 
     ODMController odm;
     TrostMission mission;
@@ -42,8 +51,12 @@ public class GameManager : MonoBehaviour
     string message = "";
     float messageTimer;
 
+    MangaMenu menu;
     GUIStyle label, title, button, small;
     float styleScale = -1f;
+    int kills;
+    float playTime;
+    string hint = "";
 
     // RuntimeInitializeOnLoadMethod chỉ chạy một lần khi mở game, nên phải nghe sceneLoaded
     // để tạo lại GameManager sau khi "Chơi lại" (load lại scene).
@@ -71,6 +84,8 @@ public class GameManager : MonoBehaviour
     {
         Time.timeScale = 1f;
         Titan.ResetAll();
+        GameAudio.Battle(false);
+        GameAudio.SetLoops(0f, 0f);
 
         odm = FindAnyObjectByType<ODMController>();
         cam = odm.cameraTransform != null ? odm.cameraTransform.GetComponent<Camera>() : Camera.main;
@@ -94,9 +109,76 @@ public class GameManager : MonoBehaviour
 
         Titan.Killed += OnTitanKilled;
         PlayerCombat.Feedback += Say;
+        GameSettings.Changed += RebuildHint;
+        RebuildHint();
 
-        if (trostMission) BuildTrost();
+        // Giao diện manga: menu chính -> màn hình chờ -> chơi. Thế giới được dựng sau khi bấm "Bắt đầu".
+        menu = MangaMenu.Create();
+        menu.Play += BeginLoading;
+        menu.Resume += () => SetPaused(false);
+        menu.Restart += Restart;
+        menu.MainMenu += GoToMainMenu;
+        menu.Quit += QuitGame;
+
+        Current = State.Title;
+        ApplyState(true);
+        // Menu chính nằm ở scene MainMenu; vào chương là sang thẳng màn hình chờ nhiệm vụ.
+        BeginLoading();
+    }
+
+    void BeginLoading()
+    {
+        if (Current != State.Title) return;
+        Current = State.Loading;
+        ApplyState(true);
+        menu.ShowBriefing();
+        StartCoroutine(LoadRoutine());
+    }
+
+    IEnumerator LoadRoutine()
+    {
+        float start = Time.unscaledTime;
+        menu.SetProgress(0.1f, "Đang dựng khu phố Trost...");
+        yield return null;
+        yield return null; // để màn hình chờ kịp hiện ra trước khi dựng (dựng thành phố gây khựng một nhịp)
+
+        if (trostMission)
+        {
+            try { BuildTrost(); }
+            catch (System.Exception e) { Debug.LogError("[Trost] Dựng khu phố lỗi: " + e); }
+        }
         else StartWave(1);
+        menu.SetProgress(0.75f, "Titan đang tiến vào khu phố...");
+        yield return null;
+        GameAudio.Warmup();
+        menu.SetProgress(0.9f, "Chuẩn bị âm thanh...");
+        yield return null;
+
+        while (Time.unscaledTime - start < minBriefingSeconds) yield return null;
+
+        menu.SetBriefingReady();
+        while (!menu.BriefingConfirmed) yield return null;
+
+        StartPlaying();
+    }
+
+    void StartPlaying()
+    {
+        Current = State.Playing;
+        ApplyState(false);
+        menu.Hide();
+        GameAudio.Battle(true);
+        Say(mission != null ? "Hạ gục titan! Gas cạn thì chạy tới cột sáng xanh để tiếp tế." : "Hạ gục hết titan!");
+    }
+
+    void RebuildHint()
+    {
+        hint = GameSettings.KeyName(GameSettings.KeyOf(4)) + ": chém (xa thì lướt tới gáy)   " +
+               GameSettings.KeyName(GameSettings.KeyOf(5)) + ": thay kiếm   " +
+               GameSettings.KeyName(GameSettings.KeyOf(0)) + "/" + GameSettings.KeyName(GameSettings.KeyOf(1)) + ": móc   " +
+               GameSettings.KeyName(GameSettings.KeyOf(2)) + ": thu dây   " +
+               GameSettings.KeyName(GameSettings.KeyOf(3)) + ": gas   " +
+               GameSettings.KeyName(GameSettings.KeyOf(6)) + ": bật/tắt làm chậm thời gian   Esc: tạm dừng";
     }
 
     void BuildTrost()
@@ -105,7 +187,11 @@ public class GameManager : MonoBehaviour
         int mask = odm.hookableLayer.value;
         int layer = 3;
         for (int i = 0; i < 32; i++) if ((mask & (1 << i)) != 0) { layer = i; break; }
-        if (mask == 0) Debug.LogWarning("[Trost] hookableLayer đang trống, dùng layer 3.");
+        if (mask == 0)
+        {
+            Debug.LogWarning("[Trost] hookableLayer đang trống, dùng layer 3.");
+            odm.hookableLayer = 1 << layer; // để móc được nhà dù scene chưa gán layer
+        }
 
         // Tắt các khối thử nghiệm cũ trong scene
         foreach (var go in FindObjectsByType<GameObject>())
@@ -124,6 +210,7 @@ public class GameManager : MonoBehaviour
         Titan.GroundSampler = p => map.GroundAt(p);
         Titan.Field = map.floorRect;
         Titan.HasField = true;
+        Physics.SyncTransforms(); // đăng ký collider nhà mới trước khi người chơi / titan quét vật lý
 
         mission = gameObject.AddComponent<TrostMission>();
         mission.Init(this, odm, combat, map);
@@ -135,6 +222,7 @@ public class GameManager : MonoBehaviour
     {
         Titan.Killed -= OnTitanKilled;
         PlayerCombat.Feedback -= Say;
+        GameSettings.Changed -= RebuildHint;
         if (playerHealth != null) playerHealth.Died -= OnPlayerDied;
         Time.timeScale = 1f;
     }
@@ -143,16 +231,18 @@ public class GameManager : MonoBehaviour
     {
         messageTimer -= Time.unscaledDeltaTime;
 
-        if (Current == State.Playing || Current == State.Paused)
+        if (GameInput.GetKeyDownRaw(KeyCode.Escape))
         {
-            if (GameInput.GetKeyDown(KeyCode.Escape)) SetPaused(Current == State.Playing);
+            if (Current == State.Playing) SetPaused(true);
+            else if (Current == State.Paused && !menu.InSettings && !menu.EscConsumedThisFrame) SetPaused(false);
         }
-        else if (GameInput.GetKeyDown(KeyCode.R))
+        else if ((Current == State.Won || Current == State.Lost) && GameInput.GetKeyDownRaw(KeyCode.R))
         {
             Restart();
         }
 
         if (Current != State.Playing) return;
+        playTime += Time.unscaledDeltaTime;
 
         if (activeTrostMap != null && odm.transform.position.y < activeTrostMap.groundY - 10f)
         {
@@ -201,6 +291,7 @@ public class GameManager : MonoBehaviour
     void OnTitanKilled(Titan t)
     {
         if (Current != State.Playing) return;
+        kills++;
         if (mission != null) return; // nhiệm vụ Trost tự theo dõi tiến trình
 
         int left = Titan.All.Count;
@@ -228,17 +319,23 @@ public class GameManager : MonoBehaviour
     {
         Current = pause ? State.Paused : State.Playing;
         ApplyState(pause);
+        GameAudio.Duck(pause);
+        if (pause) menu.ShowPause(); else menu.Hide();
     }
 
     void SetEnd(State s)
     {
+        if (Current != State.Playing && Current != State.Paused) return; // đã kết thúc rồi
         Current = s;
         ApplyState(true);
+        GameAudio.Battle(false);
+        menu.ShowResult(s == State.Won, kills, playTime);
     }
 
     void ApplyState(bool stopped)
     {
         Time.timeScale = stopped ? 0f : 1f;
+        if (!stopped) Time.fixedDeltaTime = 0.02f; // TimeFocus có thể để lại fixedDeltaTime của chế độ làm chậm
         if (odm != null) odm.enabled = !stopped;
         Cursor.lockState = stopped ? CursorLockMode.None : CursorLockMode.Locked;
         Cursor.visible = stopped;
@@ -246,8 +343,31 @@ public class GameManager : MonoBehaviour
 
     void Restart()
     {
+        ReloadScene();
+    }
+
+    void GoToMainMenu()
+    {
         Time.timeScale = 1f;
+        Time.fixedDeltaTime = 0.02f;
+        SceneManager.LoadScene("MainMenu");
+    }
+
+    void ReloadScene()
+    {
+        Time.timeScale = 1f;
+        Time.fixedDeltaTime = 0.02f;
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+    }
+
+    void QuitGame()
+    {
+        GameSettings.Save();
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#else
+        Application.Quit();
+#endif
     }
 
     public void Say(string m)
@@ -264,7 +384,6 @@ public class GameManager : MonoBehaviour
         EnsureStyles(s);
 
         if (Current == State.Playing) DrawHud(s);
-        else DrawMenu(s);
     }
 
     void EnsureStyles(float s)
@@ -340,8 +459,8 @@ public class GameManager : MonoBehaviour
         }
 
         // Gợi ý phím
-        GUI.Label(new Rect(Screen.width / 2f - 450 * s, Screen.height - 50 * s, 900 * s, 36 * s),
-                  "F: chém gáy   R: thay kiếm   Giữ chuột trái/phải: móc, thả: nhả   Space: thu dây   Shift: gas + lái   V: đổi camera   T: slow-motion   Esc: tạm dừng",
+        GUI.Label(new Rect(Screen.width / 2f - 600 * s, Screen.height - 50 * s, 1200 * s, 36 * s),
+                  hint,
                   new GUIStyle(label) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(20 * s) });
     }
 
@@ -380,28 +499,5 @@ public class GameManager : MonoBehaviour
             GUI.color = old;
         }
         small.normal.textColor = Color.white;
-    }
-
-    void DrawMenu(float s)
-    {
-        Box(new Rect(0, 0, Screen.width, Screen.height), new Color(0, 0, 0, 0.65f));
-
-        string head = Current == State.Paused ? "TẠM DỪNG" : Current == State.Won ? "CHIẾN THẮNG!" : "BẠN ĐÃ GỤC";
-        GUI.Label(new Rect(0, Screen.height * 0.25f, Screen.width, 120 * s), head, title);
-
-        float bw = 360 * s, bh = 64 * s, x = (Screen.width - bw) / 2f, y = Screen.height * 0.45f;
-
-        if (Current == State.Paused && GUI.Button(new Rect(x, y, bw, bh), "Tiếp tục", button))
-            SetPaused(false);
-        if (GUI.Button(new Rect(x, y + (bh + 16 * s), bw, bh), "Chơi lại", button))
-            Restart();
-        if (GUI.Button(new Rect(x, y + 2 * (bh + 16 * s), bw, bh), "Thoát", button))
-        {
-#if UNITY_EDITOR
-            UnityEditor.EditorApplication.isPlaying = false;
-#else
-            Application.Quit();
-#endif
-        }
     }
 }

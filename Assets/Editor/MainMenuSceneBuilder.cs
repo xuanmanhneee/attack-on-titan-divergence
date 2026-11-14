@@ -7,8 +7,8 @@ using UnityEngine.SceneManagement;
 public static class MainMenuSceneBuilder
 {
     const string ScenePath = "Assets/Scenes/MainMenu.unity";
-    const string BackgroundPath = "Assets/Textures/background.jpg";
-    const string TitleFontPath = "Assets/Fonts/Ditty.ttf";
+    const string BackgroundPath = "Assets/Resources/UI/background.jpg";
+    const string TitleFontPath = "Assets/Resources/UI/Ditty.ttf";
     const string FirstMenuTrackPath = "Assets/Resources/Audio/Music/theme_music_0_shinzou_wo_sasageyo.mp3";
 
     [InitializeOnLoadMethod]
