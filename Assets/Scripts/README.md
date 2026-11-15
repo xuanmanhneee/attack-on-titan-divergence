@@ -24,8 +24,7 @@ Dự án **tự dựng gần hết bằng code lúc chạy**. Trong scene chỉ 
 - **`GameManager` gắn thêm vào player** nếu thiếu: `PlayerCombat`, `TimeFocus`, `TitanForm`, `Health`; và tạo `TrostMission`.
 - **Singleton tạo sẵn**: `GameAudio`, `GameVfx`, `Titan` (đăng ký lúc `SubsystemRegistration`), `GameSettings`.
 - **`Titan.Spawn`** tạo titan, rồi gắn `Health`, `Rigidbody` và các script animation tương ứng.
-- **Menu**: `MangaMenu` do code tạo (không có trong scene); `MainMenuController` là menu cũ trong scene MainMenu.
-  Hai hệ này đang trùng nhau, chưa chốt dùng cái nào (xem mục "Nợ kỹ thuật").
+- **Menu chính**: UI dựng sẵn trong scene MainMenu (do `Editor/MainMenuSceneBuilder` sinh, `MainMenuController` điều khiển). `MangaMenu` (code) chỉ dùng trong game: Pause, Settings, Briefing, Result.
 
 ## Scene
 
@@ -38,7 +37,7 @@ Dự án **tự dựng gần hết bằng code lúc chạy**. Trong scene chỉ 
 
 ## Nợ kỹ thuật (chưa làm)
 
-- Chốt một hệ menu (`MangaMenu` hay `MainMenuController`); tách `HorizontalGradientGraphic`, `MenuButtonVisual`, `GameVolumeSettings` ra khỏi `MainMenuController.cs`.
+- Tách `HorizontalGradientGraphic`, `MenuButtonVisual`, `GameVolumeSettings` ra khỏi `MainMenuController.cs`.
 - `ODMController` (~1500 dòng) nên tách: di chuyển / dây / gas / FOV.
 - `MangaMenu` (~1100 dòng) nên tách theo từng `Page`.
 - Gom `Editor/*SceneBuilder` vào thư mục con; bỏ `MissingScriptRepair` khi scene đã sạch.

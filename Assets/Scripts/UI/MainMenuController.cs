@@ -59,29 +59,12 @@ public class MainMenuController : MonoBehaviour
         SetupMenuMusic();
         SetupUISounds();
         StartCoroutine(Intro());
-        HostMangaMenu();
-    }
-
-    MangaMenu mangaMenu;
-
-    // Menu chi tiết (chọn chương, cài đặt đầy đủ, đổi phím...) dùng MangaMenu, mang giao diện của menu này.
-    // Canvas dựng sẵn trong scene được ẩn đi; nhạc nền menu vẫn do controller này phát.
-    void HostMangaMenu()
-    {
-        if (rootGroup != null) rootGroup.gameObject.SetActive(false);
-        MangaSfx.ExternalMusic = menuAudio != null;
-        mangaMenu = MangaMenu.Create();
-        mangaMenu.Chapter += Load;
-        mangaMenu.Quit += Quit;
-        mangaMenu.ShowTitle();
         GameSettings.Changed += RefreshMenuMusicVolume;
     }
 
     void OnDestroy()
     {
         GameSettings.Changed -= RefreshMenuMusicVolume;
-        MangaSfx.ExternalMusic = false;
-        if (mangaMenu != null) Destroy(mangaMenu.gameObject);
     }
 
     void Update()
@@ -333,7 +316,7 @@ public class MainMenuController : MonoBehaviour
     {
         var go = new GameObject(label, typeof(RectTransform), typeof(Image), typeof(Button), typeof(MenuButtonVisual));
         go.transform.SetParent(parent, false);
-        SetRect(go.GetComponent<RectTransform>(), 0f, 1f, 1f, 1f, 0f, -index * 82f - 70f, 0f, -index * 82f);
+        SetRect(go.GetComponent<RectTransform>(), 0f, 1f, 1f, 1f, 0f, -index * 86f - 74f, 0f, -index * 86f);
 
         var image = go.GetComponent<Image>();
         image.color = ButtonIdle;
@@ -349,8 +332,13 @@ public class MainMenuController : MonoBehaviour
         button.colors = colors;
         button.onClick.AddListener(action);
 
+        var frame = go.AddComponent<Outline>();
+        frame.effectColor = new Color(Brass.r, Brass.g, Brass.b, 0.28f);
+        frame.effectDistance = new Vector2(1.5f, -1.5f);
+        frame.useGraphicAlpha = false;
+
         var accent = Image("Accent", go.transform, null, Brass);
-        SetRect(accent.rectTransform, 0f, 0f, 0f, 1f, 0f, 0f, 5f, 0f);
+        SetRect(accent.rectTransform, 0f, 0f, 0f, 1f, 0f, 0f, 4f, 0f);
         var numberText = Text("Number", go.transform, number, 14, Brass, TextAnchor.MiddleCenter, false);
         SetRect(numberText.rectTransform, 0f, 0f, 0f, 1f, 14f, 0f, 58f, 0f);
         var labelText = Text("Label", go.transform, label, 23, Ivory, TextAnchor.LowerLeft, false);
@@ -358,9 +346,10 @@ public class MainMenuController : MonoBehaviour
         var detailText = Text("Detail", go.transform, detail, 13, Muted, TextAnchor.UpperLeft, false);
         SetRect(detailText.rectTransform, 0f, 0f, 1f, 1f, 71f, 0f, -55f, -43f);
         var arrow = Text("Arrow", go.transform, "›", 34, Brass, TextAnchor.MiddleCenter, false);
-        SetRect(arrow.rectTransform, 1f, 0f, 1f, 1f, -52f, 0f, -10f, 0f);
+        SetRect(arrow.rectTransform, 1f, 0f, 1f, 1f, -52f, 0f, -14f, 0f);
 
         go.GetComponent<MenuButtonVisual>().Configure(image, accent, labelText, arrow, ButtonIdle, ButtonHover, Brass);
+        go.GetComponent<MenuButtonVisual>().SetExtras(frame, detailText, numberText, new[] { labelText.rectTransform, detailText.rectTransform, numberText.rectTransform });
         return button;
     }
 
@@ -742,13 +731,44 @@ public class MenuButtonVisual : MonoBehaviour, IPointerEnterHandler, IPointerExi
     public void OnSelect(BaseEventData eventData) => SetActive(true);
     public void OnDeselect(BaseEventData eventData) => SetActive(false);
 
-    void SetActive(bool active)
+    Outline frame;
+    Text detail;
+    Text number;
+    RectTransform[] slideTargets;
+    Vector2[] slideOrigins;
+    Vector2 arrowOrigin;
+    bool active;
+    float t;
+
+    public void SetExtras(Outline frameOutline, Text detailText, Text numberText, RectTransform[] slide)
     {
+        frame = frameOutline; detail = detailText; number = numberText; slideTargets = slide;
+        slideOrigins = new Vector2[slide.Length];
+        arrowOrigin = arrow != null ? arrow.rectTransform.anchoredPosition : Vector2.zero;
+        for (int i = 0; i < slide.Length; i++) slideOrigins[i] = slide[i].anchoredPosition;
+    }
+
+    void SetActive(bool value)
+    {
+        active = value;
         if (background == null) return;
         background.color = active ? hover : idle;
-        accent.rectTransform.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, active ? 9f : 5f);
+        accent.rectTransform.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, active ? 10f : 4f);
         label.color = active ? Color.white : new Color(0.91f, 0.88f, 0.8f, 1f);
         arrow.color = active ? Color.white : highlight;
+        if (frame != null) frame.effectColor = new Color(highlight.r, highlight.g, highlight.b, active ? 0.95f : 0.28f);
+        if (detail != null) detail.color = active ? new Color(0.91f, 0.88f, 0.8f, 1f) : new Color(0.659f, 0.667f, 0.624f, 1f);
+    }
+
+    // Trượt nhẹ chữ sang phải và mũi tên nhích theo khi được chọn
+    void Update()
+    {
+        if (slideTargets == null) return;
+        t = Mathf.MoveTowards(t, active ? 1f : 0f, Time.unscaledDeltaTime * 9f);
+        float e = Mathf.SmoothStep(0f, 1f, t);
+        for (int i = 0; i < slideTargets.Length; i++)
+            slideTargets[i].anchoredPosition = slideOrigins[i] + new Vector2(10f * e, 0f);
+        if (arrow != null) arrow.rectTransform.anchoredPosition = arrowOrigin + new Vector2(-6f * e, 0f);
     }
 
     void PlayHover()
