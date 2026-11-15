@@ -703,6 +703,8 @@ public class MangaMenu : MonoBehaviour
                     FpsNames,
                     () => Mathf.Max(0, Array.IndexOf(GameSettings.FpsOptions, GameSettings.FpsLimit)),
                     i => { GameSettings.FpsLimit = GameSettings.FpsOptions[i]; GameSettings.Commit(); });
+                ToggleRow("Rung màn hình (dạng titan)", 330f - 80f * n, n++,
+                    () => GameSettings.ScreenShake, v => { GameSettings.ScreenShake = v; GameSettings.Commit(); });
                 Note("Khi bật VSync, giới hạn FPS có thể bị bỏ qua. Độ phân giải chỉ có tác dụng rõ khi chạy chế độ cửa sổ.", 330f - 80f * n - 20f);
                 break;
 

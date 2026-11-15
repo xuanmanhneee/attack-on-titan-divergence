@@ -135,8 +135,12 @@ public class ODMController : MonoBehaviour
     [Header("Background Music")]
     public AudioClip backgroundMusic;
     [Range(0f, 1f)] public float backgroundMusicVolume = 0.24f;
-    [Tooltip("The normal exploration loop ends here. The remaining track is reserved for Titan transformation.")]
-    [Min(1f)] public float backgroundMusicLoopEnd = 142f;
+    [Tooltip("The normal exploration loop ends here (seconds, 140 = 2:20). The remaining track plays when transforming into a Titan.")]
+    [Min(1f)] public float backgroundMusicLoopEnd = 140f;
+    [Tooltip("Crossfade length when the normal loop wraps back to 0:00.")]
+    public float backgroundMusicLoopFade = 3f;
+    [Tooltip("On: go back to the normal loop as soon as the Titan form ends. Off: the Titan section plays to the end of the track first.")]
+    public bool backgroundMusicReturnOnRevert = false;
 
     [Header("Debug")]
     public bool showDebugGizmos = true;
@@ -243,7 +247,7 @@ public class ODMController : MonoBehaviour
     private LineRenderer lineLeft;
     private LineRenderer lineRight;
     private AudioSource hookAudio;
-    private AudioSource backgroundMusicAudio;
+    public BackgroundMusicPlayer Music { get; private set; }
 
     // Giá trị gốc (từ scene) để nhân / cộng với cài đặt của người chơi
     private float defSens, defBaseFov, defMaxFov;
@@ -276,7 +280,6 @@ public class ODMController : MonoBehaviour
         autoReel = GameSettings.AutoReel;
         autoRelease = GameSettings.AutoRelease;
         liftAnchorToRoof = GameSettings.AnchorLift;
-        if (backgroundMusicAudio != null) backgroundMusicAudio.volume = backgroundMusicVolume * GameSettings.Music;
     }
 
     void Start()
@@ -310,23 +313,18 @@ public class ODMController : MonoBehaviour
 
         if (backgroundMusic != null)
         {
-            backgroundMusicAudio = gameObject.AddComponent<AudioSource>();
-            backgroundMusicAudio.clip = backgroundMusic;
-            backgroundMusicAudio.playOnAwake = false;
-            backgroundMusicAudio.loop = false;
-            backgroundMusicAudio.spatialBlend = 0f;
-            backgroundMusicAudio.volume = backgroundMusicVolume * GameSettings.Music;
-            backgroundMusicAudio.Play();
+            Music = gameObject.AddComponent<BackgroundMusicPlayer>();
+            Music.clip = backgroundMusic;
+            Music.volume = backgroundMusicVolume;
+            Music.loopEnd = Mathf.Min(backgroundMusicLoopEnd, Mathf.Max(1f, backgroundMusic.length - 1f));
+            Music.loopFade = backgroundMusicLoopFade;
+            Music.returnOnRevert = backgroundMusicReturnOnRevert;
         }
     }
 
     void Update()
     {
-        if (suspended)
-        {
-            UpdateBackgroundMusic();
-            return;
-        }
+        if (suspended) return;
 
         Vector3 frameStartPosition = transform.position;
         float dt = Time.deltaTime;
@@ -364,18 +362,7 @@ public class ODMController : MonoBehaviour
 
         UpdateFov(dt);
         UpdateRopeVisuals();
-        UpdateBackgroundMusic();
         LogRoofContact(frameStartPosition);
-    }
-
-    void UpdateBackgroundMusic()
-    {
-        if (backgroundMusicAudio == null || backgroundMusicAudio.clip == null || !backgroundMusicAudio.isPlaying)
-            return;
-
-        float loopEnd = Mathf.Min(backgroundMusicLoopEnd, backgroundMusicAudio.clip.length);
-        if (backgroundMusicAudio.time >= loopEnd)
-            backgroundMusicAudio.time = 0f;
     }
 
     void SimulateMovement(float dt)

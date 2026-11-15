@@ -16,15 +16,25 @@ public class TitanForm : MonoBehaviour
     public float formRadius = 1.3f;
     public float duration = 45f;
     public float cooldown = 30f;
-    public float transformTime = 1.2f;
+    [Tooltip("Thế giới đứng hình sau khi bấm G, chờ animation cắn tay (chưa có, tạm để trống). Nhạc titan đã chạy từ đầu đoạn này.")]
+    public float biteTime = 2f;
+    [Tooltip("Chuỗi sét chớp rồi sét lớn đánh xuống, sau đoạn cắn tay.")]
+    public float lightningTime = 2.2f;
+    float TransformTotal => biteTime + lightningTime;
     [Range(0f, 1f)] public float damageTakenMultiplier = 0.5f;
 
     [Header("Di chuyển")]
     public float walkSpeed = 12f;
     public float runSpeed = 20f;
     public float acceleration = 40f;
-    public float jumpSpeed = 11f;
-    public float gravity = -30f;
+    // Titan 10m nên trọng lực phải mạnh hơn người nhiều thì mới thấy "nặng" (độ cao nhảy ~ jumpSpeed^2 / 2g ≈ 2m).
+    public float jumpSpeed = 18f;
+    public float gravity = -80f;
+    [Header("Rung màn hình")]
+    public float stepShake = 0.16f;       // rung mỗi bước chân khi chạy (0..1)
+    public float landShakeMin = 0.35f;    // rung tiếp đất nhẹ nhất
+    public float landShakeScale = 1f;     // nhân thêm theo tốc độ rơi
+    public float shakeDecay = 2.6f;       // giảm mỗi giây
 
     [Header("Đấm")]
     public float punchDamage = 45f;
@@ -149,6 +159,9 @@ public class TitanForm : MonoBehaviour
 
     void Update()
     {
+        // Lúc biến hình thế giới đứng im (timeScale = 0), chỉ đồng hồ thật chạy.
+        if (state == State.Transforming) { UpdateFrozenTransform(); return; }
+
         if (Time.timeScale <= 0.0001f) return;
         float dt = Time.deltaTime;
 
@@ -161,20 +174,7 @@ public class TitanForm : MonoBehaviour
                 if (GameInput.GetKeyDown(transformKey))
                 {
                     if (cooldownLeft > 0f) Say("Chưa thể hoá titan (" + Mathf.CeilToInt(cooldownLeft) + "s)");
-                    else BeginTransform();
-                }
-                break;
-
-            case State.Transforming:
-                stateTimer += dt;
-                float k = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(stateTimer / transformTime));
-                SetCameraLocalY(Mathf.Lerp(oldCamLocal.y, eyeLocalY, k));
-                if (stateTimer >= transformTime)
-                {
-                    state = State.Titan;
-                    stateTimer = duration;
-                    health.DamageMultiplier = damageTakenMultiplier;
-                    Say("TITAN! Chuột trái/phải: đấm");
+                    else if (!Cutscene.IsPlaying) Cutscene.PlayFirstTitan(BeginTransform); // lần đầu có cutscene, các lần sau chỉ VFX
                 }
                 break;
 
@@ -189,6 +189,47 @@ public class TitanForm : MonoBehaviour
     }
 
     // ================= BIẾN HÌNH =================
+    bool frozen; // đang giữ timeScale = 0 vì biến hình
+    bool lightningStarted;
+
+    void UpdateFrozenTransform()
+    {
+        // Đang mở menu tạm dừng / kết thúc ván: để GameManager tự quản timeScale, đồng hồ biến hình đứng yên.
+        if (manager != null && manager.Current != GameManager.State.Playing) return;
+
+        Time.timeScale = 0f; // chống việc thoát pause trả timeScale về 1 giữa chừng
+        stateTimer += Time.unscaledDeltaTime;
+
+        // Giai đoạn 1 (0 -> biteTime): đứng hình, chỗ để chèn animation cắn tay + cutscene chuyển hoá.
+        // Giai đoạn 2 (biteTime -> hết): sét chớp, sét lớn, camera nâng lên tầm mắt titan.
+        if (!lightningStarted && stateTimer >= biteTime)
+        {
+            lightningStarted = true;
+            TransformLightning.Play(transform.position, lightningTime);
+        }
+        float k = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((stateTimer - biteTime) / Mathf.Max(0.01f, lightningTime)));
+        SetCameraLocalY(Mathf.Lerp(oldCamLocal.y, eyeLocalY, k));
+        if (stateTimer >= TransformTotal)
+        {
+            Unfreeze();
+            state = State.Titan;
+            stateTimer = duration;
+            health.DamageMultiplier = damageTakenMultiplier;
+            // Gầm ngay khi thời gian chạy lại. Chỉ phát khi có file thật Assets/Resources/Audio/Roar.(wav|mp3|ogg);
+            // bản tổng hợp mặc định nghe khó chịu nên bỏ qua.
+            if (Resources.Load<AudioClip>("Audio/Roar") != null) GameAudio.Play2D(Sfx.Roar, 1f, 1f);
+            Say("TITAN! Chuột trái/phải: đấm");
+        }
+    }
+
+    void Unfreeze()
+    {
+        if (!frozen) return;
+        frozen = false;
+        Time.timeScale = 1f;
+        Time.fixedDeltaTime = 0.02f;
+    }
+
     void BeginTransform()
     {
         if (cam == null) return;
@@ -230,12 +271,17 @@ public class TitanForm : MonoBehaviour
         eyeLocalY = formHeight * 0.5f - 0.9f; // dự phòng nếu model không tải được
 
         BuildVisual();
+        ResetShake();
         velocity = Vector3.zero;
         punchT = 1f;
         punchCooldownLeft = 0f;
 
         health.DamageMultiplier = 0f; // bất tử trong lúc biến hình
-        flash = 1f;
+        // Nhạc titan chạy ngay từ lúc bấm G (crossfade ngắn). Sét bắt đầu sau biteTime, xem UpdateFrozenTransform.
+        if (odm.Music != null) odm.Music.SetTitan(true, 1f);
+        lightningStarted = false;
+        frozen = true;
+        Time.timeScale = 0f; // dừng thời gian suốt lúc biến hình (xem UpdateFrozenTransform)
         state = State.Transforming;
         stateTimer = 0f;
         Say("Hoá titan!");
@@ -243,6 +289,8 @@ public class TitanForm : MonoBehaviour
 
     void EndTransform()
     {
+        Unfreeze(); // bị tắt giữa lúc đang đứng hình thì trả thời gian lại
+        if (odm != null && odm.Music != null) { odm.Music.SetDuck(1f); odm.Music.SetTitan(false, 2f); }
         float feetY = transform.position.y - formHeight * 0.5f;
 
         controller.enabled = false;
@@ -254,6 +302,7 @@ public class TitanForm : MonoBehaviour
         controller.enabled = true;
 
         if (cam != null) cam.localPosition = oldCamLocal;
+        ResetShake();
         DestroyVisual();
 
         foreach (var vm in hiddenViewmodels) if (vm != null) vm.SetActive(true);
@@ -287,7 +336,7 @@ public class TitanForm : MonoBehaviour
         odm.Pitch -= GameInput.GetAxis("Mouse Y") * odm.mouseSensitivity;
         odm.Pitch = Mathf.Clamp(odm.Pitch, -70f, 85f);
         transform.rotation = Quaternion.Euler(0f, odm.Yaw, 0f);
-        cam.localRotation = Quaternion.Euler(odm.Pitch, 0f, 0f);
+        cam.localRotation = Quaternion.Euler(odm.Pitch + shakePitch, 0f, shakeRoll);
     }
 
     void TitanMove(float dt)
@@ -308,15 +357,25 @@ public class TitanForm : MonoBehaviour
         if (grounded && GameInput.GetKeyDown(KeyCode.Space)) velocity.y = jumpSpeed;
         velocity.y += gravity * dt;
 
+        float preMoveVy = velocity.y;
         controller.Move(velocity * dt);
+
+        // Tiếp đất: rơi càng nhanh rung càng mạnh.
+        bool nowGrounded = controller.isGrounded;
+        if (nowGrounded && !wasGroundedShake && preMoveVy < -6f)
+            AddShake(Mathf.Clamp01(landShakeMin + (-preMoveVy - 6f) / 30f * landShakeScale));
+        wasGroundedShake = nowGrounded;
 
         // Bước chân nặng nề: camera nhấp nhô theo nhịp chạy
         float moveAmount = grounded ? flat.magnitude / runSpeed : 0f;
+        float prevStep = Mathf.Floor(bobPhase / Mathf.PI);
         bobPhase += flat.magnitude * dt * 0.45f;
+        if (grounded && Mathf.Floor(bobPhase / Mathf.PI) != prevStep) AddShake(stepShake * Mathf.Clamp01(moveAmount * 1.3f)); // mỗi bước chạm đất
+        UpdateShake(dt);
         float bob = Mathf.Abs(Mathf.Sin(bobPhase)) * 0.35f * moveAmount;
         // Clip chạy đã làm đầu nhấp nhô (camera bám đầu) -> bớt nhấp nhô giả.
         if (punchAnim != null && punchAnim.HasRun) bob *= 1f - punchAnim.RunWeight;
-        SetCameraLocalY(eyeLocalY + bob);
+        SetCameraLocalY(eyeLocalY + bob + shakeY);
         walkAmount = Mathf.MoveTowards(walkAmount, grounded && flat.sqrMagnitude > 0.5f ? flat.magnitude / runSpeed : 0f, dt * 3f);
         if (punchAnim != null)
         {
@@ -329,6 +388,32 @@ public class TitanForm : MonoBehaviour
             proc.walkPhase = bobPhase;
             proc.moveAmount = grounded && flat.sqrMagnitude > 0.5f ? 1f : 0f;
         }
+    }
+
+    // ----- Rung màn hình (dùng thời gian thật của khung hình, dùng nhiễu Perlin cho mượt) -----
+    float shake, shakeY, shakePitch, shakeRoll;
+    bool wasGroundedShake = true;
+
+    void AddShake(float amount)
+    {
+        if (!GameSettings.ScreenShake) return; // người chơi đã tắt trong Cài đặt > Đồ họa
+        shake = Mathf.Max(shake, Mathf.Clamp01(amount));
+    }
+
+    void UpdateShake(float dt)
+    {
+        shake = Mathf.Max(0f, shake - shakeDecay * dt);
+        float a = shake * shake * 0.5f + shake * 0.5f; // đường cong nhẹ: rung nhỏ vẫn thấy được, rung lớn gắt
+        float t = Time.time * 28f;
+        shakeY = (Mathf.PerlinNoise(t, 0.3f) - 0.5f) * 2f * a * 0.5f;      // tối đa ~0.5m
+        shakePitch = (Mathf.PerlinNoise(t, 1.7f) - 0.5f) * 2f * a * 2.5f;  // độ
+        shakeRoll = (Mathf.PerlinNoise(t, 5.1f) - 0.5f) * 2f * a * 3f;     // độ
+    }
+
+    void ResetShake()
+    {
+        shake = shakeY = shakePitch = shakeRoll = 0f;
+        wasGroundedShake = true;
     }
 
     void SetCameraLocalY(float y)
