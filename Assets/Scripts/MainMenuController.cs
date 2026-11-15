@@ -48,6 +48,14 @@ public class MainMenuController : MonoBehaviour
         if (!enabled) return;
         WireAuthoredUI();
         SetupTitleOutline();
+        // Lần đầu mở game: prologue chạy trước, chưa có nhạc/âm menu cho tới khi vào menu.
+        if (Cutscene.PrologueSeen) StartMenu();
+        else Cutscene.PlayPrologue(StartMenu);
+    }
+
+    void StartMenu()
+    {
+        if (this == null) return;
         SetupMenuMusic();
         SetupUISounds();
         StartCoroutine(Intro());
