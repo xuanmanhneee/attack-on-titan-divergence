@@ -13,8 +13,8 @@ Dự án **tự dựng gần hết bằng code lúc chạy**. Trong scene chỉ 
 | `Missions/` | `TrostMission`, `TrostCity`, `TrostMapAuthoring`, `Chapter0Training`, `Cutscene` |
 | `Audio/` | `GameAudio` (singleton SFX/nhạc), `BackgroundMusicPlayer` |
 | `Vfx/` | `GameVfx` (hạt), `TransformLightning` (sét biến hình) |
-| `UI/` | `GameHud`, `MangaMenu` (menu trong game), `MainMenuController` (menu scene MainMenu), `MangaGraphics`, `GameSettings` |
-| `../Editor/` | Script dựng scene/model, chỉ chạy trong Editor |
+| `UI/` | `GameHud` (HUD), `MangaMenu` (menu trong game), `MainMenuController` (menu scene MainMenu), `MangaGraphics`, `GameSettings` |
+| `../Editor/` | Script dựng scene thế giới/model (Chapter*SceneBuilder, PlayerModelSetup...), chỉ chạy trong Editor |
 
 ## Ai tạo ai
 
@@ -24,7 +24,7 @@ Dự án **tự dựng gần hết bằng code lúc chạy**. Trong scene chỉ 
 - **`GameManager` gắn thêm vào player** nếu thiếu: `PlayerCombat`, `TimeFocus`, `TitanForm`, `Health`; và tạo `TrostMission`.
 - **Singleton tạo sẵn**: `GameAudio`, `GameVfx`, `Titan` (đăng ký lúc `SubsystemRegistration`), `GameSettings`.
 - **`Titan.Spawn`** tạo titan, rồi gắn `Health`, `Rigidbody` và các script animation tương ứng.
-- **Menu chính**: UI dựng sẵn trong scene MainMenu (do `Editor/MainMenuSceneBuilder` sinh, `MainMenuController` điều khiển). `MangaMenu` (code) chỉ dùng trong game: Pause, Settings, Briefing, Result.
+- **UI là scene/prefab, không sinh bằng code**: menu chính nằm trong scene `MainMenu` (Main Menu Canvas), HUD là prefab `Resources/UI/GameHud` đặt sẵn trong Chapter0, Chapter1, SampleScene (3 canvas: FX 10 < Markers 15 < HUD 20). Sửa trực tiếp trong Unity, không còn builder nào ghi đè. Ngoại lệ còn lại: `MangaMenu` (Pause, Settings, Briefing, Result trong trận) vẫn dựng bằng code.
 
 ## Scene
 
@@ -37,7 +37,7 @@ Dự án **tự dựng gần hết bằng code lúc chạy**. Trong scene chỉ 
 
 ## Nợ kỹ thuật (chưa làm)
 
-- Tách `HorizontalGradientGraphic`, `MenuButtonVisual`, `GameVolumeSettings` ra khỏi `MainMenuController.cs`.
+- Chuyển `MangaMenu` (Pause/Settings/Briefing/Result) sang canvas dựng sẵn trong scene/prefab rồi bỏ code dựng UI.
 - `ODMController` (~1500 dòng) nên tách: di chuyển / dây / gas / FOV.
 - `MangaMenu` (~1100 dòng) nên tách theo từng `Page`.
 - Gom `Editor/*SceneBuilder` vào thư mục con; bỏ `MissingScriptRepair` khi scene đã sạch.

@@ -113,7 +113,7 @@ public class GameManager : MonoBehaviour
 
         // Giao diện manga: menu chính -> màn hình chờ -> chơi. Thế giới được dựng sau khi bấm "Bắt đầu".
         // HUD uGUI (prefab Resources/UI/GameHud, 3 canvas tách lớp)
-        hud = GameHud.Create(this, odm, combat, playerHealth, cam);
+        hud = GameHud.Bind(this, odm, combat, playerHealth, cam);
         menu = MangaMenu.Create();
         menu.Resume += () => SetPaused(false);
         menu.Restart += Restart;

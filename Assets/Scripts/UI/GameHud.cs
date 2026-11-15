@@ -3,13 +3,12 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// HUD trong trận (uGUI). Giao diện là prefab Resources/UI/GameHud do Editor/GameHudBuilder dựng sẵn,
+/// HUD trong trận (uGUI). Giao diện là prefab Assets/Resources/UI/GameHud đặt sẵn trong scene,
 /// gồm 3 canvas tách lớp: FX (viền đỏ khi trúng đòn) &lt; Markers (dấu gáy, máu titan, điểm nhiệm vụ) &lt; HUD (máu/gas/thể lực, tốc độ, mục tiêu).
 /// Script này chỉ đọc trạng thái game rồi cập nhật các thành phần có sẵn trong prefab.
 /// </summary>
 public class GameHud : MonoBehaviour
 {
-    const string PrefabPath = "UI/GameHud";
     const float RefHeight = 1080f;
 
     static readonly Color Ivory = new Color(0.91f, 0.878f, 0.796f, 1f);
@@ -110,17 +109,15 @@ public class GameHud : MonoBehaviour
 
     Pool napes, titanBars, missionMarks;
 
-    public static GameHud Create(GameManager manager, ODMController player, PlayerCombat pc, Health hp, Camera camera)
+    // HUD là prefab GameHud đặt sẵn trong scene; GameManager chỉ nối dữ liệu vào, không tạo UI.
+    public static GameHud Bind(GameManager manager, ODMController player, PlayerCombat pc, Health hp, Camera camera)
     {
-        var prefab = Resources.Load<GameObject>(PrefabPath);
-        if (prefab == null)
+        var h = FindAnyObjectByType<GameHud>(FindObjectsInactive.Include);
+        if (h == null)
         {
-            Debug.LogError("[GameHud] Thiếu prefab Resources/" + PrefabPath + ". Chạy menu Attack on Titan > Build Game HUD Prefab.");
+            Debug.LogError("[GameHud] Scene chưa có prefab GameHud. Kéo Assets/Resources/UI/GameHud.prefab vào scene.");
             return null;
         }
-        var go = Instantiate(prefab);
-        go.name = "GameHud";
-        var h = go.GetComponent<GameHud>();
         h.gm = manager; h.odm = player; h.combat = pc; h.health = hp; h.cam = camera;
         h.focus = player.GetComponent<TimeFocus>();
         return h;
