@@ -37,7 +37,10 @@ Dự án **tự dựng gần hết bằng code lúc chạy**. Trong scene chỉ 
 
 ## Nợ kỹ thuật (chưa làm)
 
-- Chuyển `MangaMenu` (Pause/Settings/Briefing/Result) sang canvas dựng sẵn trong scene/prefab rồi bỏ code dựng UI.
+- **[LÀM SAU] `MangaMenu`** (đang ổn, tạm giữ nguyên): chuyển Briefing, Pause, Settings, Result sang canvas dựng sẵn trong scene/prefab rồi bỏ code dựng UI (~1100 dòng).
+  - Trang Title, Chapters, Credits của `MangaMenu` là code chết (menu chính đã dùng scene), xóa được ngay.
+  - Trang Settings trùng với `SettingsMenu` của menu chính; khi chuyển nên dùng chung một prefab.
+  - Crosshair vẫn là Image trong canvas riêng của từng scene; cân nhắc đưa vào prefab `GameHud`.
 - `ODMController` (~1500 dòng) nên tách: di chuyển / dây / gas / FOV.
 - `MangaMenu` (~1100 dòng) nên tách theo từng `Page`.
 - Gom `Editor/*SceneBuilder` vào thư mục con; bỏ `MissingScriptRepair` khi scene đã sạch.
