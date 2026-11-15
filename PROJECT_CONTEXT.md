@@ -76,12 +76,10 @@ Khoảng **5.900 dòng C#** trong `Assets/Scripts/` (chưa tính Editor).
 
 ### Editor (`Assets/Editor/`)
 
-Script dựng scene và xử lý asset, chạy trong Unity Editor:
+Chỉ còn tool nhỏ chạy trong Unity Editor (UI và scene là asset dựng sẵn, không còn script sinh scene):
 
-- `Chapter0SceneBuilder.cs`, `Chapter1SceneBuilder.cs`, `MainMenuSceneBuilder.cs`: dựng scene bằng code.
-- `TitanImportSettings.cs`, `TitanModelSetup.cs`: cấu hình import model titan (Rig Humanoid).
-- `PlayerModelSetup.cs`, `WRADSwordViewmodelSetup.cs`: thiết lập model nhân vật và kiếm.
-- `MissingScriptRepair.cs`: sửa component bị thiếu script.
+- `TitanImportSettings.cs`: cấu hình import model titan (Rig Humanoid).
+- `CutsceneMenu.cs`: menu Tools/Cutscenes để reset prologue và cutscene biến hình khi test.
 
 ## 6. Asset và tài nguyên
 

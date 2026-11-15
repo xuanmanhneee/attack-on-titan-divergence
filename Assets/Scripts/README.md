@@ -14,7 +14,7 @@ Dự án **tự dựng gần hết bằng code lúc chạy**. Trong scene chỉ 
 | `Audio/` | `GameAudio` (singleton SFX/nhạc), `BackgroundMusicPlayer` |
 | `Vfx/` | `GameVfx` (hạt), `TransformLightning` (sét biến hình) |
 | `UI/` | `GameHud` (HUD), `MangaMenu` (menu trong game), `MainMenuController` (menu scene MainMenu), `MangaGraphics`, `GameSettings` |
-| `../Editor/` | Script dựng scene thế giới/model (Chapter*SceneBuilder, PlayerModelSetup...), chỉ chạy trong Editor |
+| `../Editor/` | Chỉ còn tool nhỏ: `TitanImportSettings` (cấu hình import model titan), `CutsceneMenu` (reset cutscene để test). Không còn script nào dựng scene. |
 
 ## Ai tạo ai
 
@@ -33,7 +33,7 @@ Dự án **tự dựng gần hết bằng code lúc chạy**. Trong scene chỉ 
 | `MainMenu` | Menu chính |
 | `Chapter0_TrainingCamp` | Màn huấn luyện |
 | `Chapter1_BattleOfTrost` | Trận Trost |
-| `SampleScene` | **Scene gốc**: các `Editor/Chapter*SceneBuilder` mở nó rồi dựng chương mới. Không xóa. |
+| `SampleScene` | Scene mẫu cũ, không còn builder nào dùng; có thể xóa cùng `New Terrain.asset`. |
 
 ## Nợ kỹ thuật (chưa làm)
 
@@ -43,4 +43,3 @@ Dự án **tự dựng gần hết bằng code lúc chạy**. Trong scene chỉ 
   - Crosshair vẫn là Image trong canvas riêng của từng scene; cân nhắc đưa vào prefab `GameHud`.
 - `ODMController` (~1500 dòng) nên tách: di chuyển / dây / gas / FOV.
 - `MangaMenu` (~1100 dòng) nên tách theo từng `Page`.
-- Gom `Editor/*SceneBuilder` vào thư mục con; bỏ `MissingScriptRepair` khi scene đã sạch.
