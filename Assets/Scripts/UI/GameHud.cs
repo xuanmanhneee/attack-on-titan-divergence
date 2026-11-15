@@ -1,15 +1,53 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 
-// HUD trong trận, vẽ bằng IMGUI nhưng dùng sprite của Kenney "UI Pack: Sci-Fi" (CC0)
-// trong Resources/UI/Kenney: khung kính 9-slice, thanh máu/gas/kiếm bóng, tâm ngắm.
-// Bảng màu theo menu: nền xanh đen, chữ ngà, nhấn đồng.
+/// <summary>
+/// HUD trong trận (uGUI). Giao diện là prefab Resources/UI/GameHud do Editor/GameHudBuilder dựng sẵn,
+/// gồm 3 canvas tách lớp: FX (viền đỏ khi trúng đòn) &lt; Markers (dấu gáy, máu titan, điểm nhiệm vụ) &lt; HUD (máu/gas/thể lực, tốc độ, mục tiêu).
+/// Script này chỉ đọc trạng thái game rồi cập nhật các thành phần có sẵn trong prefab.
+/// </summary>
 public class GameHud : MonoBehaviour
 {
+    const string PrefabPath = "UI/GameHud";
+    const float RefHeight = 1080f;
+
     static readonly Color Ivory = new Color(0.91f, 0.878f, 0.796f, 1f);
     static readonly Color Brass = new Color(0.753f, 0.541f, 0.243f, 1f);
     static readonly Color Muted = new Color(0.659f, 0.667f, 0.624f, 1f);
-    static readonly Color Plate = new Color(0.03f, 0.05f, 0.058f, 0.82f);
+    static readonly Color Danger = new Color(0.86f, 0.27f, 0.2f, 1f);
+    static readonly Color Good = new Color(0.36f, 0.72f, 0.58f, 1f);
+
+    [Header("Layers (bật khi đang chơi)")]
+    [SerializeField] GameObject[] layers = null;
+
+    [Header("Vitals")]
+    [SerializeField] RectTransform hpFill = null;
+    [SerializeField] Text hpValue = null;
+    [SerializeField] RectTransform gasFill = null;
+    [SerializeField] Image gasFillImage = null;
+    [SerializeField] Text gasValue = null;
+    [SerializeField] RectTransform staminaFill = null;
+    [SerializeField] Image staminaFillImage = null;
+    [SerializeField] Text staminaValue = null;
+    [SerializeField] Text statusText = null;
+    [SerializeField] Text lowGasText = null;
+
+    [Header("Speed / Objective / Messages")]
+    [SerializeField] Text speedValue = null;
+    [SerializeField] Text objectiveText = null;
+    [SerializeField] Text subText = null;
+    [SerializeField] CanvasGroup toastGroup = null;
+    [SerializeField] Text toastText = null;
+    [SerializeField] Text hintText = null;
+
+    [Header("FX")]
+    [SerializeField] CanvasGroup hurtGroup = null;
+
+    [Header("Markers (template ẩn, nhân bản khi cần)")]
+    [SerializeField] RectTransform napeTemplate = null;
+    [SerializeField] RectTransform titanBarTemplate = null;
+    [SerializeField] RectTransform missionTemplate = null;
 
     GameManager gm;
     ODMController odm;
@@ -17,26 +55,72 @@ public class GameHud : MonoBehaviour
     Health health;
     Camera cam;
     TimeFocus focus;
+    PlayerStamina stamina;
 
     string toast = "";
     float toastTimer;
     float shownGas = 1f, shownHp = 1f, shownStamina = 1f;
-    PlayerStamina stamina;
     float hurtFlash;
     float lastHp = -1f;
+    bool visible;
 
-    Texture2D panel, panelNotch, panelRect, track, crosshair;
-    Texture2D barGreen, barYellow, barRed, barBlue;
-    Font numFont;
-    GUIStyle plateStyle, notchStyle, rectStyle, trackStyle;
-    GUIStyle barGreenStyle, barYellowStyle, barRedStyle, barBlueStyle;
-    GUIStyle text, num, small, centered;
-    float styleScale = -1f;
+    class Item
+    {
+        public RectTransform rt;
+        public Image[] images;
+        public RectTransform fill;
+        public Text text;
+        public GameObject icon;
+    }
+
+    class Pool
+    {
+        public RectTransform template;
+        public readonly List<Item> items = new List<Item>();
+        int used;
+
+        public void Begin() { used = 0; }
+
+        public Item Next()
+        {
+            if (used >= items.Count)
+            {
+                var rt = Object.Instantiate(template, template.parent);
+                var it = new Item
+                {
+                    rt = rt,
+                    images = rt.GetComponentsInChildren<Image>(true),
+                    fill = rt.Find("Fill") as RectTransform,
+                    text = rt.GetComponentInChildren<Text>(true),
+                    icon = rt.Find("Icon") != null ? rt.Find("Icon").gameObject : null
+                };
+                items.Add(it);
+            }
+            var item = items[used++];
+            item.rt.gameObject.SetActive(true);
+            return item;
+        }
+
+        public void End()
+        {
+            for (int i = used; i < items.Count; i++)
+                if (items[i].rt.gameObject.activeSelf) items[i].rt.gameObject.SetActive(false);
+        }
+    }
+
+    Pool napes, titanBars, missionMarks;
 
     public static GameHud Create(GameManager manager, ODMController player, PlayerCombat pc, Health hp, Camera camera)
     {
-        var go = new GameObject("GameHud");
-        var h = go.AddComponent<GameHud>();
+        var prefab = Resources.Load<GameObject>(PrefabPath);
+        if (prefab == null)
+        {
+            Debug.LogError("[GameHud] Thiếu prefab Resources/" + PrefabPath + ". Chạy menu Attack on Titan > Build Game HUD Prefab.");
+            return null;
+        }
+        var go = Instantiate(prefab);
+        go.name = "GameHud";
+        var h = go.GetComponent<GameHud>();
         h.gm = manager; h.odm = player; h.combat = pc; h.health = hp; h.cam = camera;
         h.focus = player.GetComponent<TimeFocus>();
         return h;
@@ -50,24 +134,26 @@ public class GameHud : MonoBehaviour
 
     void Awake()
     {
-        panel = Load("panel_glass");
-        panelNotch = Load("panel_notches");
-        panelRect = Load("panel_rect");
-        track = Load("bar_track");
-        crosshair = Load("crosshair");
-        barGreen = Load("bar_green");
-        barYellow = Load("bar_yellow");
-        barRed = Load("bar_red");
-        barBlue = Load("bar_blue");
-        numFont = Resources.Load<Font>("UI/Kenney/KenneyFutureNarrow");
+        napes = new Pool { template = napeTemplate };
+        titanBars = new Pool { template = titanBarTemplate };
+        missionMarks = new Pool { template = missionTemplate };
+        SetLayers(false);
     }
 
-    static Texture2D Load(string n) { return Resources.Load<Texture2D>("UI/Kenney/" + n); }
-
-    void Update()
+    void SetLayers(bool on)
     {
-        toastTimer -= Time.unscaledDeltaTime;
+        visible = on;
+        foreach (var l in layers) if (l != null && l.activeSelf != on) l.SetActive(on);
+    }
+
+    void LateUpdate()
+    {
+        bool playing = odm != null && gm != null && gm.Current == GameManager.State.Playing;
+        if (playing != visible) SetLayers(playing);
+        if (!playing) return;
+
         float dt = Time.unscaledDeltaTime;
+        toastTimer -= dt;
         if (odm != null) shownGas = Mathf.MoveTowards(shownGas, odm.GasNormalized, 2.5f * dt);
         if (health != null)
         {
@@ -75,275 +161,164 @@ public class GameHud : MonoBehaviour
             if (lastHp >= 0f && health.Current < lastHp - 0.01f) hurtFlash = 1f;
             lastHp = health.Current;
         }
-        if (stamina == null && odm != null) stamina = odm.GetComponent<PlayerStamina>();
+        if (stamina == null) stamina = odm.GetComponent<PlayerStamina>();
         if (stamina != null) shownStamina = Mathf.MoveTowards(shownStamina, stamina.Normalized, 2f * dt);
         hurtFlash = Mathf.MoveTowards(hurtFlash, 0f, 2.2f * dt);
+
+        UpdateVitals();
+        UpdateSpeed();
+        UpdateObjective();
+        UpdateMessages();
+        hurtGroup.alpha = hurtFlash;
+
+        UpdateNapeMarks();
+        UpdateTitanBars();
+        UpdateMissionMarks();
     }
 
-    // ---------- kiểu chữ / khung ----------
-    static GUIStyle Slice(Texture2D t, int border)
+    // ---------- Thanh và chỉ số ----------
+    static void SetFill(RectTransform fill, float v)
     {
-        var st = new GUIStyle();
-        st.normal.background = t;
-        st.border = new RectOffset(border, border, border, border);
-        return st;
+        fill.anchorMax = new Vector2(Mathf.Clamp01(v), 1f);
     }
 
-    void EnsureStyles(float s)
+    void UpdateVitals()
     {
-        if (Mathf.Approximately(styleScale, s) && text != null) return;
-        styleScale = s;
+        SetFill(hpFill, shownHp);
+        hpValue.text = health != null ? Mathf.CeilToInt(health.Current).ToString() : "";
 
-        plateStyle = Slice(panel, 14);
-        notchStyle = Slice(panelNotch, 24);
-        rectStyle = Slice(panelRect, 12);
-        trackStyle = Slice(track, 8);
-        barGreenStyle = Slice(barGreen, 8);
-        barYellowStyle = Slice(barYellow, 8);
-        barRedStyle = Slice(barRed, 8);
-        barBlueStyle = Slice(barBlue, 8);
-
-        text = new GUIStyle(GUI.skin.label) { fontSize = Mathf.RoundToInt(24 * s), alignment = TextAnchor.MiddleLeft, richText = true };
-        text.normal.textColor = Ivory;
-        small = new GUIStyle(text) { fontSize = Mathf.RoundToInt(18 * s) };
-        small.normal.textColor = Muted;
-        centered = new GUIStyle(text) { alignment = TextAnchor.MiddleCenter };
-        num = new GUIStyle(text) { alignment = TextAnchor.MiddleRight };
-    }
-
-    static void Tinted(GUIStyle st, Rect r, Color c)
-    {
-        Color old = GUI.color;
-        GUI.color = c;
-        if (st.normal.background != null) st.Draw(r, GUIContent.none, false, false, false, false);
-        else GUI.DrawTexture(r, Texture2D.whiteTexture);
-        GUI.color = old;
-    }
-
-    void Text(Rect r, string t, GUIStyle st, Color c)
-    {
-        Color old = st.normal.textColor;
-        // bóng chữ để dễ đọc trên nền sáng
-        st.normal.textColor = new Color(0f, 0f, 0f, 0.7f);
-        GUI.Label(new Rect(r.x + 1.5f, r.y + 1.5f, r.width, r.height), t, st);
-        st.normal.textColor = c;
-        GUI.Label(r, t, st);
-        st.normal.textColor = old;
-    }
-
-    // Thanh có đầu bo: nền rãnh tối + phần đầy theo tỉ lệ
-    void Bar(Rect r, float v, GUIStyle fillStyle)
-    {
-        Tinted(trackStyle, r, Color.white);
-        v = Mathf.Clamp01(v);
-        float minW = 16f * styleScale;
-        if (v > 0.001f)
-        {
-            float w = Mathf.Max(minW, r.width * v);
-            Tinted(fillStyle, new Rect(r.x, r.y, Mathf.Min(w, r.width), r.height), Color.white);
-        }
-    }
-
-    GUIStyle FillFor(float v)
-    {
-        if (v >= 0.5f) return barGreenStyle;
-        if (v >= 0.2f) return barYellowStyle;
-        return barRedStyle;
-    }
-
-    void OnGUI()
-    {
-        if (odm == null || gm == null || gm.Current != GameManager.State.Playing) return;
-        if (Event.current.type != EventType.Repaint) return; // chỉ vẽ ở sự kiện Repaint (GUIStyle.Draw không chạy ở Layout)
-        float s = Screen.height / 1080f;
-        EnsureStyles(s);
-
-        if (hurtFlash > 0.01f) DrawHurt();
-        DrawVitals(s);
-        DrawSpeed(s);
-        DrawObjective(s);
-        DrawNapeMarks(s);
-        DrawTitanHealth(s);
-        DrawMissionMarks(s);
-        DrawToast(s);
-        DrawHint(s);
-    }
-
-    void DrawHurt()
-    {
-        Color old = GUI.color;
-        float a = hurtFlash * 0.35f;
-        float t = 90f;
-        GUI.color = new Color(0.8f, 0.05f, 0.05f, a);
-        GUI.DrawTexture(new Rect(0, 0, Screen.width, t), Texture2D.whiteTexture);
-        GUI.DrawTexture(new Rect(0, Screen.height - t, Screen.width, t), Texture2D.whiteTexture);
-        GUI.DrawTexture(new Rect(0, 0, t, Screen.height), Texture2D.whiteTexture);
-        GUI.DrawTexture(new Rect(Screen.width - t, 0, t, Screen.height), Texture2D.whiteTexture);
-        GUI.color = old;
-    }
-
-    // ----- góc dưới trái: máu, gas, thể lực -----
-    void DrawVitals(float s)
-    {
-        float w = 560 * s, h = 214 * s;
-        var box = new Rect(32 * s, Screen.height - h - 32 * s, w, h);
-        Tinted(plateStyle, box, Plate);
-        // vạch nhấn đồng ở cạnh trái khung
-        GUI.color = Brass;
-        GUI.DrawTexture(new Rect(box.x + 8 * s, box.y + 14 * s, 4 * s, box.height - 28 * s), Texture2D.whiteTexture);
-        GUI.color = Color.white;
-
-        float x = box.x + 30 * s, rowH = 54 * s, y = box.y + 18 * s;
-        float labelW = 96 * s, barW = w - labelW - 150 * s;
-
-        Row("HP", shownHp, health != null ? Mathf.CeilToInt(health.Current).ToString() : "", barRedStyle, x, y, labelW, barW, rowH, s);
         float g = odm.GasNormalized;
-        Row("GAS", shownGas, Mathf.RoundToInt(g * 100f) + "%", FillFor(shownGas), x, y + rowH, labelW, barW, rowH, s);
-        Row("THỂ LỰC", shownStamina, stamina != null ? stamina.Percent + "%" : "", stamina != null && stamina.Exhausted ? barRedStyle : barGreenStyle, x, y + 2 * rowH, labelW, barW, rowH, s);
+        SetFill(gasFill, shownGas);
+        gasFillImage.color = shownGas >= 0.5f ? Good : (shownGas >= 0.2f ? Brass : Danger);
+        gasValue.text = Mathf.RoundToInt(g * 100f) + "%";
 
+        SetFill(staminaFill, shownStamina);
+        bool exhausted = stamina != null && stamina.Exhausted;
+        staminaFillImage.color = exhausted ? Danger : Ivory;
+        staminaValue.text = stamina != null ? stamina.Percent + "%" : "";
+
+        string msg = null; Color col = Muted;
         if (stamina != null)
         {
-            string msg = null; Color col = Muted;
-            if (stamina.Exhausted) { msg = "KIỆT SỨC - tìm chỗ an toàn để nghỉ"; col = new Color(1f, 0.35f, 0.25f); }
+            if (exhausted) { msg = "KIỆT SỨC - tìm chỗ an toàn để nghỉ"; col = Danger; }
             else if (stamina.Resting) msg = "Đang nghỉ - hồi sức";
-            if (msg != null) Text(new Rect(x + labelW, y + 3 * rowH - 6 * s, barW, 30 * s), msg, small, col);
         }
+        statusText.text = msg ?? "";
+        statusText.color = col;
 
-        // cảnh báo gas thấp nhấp nháy
-        if (g < 0.2f && Mathf.Repeat(Time.unscaledTime, 0.8f) < 0.4f)
-            Text(new Rect(box.x, box.y - 40 * s, box.width, 34 * s), "GAS SẮP CẠN", centered, new Color(1f, 0.35f, 0.25f));
+        lowGasText.enabled = g < 0.2f && Mathf.Repeat(Time.unscaledTime, 0.8f) < 0.4f;
     }
 
-    void Row(string label, float v, string value, GUIStyle fill, float x, float y, float labelW, float barW, float rowH, float s)
+    void UpdateSpeed()
     {
-        var lbl = new GUIStyle(text);
-        if (numFont != null && label != "KIẾM") lbl.font = numFont;
-        Text(new Rect(x, y, labelW, rowH * 0.9f), label, lbl, Brass);
-        Bar(new Rect(x + labelW, y + 7 * s, barW, rowH * 0.62f), v, fill);
-        Text(new Rect(x + labelW + barW + 6 * s, y, 100 * s, rowH * 0.9f), value, num, Ivory);
+        speedValue.text = odm.Speed.ToString("F0");
     }
 
-    // ----- góc dưới phải: tốc độ -----
-    void DrawSpeed(float s)
+    void UpdateObjective()
     {
-        float w = 250 * s, h = 112 * s;
-        var box = new Rect(Screen.width - w - 32 * s, Screen.height - h - 32 * s, w, h);
-        Tinted(plateStyle, box, Plate);
-        var big = new GUIStyle(num) { fontSize = Mathf.RoundToInt(64 * s), alignment = TextAnchor.MiddleCenter };
-        if (numFont != null) big.font = numFont;
-        Text(new Rect(box.x, box.y + 4 * s, box.width, box.height * 0.7f), odm.Speed.ToString("F0"), big, Ivory);
-        var unit = new GUIStyle(small) { alignment = TextAnchor.MiddleCenter };
-        if (numFont != null) unit.font = numFont;
-        Text(new Rect(box.x, box.y + box.height - 36 * s, box.width, 30 * s), "M/S", unit, Brass);
-    }
-
-    // ----- giữa trên: mục tiêu -----
-    void DrawObjective(float s)
-    {
-        string obj = gm.Mission != null ? gm.Mission.ObjectiveText
-                                        : "Đợt " + gm.Wave + "/" + gm.TotalWaves + "  -  hạ gục hết titan";
-        float w = 980 * s, h = 82 * s;
-        var box = new Rect((Screen.width - w) / 2f, 22 * s, w, h);
-        Tinted(notchStyle, box, Plate);
-        GUI.color = Brass;
-        GUI.DrawTexture(new Rect(box.x + 22 * s, box.yMax - 14 * s, box.width - 44 * s, 2 * s), Texture2D.whiteTexture);
-        GUI.color = Color.white;
-        Text(new Rect(box.x, box.y + 6 * s, box.width, 46 * s), obj, centered, Ivory);
-
+        objectiveText.text = gm.Mission != null ? gm.Mission.ObjectiveText
+                                                : "Đợt " + gm.Wave + "/" + gm.TotalWaves + "  -  hạ gục hết titan";
         string sub = "TITAN CÒN  <color=#C08A3E>" + Titan.All.Count + "</color>";
         if (focus != null && focus.Active) sub += "      <color=#C08A3E>TẬP TRUNG · THỜI GIAN CHẬM</color>";
-        var subStyle = new GUIStyle(small) { alignment = TextAnchor.MiddleCenter };
-        Text(new Rect(box.x, box.y + 44 * s, box.width, 28 * s), sub, subStyle, Muted);
+        subText.text = sub;
     }
 
-    // ----- chấm đánh dấu gáy titan -----
-    void DrawNapeMarks(float s)
+    void UpdateMessages()
     {
-        if (cam == null) return;
-        foreach (Titan t in Titan.All)
-        {
-            if (t == null || t.IsDead || t.Nape == null) continue;
-            Vector3 sp = cam.WorldToScreenPoint(t.Nape.position);
-            if (sp.z <= 0f || sp.z > 140f) continue;
-            bool inRange = Vector3.Distance(cam.transform.position, t.Nape.position) <= combat.napeReach;
-            float size = (inRange ? 56f : 30f) * s;
-            Color c = inRange ? new Color(1f, 0.86f, 0.25f, 1f) : new Color(1f, 0.3f, 0.2f, 0.75f);
-            Color old = GUI.color;
-            GUI.color = c;
-            GUI.DrawTexture(new Rect(sp.x - size / 2f, Screen.height - sp.y - size / 2f, size, size), crosshair != null ? crosshair : Texture2D.whiteTexture);
-            GUI.color = old;
-        }
-    }
+        bool showToast = toastTimer > 0f && !string.IsNullOrEmpty(toast);
+        toastGroup.alpha = showToast ? Mathf.Clamp01(toastTimer) : 0f;
+        if (showToast) toastText.text = toast;
 
-    // ----- thanh máu trên đầu titan (titan còn sống trong 100 m) -----
-    void DrawTitanHealth(float s)
-    {
-        if (cam == null) return;
-        foreach (Titan t in Titan.All)
-        {
-            if (t == null || t.IsDead) continue;
-            float v = t.HealthNormalized;
-            Vector3 sp = cam.WorldToScreenPoint(t.transform.position + Vector3.up * (t.Height + 1.5f));
-            if (sp.z <= 0f || sp.z > 100f) continue;
-            float scale = Mathf.Clamp(60f / sp.z, 0.6f, 1.4f) * s;
-            float bw = 150f * scale, bh = 14f * scale;
-            var r = new Rect(sp.x - bw / 2f, Screen.height - sp.y - bh / 2f, bw, bh);
-            Tinted(plateStyle, new Rect(r.x - 4 * scale, r.y - 4 * scale, r.width + 8 * scale, r.height + 8 * scale), Plate);
-            Bar(r, v, barRedStyle);
-        }
-    }
-
-    // ----- điểm tiếp tế / cổng -----
-    void DrawMissionMarks(float s)
-    {
-        if (cam == null || gm.Mission == null) return;
-        foreach (var mk in gm.Mission.Markers)
-        {
-            float dist = Vector3.Distance(cam.transform.position, mk.pos);
-            string txt = mk.label + "  " + Mathf.RoundToInt(dist) + " m";
-            Vector3 sp = cam.WorldToScreenPoint(mk.pos + Vector3.up * 8f);
-            float bw = 300 * s, bh = 40 * s;
-            Rect r;
-            if (sp.z > 0f)
-            {
-                float x = Mathf.Clamp(sp.x, bw / 2f + 20 * s, Screen.width - bw / 2f - 20 * s);
-                float y = Mathf.Clamp(Screen.height - sp.y, 130 * s, Screen.height - 280 * s);
-                r = new Rect(x - bw / 2f, y - bh, bw, bh);
-                Color old = GUI.color;
-                GUI.color = mk.color;
-                GUI.DrawTexture(new Rect(x - 7 * s, y + 4 * s, 14 * s, 14 * s), Texture2D.whiteTexture);
-                GUI.color = old;
-            }
-            else
-            {
-                bool right = cam.transform.InverseTransformPoint(mk.pos).x >= 0f;
-                txt = right ? txt + "  ›››" : "‹‹‹  " + txt;
-                r = new Rect(right ? Screen.width - bw - 24 * s : 24 * s, Screen.height * 0.5f, bw, bh);
-            }
-            Tinted(rectStyle, r, new Color(0.03f, 0.05f, 0.058f, 0.75f));
-            var st = new GUIStyle(small) { alignment = TextAnchor.MiddleCenter };
-            Text(r, txt, st, mk.color);
-        }
-    }
-
-    void DrawToast(float s)
-    {
-        if (toastTimer <= 0f || string.IsNullOrEmpty(toast)) return;
-        float a = Mathf.Clamp01(toastTimer);
-        float w = 900 * s, h = 54 * s;
-        var r = new Rect((Screen.width - w) / 2f, 128 * s, w, h);
-        Color old = GUI.color;
-        GUI.color = new Color(1f, 1f, 1f, a);
-        Tinted(rectStyle, r, new Color(0.03f, 0.05f, 0.058f, 0.85f * a));
-        Text(r, toast, centered, new Color(Ivory.r, Ivory.g, Ivory.b, a));
-        GUI.color = old;
-    }
-
-    void DrawHint(float s)
-    {
         string h = gm.Hint;
-        if (string.IsNullOrEmpty(h)) return;
-        var st = new GUIStyle(small) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(16 * s) };
-        Text(new Rect(Screen.width / 2f - 700 * s, Screen.height - 40 * s, 1400 * s, 30 * s), h, st, new Color(Muted.r, Muted.g, Muted.b, 0.75f));
+        hintText.text = string.IsNullOrEmpty(h) ? "" : h;
+    }
+
+    // ---------- Dấu trên thế giới (canvas Markers) ----------
+    // Canvas dùng Scale With Screen Size, match chiều cao, nên 1 đơn vị canvas = Screen.height / 1080 pixel.
+    bool ToCanvas(Vector3 world, out Vector2 pos, out float depth)
+    {
+        Vector3 sp = cam.WorldToScreenPoint(world);
+        float k = RefHeight / Screen.height;
+        pos = new Vector2((sp.x - Screen.width * 0.5f) * k, (sp.y - Screen.height * 0.5f) * k);
+        depth = sp.z;
+        return sp.z > 0f;
+    }
+
+    static void Tint(Item it, Color c)
+    {
+        foreach (var img in it.images) img.color = c;
+    }
+
+    void UpdateNapeMarks()
+    {
+        napes.Begin();
+        if (cam != null)
+        {
+            foreach (Titan t in Titan.All)
+            {
+                if (t == null || t.IsDead || t.Nape == null) continue;
+                Vector2 p; float z;
+                if (!ToCanvas(t.Nape.position, out p, out z) || z > 140f) continue;
+                bool inRange = Vector3.Distance(cam.transform.position, t.Nape.position) <= combat.napeReach;
+                var it = napes.Next();
+                float size = inRange ? 56f : 30f;
+                it.rt.sizeDelta = new Vector2(size, size);
+                it.rt.anchoredPosition = p;
+                Tint(it, inRange ? new Color(1f, 0.86f, 0.25f, 1f) : new Color(1f, 0.3f, 0.2f, 0.75f));
+            }
+        }
+        napes.End();
+    }
+
+    void UpdateTitanBars()
+    {
+        titanBars.Begin();
+        if (cam != null)
+        {
+            foreach (Titan t in Titan.All)
+            {
+                if (t == null || t.IsDead) continue;
+                Vector2 p; float z;
+                if (!ToCanvas(t.transform.position + Vector3.up * (t.Height + 1.5f), out p, out z) || z > 100f) continue;
+                var it = titanBars.Next();
+                it.rt.anchoredPosition = p;
+                it.rt.localScale = Vector3.one * Mathf.Clamp(60f / z, 0.6f, 1.4f);
+                SetFill(it.fill, t.HealthNormalized);
+            }
+        }
+        titanBars.End();
+    }
+
+    void UpdateMissionMarks()
+    {
+        missionMarks.Begin();
+        if (cam != null && gm.Mission != null)
+        {
+            foreach (var mk in gm.Mission.Markers)
+            {
+                var it = missionMarks.Next();
+                float dist = Vector3.Distance(cam.transform.position, mk.pos);
+                string txt = mk.label + "  " + Mathf.RoundToInt(dist) + " m";
+                Vector2 p; float z;
+                bool front = ToCanvas(mk.pos + Vector3.up * 8f, out p, out z);
+                if (front)
+                {
+                    p.x = Mathf.Clamp(p.x, -960f + 190f, 960f - 190f);
+                    p.y = Mathf.Clamp(p.y, -260f, 410f);
+                }
+                else
+                {
+                    bool right = cam.transform.InverseTransformPoint(mk.pos).x >= 0f;
+                    txt = right ? txt + "  ›››" : "‹‹‹  " + txt;
+                    p = new Vector2(right ? 960f - 190f : -960f + 190f, 0f);
+                }
+                it.rt.anchoredPosition = p;
+                it.icon.SetActive(front);
+                it.text.text = txt;
+                it.text.color = mk.color;
+                it.images[it.images.Length - 1].color = mk.color; // Icon là Image cuối cùng
+            }
+        }
+        missionMarks.End();
     }
 }

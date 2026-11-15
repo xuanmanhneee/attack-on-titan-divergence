@@ -8,7 +8,7 @@ Dự án **tự dựng gần hết bằng code lúc chạy**. Trong scene chỉ 
 | Thư mục | Nội dung |
 | --- | --- |
 | `Core/` | `GameManager` (trạng thái game, nối các hệ thống), `GameInput`, `Health`, `TimeFocus` |
-| `Player/` | `ODMController` (di chuyển ODM, lớn nhất), `PlayerCombat`, `PlayerStamina`, camera/viewmodel/trang bị, `GasHUD`, `Crosshair` |
+| `Player/` | `ODMController` (di chuyển ODM, lớn nhất), `PlayerCombat`, `PlayerStamina`, camera/viewmodel/trang bị, `Crosshair` |
 | `Titan/` | `Titan` (AI), `TitanForm` (Eren biến hình), các script animation: `TitanModels`, `TitanClipPlayer`, `TitanProceduralAnim`, `TitanPunchAnimator`, `TitanFootGrounder` |
 | `Missions/` | `TrostMission`, `TrostCity`, `TrostMapAuthoring`, `Chapter0Training`, `Cutscene` |
 | `Audio/` | `GameAudio` (singleton SFX/nhạc), `BackgroundMusicPlayer` |
@@ -20,7 +20,7 @@ Dự án **tự dựng gần hết bằng code lúc chạy**. Trong scene chỉ 
 
 - **Có sẵn trong scene**: `ODMController`, `Crosshair`, `FirstPersonSwordViewmodel` (Chapter0, Chapter1, SampleScene);
   `Chapter0Training` (Chapter0); `TrostMapAuthoring` (Chapter1); `MainMenuController` (MainMenu).
-- **Tự tạo khi load scene** (`AfterSceneLoad`): `GameManager`, `GasHUD`, `ThirdPersonObservationCamera`, `ThirdPersonODMEquipment`.
+- **Tự tạo khi load scene** (`AfterSceneLoad`): `GameManager`, `ThirdPersonObservationCamera`, `ThirdPersonODMEquipment`.
 - **`GameManager` gắn thêm vào player** nếu thiếu: `PlayerCombat`, `TimeFocus`, `TitanForm`, `Health`; và tạo `TrostMission`.
 - **Singleton tạo sẵn**: `GameAudio`, `GameVfx`, `Titan` (đăng ký lúc `SubsystemRegistration`), `GameSettings`.
 - **`Titan.Spawn`** tạo titan, rồi gắn `Health`, `Rigidbody` và các script animation tương ứng.

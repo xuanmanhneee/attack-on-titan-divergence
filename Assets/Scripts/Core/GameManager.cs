@@ -112,9 +112,7 @@ public class GameManager : MonoBehaviour
         RebuildHint();
 
         // Giao diện manga: menu chính -> màn hình chờ -> chơi. Thế giới được dựng sau khi bấm "Bắt đầu".
-        // HUD kiểu mới thay cho HUD IMGUI thô và thanh gas riêng của GasHUD
-        var oldGas = FindAnyObjectByType<GasHUD>();
-        if (oldGas != null) oldGas.gameObject.SetActive(false);
+        // HUD uGUI (prefab Resources/UI/GameHud, 3 canvas tách lớp)
         hud = GameHud.Create(this, odm, combat, playerHealth, cam);
         menu = MangaMenu.Create();
         menu.Resume += () => SetPaused(false);
