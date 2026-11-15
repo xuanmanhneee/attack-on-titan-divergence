@@ -148,8 +148,8 @@ public class GameAudio : MonoBehaviour
         float dt = Time.unscaledDeltaTime;
         float sfxVol = GameSettings.Sfx;
 
-        gasSrc.volume = Mathf.MoveTowards(gasSrc.volume, gasTarget * 0.55f * sfxVol, dt * 5f);
-        windSrc.volume = Mathf.MoveTowards(windSrc.volume, windTarget * 0.5f * sfxVol, dt * 3f);
+        gasSrc.volume = Mathf.MoveTowards(gasSrc.volume, gasTarget * 0.10f * sfxVol, dt * 5f);
+        windSrc.volume = Mathf.MoveTowards(windSrc.volume, windTarget * 0.12f * sfxVol, dt * 3f);
         windSrc.pitch = 0.75f + windTarget * 0.7f;
 
         musicLevel = Mathf.MoveTowards(musicLevel, musicTarget, dt * 0.7f);

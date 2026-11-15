@@ -174,12 +174,11 @@ public class GameManager : MonoBehaviour
     void RebuildHint()
     {
         hint = GameSettings.KeyName(GameSettings.KeyOf(4)) + ": chém gáy   " +
-               GameSettings.KeyName(GameSettings.KeyOf(5)) + ": thay kiếm   " +
                "Chuột trái/phải hoặc " + GameSettings.KeyName(GameSettings.KeyOf(0)) + "/" + GameSettings.KeyName(GameSettings.KeyOf(1)) + ": móc   " +
                GameSettings.KeyName(GameSettings.KeyOf(2)) + ": thu dây   " +
                GameSettings.KeyName(GameSettings.KeyOf(3)) + ": gas   " +
                "G: hoá titan   V: đổi camera   " +
-               GameSettings.KeyName(GameSettings.KeyOf(6)) + ": làm chậm   Esc: tạm dừng";
+               GameSettings.KeyName(GameSettings.KeyOf(5)) + ": làm chậm   Esc: tạm dừng";
     }
 
     const string TitanHint =

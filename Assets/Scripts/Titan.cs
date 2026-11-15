@@ -32,13 +32,31 @@ public class Titan : MonoBehaviour
     public static void ResetAll() { All.Clear(); ObstacleMask = 0; GroundSampler = null; HasField = false; }
 
     [Header("Movement")]
-    public float walkSpeed = 2.5f;
+    public float walkSpeed = 1.6f; // lang thang theo linh cảm: chậm để người chơi có 15-20 giây nghỉ
     // A normal ODM runner tops out around 9 m/s.  Titans must outrun a simple
     // sprint so the player is forced to use hooks, gas, and rooftops.
     public float runSpeed = 17.5f;
     public float turnSpeed = 100f;
-    public float detectRange = 80f;
-    public float loseRange = 140f;
+    [Header("Cảm nhận người chơi")]
+    [Tooltip("Thấy người chơi (có đường nhìn, không bị nhà chắn) trong tầm này thì lao tới, tốc độ tăng vọt")]
+    public float detectRange = 60f;
+    [Tooltip("Nghe/ngửi thấy người ở sát bên thì biết ngay, bất kể tường chắn")]
+    public float senseRange = 14f;
+    [Tooltip("Mất dấu quá chừng này giây thì quay về lang thang")]
+    public float loseSightTime = 6f;
+    public float loseRange = 120f;
+    [Tooltip("Lúc chưa thấy: vẫn đại khái biết người ở đâu và lang thang quanh đó, lệch ngẫu nhiên tới bán kính này")]
+    public float instinctRadius = 45f;
+    public float instinctInterval = 6f;
+    [Tooltip("Điểm lang thang luôn cách người chơi ít nhất chừng này (không dồn thẳng vào người)")]
+    public float instinctMinRadius = 25f;
+
+    [Header("Không túm tụm")]
+    [Tooltip("Số titan tối đa được đuổi cùng lúc; con còn lại chỉ lảng vảng cho tới khi có con bị hạ hoặc mất dấu")]
+    public int maxChasers = 3;
+    [Tooltip("Titan khác trong bán kính này thì đẩy nhau ra")]
+    public float separationRadius = 16f;
+    public float separationStrength = 1.6f;
 
     [Header("Attack")]
     public float attackDamage = 35f;
@@ -59,6 +77,8 @@ public class Titan : MonoBehaviour
     State state = State.Wander;
     float stateTimer;
     Vector3 wanderPoint;
+    float lostSightTimer;
+    public bool IsChasing => state == State.Chase || state == State.Windup || state == State.Recover;
     float wanderTimer;
     bool moving;
     float walkPhase;
@@ -501,6 +521,35 @@ public class Titan : MonoBehaviour
     }
 
     // ================= AI =================
+    // Titan này có thấy/nghe thấy người chơi lúc này không (HUD/thể lực dùng để biết có được nghỉ không)
+    public bool SensesTarget
+    {
+        get
+        {
+            if (target == null || IsDead) return false;
+            Vector3 to = target.position - transform.position; to.y = 0f;
+            return CanSense(to.magnitude);
+        }
+    }
+
+    static int ChaserCount(Titan self)
+    {
+        int n = 0;
+        foreach (Titan t in All) if (t != null && t != self && !t.IsDead && t.IsChasing) n++;
+        return n;
+    }
+
+    // Thấy người chơi: trong tầm, không bị vật cản chắn. Rất gần thì biết ngay (nghe/ngửi).
+    bool CanSense(float flatDist)
+    {
+        if (flatDist < senseRange) return true;
+        if (flatDist > detectRange) return false;
+        if (ObstacleMask == 0) return true;
+        Vector3 eye = transform.position + Vector3.up * (Height * 0.8f);
+        Vector3 aim = target.position + Vector3.up * 1f;
+        return !Physics.Linecast(eye, aim, ObstacleMask, QueryTriggerInteraction.Ignore);
+    }
+
     void Update()
     {
         if (IsDead || target == null) return;
@@ -528,9 +577,10 @@ public class Titan : MonoBehaviour
         switch (state)
         {
             case State.Wander:
-                if (dist < detectRange)
+                if (CanSense(dist) && (dist < senseRange || ChaserCount(this) < maxChasers))
                 {
                     state = State.Chase;
+                    lostSightTimer = 0f;
                     GameAudio.Play(Sfx.Roar, transform.position + Vector3.up * Height * 0.8f, Mathf.Clamp(Height / 12f, 0.5f, 1.3f), Mathf.Clamp(14f / Height, 0.7f, 1.3f));
                     break;
                 }
@@ -538,16 +588,18 @@ public class Titan : MonoBehaviour
                 Vector3 toPoint = wanderPoint - transform.position; toPoint.y = 0f;
                 if (wanderTimer <= 0f || toPoint.magnitude < 2f)
                 {
-                    Vector2 r = UnityEngine.Random.insideUnitCircle * 40f;
-                    wanderPoint = transform.position + new Vector3(r.x, 0f, r.y);
-                    wanderTimer = UnityEngine.Random.Range(5f, 9f);
+                    // Linh cảm: điểm đến luôn nằm quanh vị trí người chơi (lệch ngẫu nhiên), chưa phải đuổi thẳng
+                    Vector2 r = UnityEngine.Random.insideUnitCircle.normalized * UnityEngine.Random.Range(instinctMinRadius, Mathf.Max(instinctMinRadius + 1f, instinctRadius));
+                    wanderPoint = target.position + new Vector3(r.x, 0f, r.y);
+                    wanderTimer = UnityEngine.Random.Range(instinctInterval * 0.7f, instinctInterval * 1.3f);
                 }
                 MoveToward(wanderPoint, walkSpeed, dt);
                 SetArms(0f);
                 break;
 
             case State.Chase:
-                if (dist > loseRange) { state = State.Wander; break; }
+                if (CanSense(dist)) lostSightTimer = 0f; else lostSightTimer += dt;
+                if (dist > loseRange || lostSightTimer > loseSightTime) { state = State.Wander; wanderTimer = 0f; break; }
                 if (dist <= AttackReach && inArmHeight)
                 {
                     state = State.Windup;
@@ -618,6 +670,21 @@ public class Titan : MonoBehaviour
         if (dir.sqrMagnitude < 0.01f) return;
 
         Vector3 dirN = dir.normalized;
+
+        // Tách nhau: titan khác ở gần thì đẩy ra để không dồn thành một cục (tắt khi đã sát mục tiêu để còn đánh)
+        if (dir.magnitude > 15f)
+        {
+            Vector3 push = Vector3.zero;
+            float sepSq = separationRadius * separationRadius;
+            foreach (Titan o in All)
+            {
+                if (o == null || o == this || o.IsDead) continue;
+                Vector3 away = transform.position - o.transform.position; away.y = 0f;
+                float d2 = away.sqrMagnitude;
+                if (d2 < sepSq && d2 > 0.0001f) push += away.normalized * (1f - Mathf.Sqrt(d2) / separationRadius);
+            }
+            if (push.sqrMagnitude > 0.0001f) dirN = (dirN + push * separationStrength).normalized;
+        }
 
         // Né công trình: có nhà chắn phía trước thì trượt dọc theo mặt nhà
         if (ObstacleMask != 0)

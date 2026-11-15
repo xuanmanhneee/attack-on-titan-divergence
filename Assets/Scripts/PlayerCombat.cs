@@ -1,11 +1,11 @@
 using System;
 using UnityEngine;
 
-// Chiến đấu bằng kiếm. F (hoặc chuột giữa) = chém. R = thay kiếm.
+// Chiến đấu bằng kiếm. F (hoặc chuột giữa) = chém. Kiếm không mòn, không phải thay.
 // Chém đúng gáy trong tầm và góc nhìn => hạ gục ngay, không phụ thuộc tốc độ bay.
 // Chém thân chỉ gây sát thương nhỏ.
-// Mỗi nhát chém làm mòn kiếm; hết độ bền phải thay kiếm (có số lượng kiếm dự phòng).
 [RequireComponent(typeof(ODMController))]
+[RequireComponent(typeof(PlayerStamina))]
 public class PlayerCombat : MonoBehaviour
 {
     [Header("Tầm và góc chém")]
@@ -18,16 +18,8 @@ public class PlayerCombat : MonoBehaviour
 
     [Header("Kiếm")]
     public float slashCooldown = 0.45f;
-    public float durabilityPerSlash = 12f;
-    public float durabilityOnNapeKill = 5f;
-    public int spareBlades = 3;
-    public float reloadTime = 1.2f;
 
     public static event Action<string> Feedback;
-
-    public float Durability { get; private set; } = 100f;
-    public int Spare => spareBlades;
-    public bool IsReloading { get; private set; }
 
     // Có gáy titan nào trong tầm và góc chém không (HUD dùng để báo "chém được")
     public bool CanKillNow
@@ -47,12 +39,13 @@ public class PlayerCombat : MonoBehaviour
     }
 
     ODMController odm;
+    PlayerStamina stamina;
     float cooldown;
-    float reloadTimer;
 
     void Awake()
     {
         odm = GetComponent<ODMController>();
+        stamina = GetComponent<PlayerStamina>();
     }
 
     void Update()
@@ -61,44 +54,13 @@ public class PlayerCombat : MonoBehaviour
         float dt = Time.deltaTime;
         cooldown -= dt;
 
-        if (IsReloading)
-        {
-            reloadTimer -= dt;
-            if (reloadTimer <= 0f)
-            {
-                IsReloading = false;
-                Durability = 100f;
-                spareBlades--;
-                Feedback?.Invoke("Đã thay kiếm mới");
-            }
-            return;
-        }
-
-        if (GameInput.GetKeyDown(KeyCode.R)) StartReload();
         if (GameInput.GetKeyDown(KeyCode.F) || GameInput.GetMouseButtonDown(2)) Slash();
-    }
-
-    // Gọi khi tới điểm tiếp tế: đầy kiếm và đủ kiếm dự phòng
-    public void Restock()
-    {
-        Durability = 100f;
-        spareBlades = 3;
-        IsReloading = false;
-    }
-
-    void StartReload()
-    {
-        if (Durability >= 99f) return;
-        if (spareBlades <= 0) { Feedback?.Invoke("Hết kiếm dự phòng!"); return; }
-        IsReloading = true;
-        reloadTimer = reloadTime;
-        GameAudio.Play2D(Sfx.Reload, 0.8f);
     }
 
     void Slash()
     {
         if (cooldown > 0f) return;
-        if (Durability <= 0f) { Feedback?.Invoke("Kiếm gãy! Nhấn R để thay"); return; }
+        if (stamina != null && !stamina.TrySpend(stamina.stats.slashCost)) { Feedback?.Invoke(stamina.Exhausted ? "Kiệt sức! Hãy nghỉ" : "Không đủ thể lực để chém"); return; }
         cooldown = slashCooldown;
         GameAudio.Play2D(Sfx.Slash, 0.8f, UnityEngine.Random.Range(0.95f, 1.1f));
         GetComponent<FirstPersonSwordViewmodel>()?.PlaySlash();
@@ -116,7 +78,6 @@ public class PlayerCombat : MonoBehaviour
                 t.KillByNape();
                 GameAudio.Play2D(Sfx.SlashHit, 1f);
                 GameVfx.Burst(t.Nape.position, new Color(1f, 1f, 1f, 0.85f), 18, 6f, 0.7f, 0.8f);
-                Durability -= durabilityOnNapeKill;
                 Feedback?.Invoke("CHÉM GÁY! Hạ gục titan");
                 continue;
             }
@@ -131,14 +92,11 @@ public class PlayerCombat : MonoBehaviour
                 {
                     t.Damage(bodyDamage);
                     GameAudio.Play2D(Sfx.SlashHit, 0.5f, 0.85f);
-                    Durability -= durabilityPerSlash;
                     break;
                 }
             }
         }
 
-        Durability = Mathf.Max(0f, Durability);
-        if (Durability <= 0f) Feedback?.Invoke("Kiếm gãy! Nhấn R để thay");
     }
 
 }

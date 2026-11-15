@@ -20,7 +20,8 @@ public class GameHud : MonoBehaviour
 
     string toast = "";
     float toastTimer;
-    float shownGas = 1f, shownHp = 1f, shownBlade = 1f;
+    float shownGas = 1f, shownHp = 1f, shownStamina = 1f;
+    PlayerStamina stamina;
     float hurtFlash;
     float lastHp = -1f;
 
@@ -74,7 +75,8 @@ public class GameHud : MonoBehaviour
             if (lastHp >= 0f && health.Current < lastHp - 0.01f) hurtFlash = 1f;
             lastHp = health.Current;
         }
-        if (combat != null) shownBlade = Mathf.MoveTowards(shownBlade, combat.Durability / 100f, 2f * dt);
+        if (stamina == null && odm != null) stamina = odm.GetComponent<PlayerStamina>();
+        if (stamina != null) shownStamina = Mathf.MoveTowards(shownStamina, stamina.Normalized, 2f * dt);
         hurtFlash = Mathf.MoveTowards(hurtFlash, 0f, 2.2f * dt);
     }
 
@@ -180,7 +182,7 @@ public class GameHud : MonoBehaviour
         GUI.color = old;
     }
 
-    // ----- góc dưới trái: máu, gas, kiếm -----
+    // ----- góc dưới trái: máu, gas, thể lực -----
     void DrawVitals(float s)
     {
         float w = 560 * s, h = 214 * s;
@@ -197,10 +199,15 @@ public class GameHud : MonoBehaviour
         Row("HP", shownHp, health != null ? Mathf.CeilToInt(health.Current).ToString() : "", barRedStyle, x, y, labelW, barW, rowH, s);
         float g = odm.GasNormalized;
         Row("GAS", shownGas, Mathf.RoundToInt(g * 100f) + "%", FillFor(shownGas), x, y + rowH, labelW, barW, rowH, s);
-        string blades = combat.IsReloading ? "..." : Mathf.RoundToInt(combat.Durability) + "%";
-        Row("KIẾM", shownBlade, blades, barBlueStyle, x, y + 2 * rowH, labelW, barW, rowH, s);
+        Row("THỂ LỰC", shownStamina, stamina != null ? stamina.Percent + "%" : "", stamina != null && stamina.Exhausted ? barRedStyle : barGreenStyle, x, y + 2 * rowH, labelW, barW, rowH, s);
 
-        Text(new Rect(x, y + 3 * rowH - 6 * s, w - 60 * s, 30 * s), "Dự phòng: " + combat.Spare + (combat.IsReloading ? "   ·   đang thay kiếm…" : ""), small, Muted);
+        if (stamina != null)
+        {
+            string msg = null; Color col = Muted;
+            if (stamina.Exhausted) { msg = "KIỆT SỨC - tìm chỗ an toàn để nghỉ"; col = new Color(1f, 0.35f, 0.25f); }
+            else if (stamina.Resting) msg = "Đang nghỉ - hồi sức";
+            if (msg != null) Text(new Rect(x + labelW, y + 3 * rowH - 6 * s, barW, 30 * s), msg, small, col);
+        }
 
         // cảnh báo gas thấp nhấp nháy
         if (g < 0.2f && Mathf.Repeat(Time.unscaledTime, 0.8f) < 0.4f)
