@@ -392,27 +392,94 @@ public class MainMenuController : MonoBehaviour
         SetRect(body.rectTransform, 0f, 0f, 1f, 1f, 28f, 18f, -18f, -91f);
     }
 
+    // Khung thẻ dùng chung cho Archives/Settings: viền đồng, góc nhấn, tiêu đề, trượt vào khi mở.
+    RectTransform BuildCard(Transform overlay, string name, float width, float height, string heading, string subheading, string tag)
+    {
+        var dim = overlay.GetComponent<Image>();
+        dim.color = new Color(0.005f, 0.012f, 0.016f, 0.86f);
+
+        var card = Image(name, overlay, null, new Color(0.03f, 0.045f, 0.05f, 0.99f));
+        SetRect(card.rectTransform, 0.5f, 0.5f, 0.5f, 0.5f, -width / 2f, -height / 2f, width / 2f, height / 2f);
+        var frame = card.gameObject.AddComponent<Outline>();
+        frame.effectColor = new Color(Brass.r, Brass.g, Brass.b, 0.55f);
+        frame.effectDistance = new Vector2(1.5f, -1.5f);
+        frame.useGraphicAlpha = false;
+        card.gameObject.AddComponent<MangaSlideIn>().Init(new Vector2(0f, -70f), 0f, 0.94f, 0.32f);
+
+        var top = Image("Top Rule", card.transform, null, Brass);
+        SetRect(top.rectTransform, 0f, 1f, 1f, 1f, 0f, -5f, 0f, 0f);
+        // Góc nhấn kiểu khung ngắm
+        Corner(card.transform, 0f, 0f, 1f, 1f);
+        Corner(card.transform, 1f, 0f, -1f, 1f);
+        Corner(card.transform, 0f, 1f, 1f, -1f);
+        Corner(card.transform, 1f, 1f, -1f, -1f);
+
+        var tagText = Text("Tag", card.transform, tag, 13, Brass, TextAnchor.MiddleLeft, false);
+        SetRect(tagText.rectTransform, 0f, 1f, 1f, 1f, 56f, -52f, -56f, -30f);
+        var head = Text("Heading", card.transform, heading, 50, Ivory, TextAnchor.MiddleLeft, true);
+        SetRect(head.rectTransform, 0f, 1f, 1f, 1f, 54f, -112f, -54f, -48f);
+        var headOutline = head.gameObject.AddComponent<Outline>();
+        headOutline.effectColor = new Color(0f, 0f, 0f, 0.9f);
+        headOutline.effectDistance = new Vector2(3f, -3f);
+        var sub = Text("Subheading", card.transform, subheading, 14, Muted, TextAnchor.MiddleLeft, false);
+        SetRect(sub.rectTransform, 0f, 1f, 1f, 1f, 56f, -142f, -56f, -116f);
+        var rule = Image("Header Rule", card.transform, null, new Color(Brass.r, Brass.g, Brass.b, 0.5f));
+        SetRect(rule.rectTransform, 0f, 1f, 1f, 1f, 56f, -152f, -56f, -150f);
+        return card.rectTransform;
+    }
+
+    void Corner(Transform parent, float ax, float ay, float dx, float dy)
+    {
+        const float len = 22f, thick = 3f, inset = 10f;
+        var h = Image("Corner H", parent, null, Brass);
+        SetRect(h.rectTransform, ax, ay, ax, ay, dx > 0 ? inset : -inset - len, dy > 0 ? inset : -inset - thick, dx > 0 ? inset + len : -inset, dy > 0 ? inset + thick : -inset);
+        var v = Image("Corner V", parent, null, Brass);
+        SetRect(v.rectTransform, ax, ay, ax, ay, dx > 0 ? inset : -inset - thick, dy > 0 ? inset : -inset - len, dx > 0 ? inset + thick : -inset, dy > 0 ? inset + len : -inset);
+    }
+
     void BuildCredits(Transform parent)
     {
         creditsOverlay = RectObject("Credits Overlay", parent).gameObject;
         Stretch(creditsOverlay.GetComponent<RectTransform>());
-        creditsOverlay.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.78f);
+        creditsOverlay.AddComponent<Image>();
 
-        var modal = Image("Credits Card", creditsOverlay.transform, null, new Color(0.035f, 0.05f, 0.055f, 0.99f));
-        SetRect(modal.rectTransform, 0.5f, 0.5f, 0.5f, 0.5f, -390f, -255f, 390f, 255f);
-        var top = Image("Top Rule", modal.transform, null, Brass);
-        SetRect(top.rectTransform, 0f, 1f, 1f, 1f, 0f, -5f, 0f, 0f);
-        var heading = Text("Heading", modal.transform, "FIELD ARCHIVES", 42, Ivory, TextAnchor.MiddleCenter, true);
-        SetRect(heading.rectTransform, 0f, 1f, 1f, 1f, 40f, -98f, -40f, -30f);
-        var sub = Text("Subheading", modal.transform, "ATTACK ON TITAN: DIVERGENCE", 16, Brass, TextAnchor.MiddleCenter, false);
-        SetRect(sub.rectTransform, 0f, 1f, 1f, 1f, 40f, -132f, -40f, -100f);
-        var body = Text("Body", modal.transform,
-            "A FAN-MADE UNITY PROTOTYPE\n\nDesign & Development  /  Divergence Team\nBackground artwork and type assets supplied with the project.\n\nThank you for playing.",
-            18, Muted, TextAnchor.MiddleCenter, false);
-        SetRect(body.rectTransform, 0f, 0f, 1f, 1f, 55f, 105f, -55f, -150f);
+        var card = BuildCard(creditsOverlay.transform, "Credits Card", 1060f, 740f, "FIELD ARCHIVES",
+            "FAN-MADE UNITY PROTOTYPE  /  NON-COMMERCIAL  /  STUDENT PROJECT", "ARCHIVE 01  /  ASSET CREDITS");
 
-        var close = SimpleButton(modal.transform, "CLOSE ARCHIVES", () => ShowCredits(false));
-        SetRect(close.GetComponent<RectTransform>(), 0.5f, 0f, 0.5f, 0f, -150f, 34f, 150f, 92f);
+        var credits = new[]
+        {
+            new[] { "ODM Gear", "aap75  ·  Sketchfab", "CC BY 4.0" },
+            new[] { "Gear Sword – Low Poly", "Cem Alagozlu  ·  Sketchfab", "CC BY 4.0" },
+            new[] { "WRAD Arms", "wriks  ·  GitHub", "CC0 1.0" },
+            new[] { "Low Poly Arms (Rigged)", "DevMops  ·  OpenGameArt", "CC0 1.0" },
+            new[] { "UI Pack: Sci-Fi", "Kenney", "CC0 1.0" },
+            new[] { "Interface Sounds", "Kenney", "CC0 1.0" },
+        };
+        for (int i = 0; i < credits.Length; i++)
+        {
+            float top = 176f + i * 70f;
+            var row = RectObject("Credit " + (i + 1), card);
+            SetRect(row, 0f, 1f, 1f, 1f, 56f, -top - 60f, -56f, -top);
+            var bg = row.gameObject.AddComponent<Image>();
+            bg.color = new Color(0.045f, 0.065f, 0.072f, 0.9f);
+            bg.raycastTarget = false;
+            row.gameObject.AddComponent<MangaSlideIn>().Init(new Vector2(120f, 0f), 0.08f + i * 0.05f);
+            var bar = Image("Accent", row, null, Brass);
+            SetRect(bar.rectTransform, 0f, 0f, 0f, 1f, 0f, 0f, 4f, 0f);
+            var num = Text("Number", row, (i + 1).ToString("00"), 14, Brass, TextAnchor.MiddleCenter, false);
+            SetRect(num.rectTransform, 0f, 0f, 0f, 1f, 14f, 0f, 62f, 0f);
+            var title = Text("Title", row, credits[i][0], 21, Ivory, TextAnchor.LowerLeft, false);
+            SetRect(title.rectTransform, 0f, 0f, 0.7f, 1f, 76f, 28f, 0f, 0f);
+            var src = Text("Source", row, credits[i][1], 13, Muted, TextAnchor.UpperLeft, false);
+            SetRect(src.rectTransform, 0f, 0f, 0.7f, 1f, 77f, 0f, 0f, -34f);
+            var lic = Text("License", row, credits[i][2], 15, Brass, TextAnchor.MiddleRight, false);
+            SetRect(lic.rectTransform, 0.6f, 0f, 1f, 1f, 0f, 0f, -22f, 0f);
+        }
+
+        var thanks = Text("Thanks", card, "THANK YOU FOR PLAYING", 14, Muted, TextAnchor.MiddleCenter, false);
+        SetRect(thanks.rectTransform, 0f, 0f, 1f, 0f, 40f, 104f, -40f, 130f);
+        var close = SimpleButton(card, "CLOSE ARCHIVES", () => ShowCredits(false));
+        SetRect(close.GetComponent<RectTransform>(), 0.5f, 0f, 0.5f, 0f, -170f, 32f, 170f, 94f);
         creditsOverlay.SetActive(false);
     }
 
@@ -420,63 +487,67 @@ public class MainMenuController : MonoBehaviour
     {
         settingsOverlay = RectObject("Settings Overlay", parent).gameObject;
         Stretch(settingsOverlay.GetComponent<RectTransform>());
-        settingsOverlay.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.8f);
+        settingsOverlay.AddComponent<Image>();
 
-        var modal = Image("Settings Card", settingsOverlay.transform, null, new Color(0.035f, 0.05f, 0.055f, 0.99f));
-        SetRect(modal.rectTransform, 0.5f, 0.5f, 0.5f, 0.5f, -420f, -330f, 420f, 330f);
-        var top = Image("Top Rule", modal.transform, null, Brass);
-        SetRect(top.rectTransform, 0f, 1f, 1f, 1f, 0f, -5f, 0f, 0f);
+        var card = BuildCard(settingsOverlay.transform, "Settings Card", 940f, 760f, "SETTINGS",
+            "SYSTEM CONFIGURATION  /  CHANGES SAVE AUTOMATICALLY", "SYSTEM 02  /  AUDIO & DISPLAY");
 
-        var heading = Text("Heading", modal.transform, "SETTINGS", 46, Ivory, TextAnchor.MiddleLeft, true);
-        SetRect(heading.rectTransform, 0f, 1f, 1f, 1f, 54f, -92f, -54f, -27f);
-        var sub = Text("Subheading", modal.transform, "SYSTEM CONFIGURATION  /  CHANGES SAVE AUTOMATICALLY", 14, Brass, TextAnchor.MiddleLeft, false);
-        SetRect(sub.rectTransform, 0f, 1f, 1f, 1f, 56f, -126f, -54f, -96f);
-
-        var section = Text("Audio Section", modal.transform, "AUDIO", 15, Muted, TextAnchor.MiddleLeft, false);
-        SetRect(section.rectTransform, 0f, 1f, 1f, 1f, 56f, -176f, -54f, -145f);
-        var sectionRule = Image("Audio Rule", modal.transform, null, new Color(Brass.r, Brass.g, Brass.b, 0.45f));
-        SetRect(sectionRule.rectTransform, 0f, 1f, 1f, 1f, 56f, -179f, -54f, -177f);
-
-        SettingSlider(modal.transform, "MASTER VOLUME", GameVolumeSettings.MasterVolume, 212f, value =>
+        SectionLabel(card, "AUDIO", 176f);
+        SettingSlider(card, "MASTER VOLUME", GameVolumeSettings.MasterVolume, 214f, value =>
         {
             GameVolumeSettings.MasterVolume = value;
             GameVolumeSettings.ApplyMasterVolume();
         });
-        SettingSlider(modal.transform, "MUSIC VOLUME", GameVolumeSettings.MusicVolume, 292f, value =>
+        SettingSlider(card, "MUSIC VOLUME", GameVolumeSettings.MusicVolume, 296f, value =>
         {
             GameVolumeSettings.MusicVolume = value;
             RefreshMenuMusicVolume();
         });
-        SettingSlider(modal.transform, "SFX VOLUME", GameVolumeSettings.SfxVolume, 372f, value =>
+        SettingSlider(card, "SFX VOLUME", GameVolumeSettings.SfxVolume, 378f, value =>
             GameVolumeSettings.SfxVolume = value);
 
-        var displaySection = Text("Display Section", modal.transform, "DISPLAY", 15, Muted, TextAnchor.MiddleLeft, false);
-        SetRect(displaySection.rectTransform, 0f, 1f, 1f, 1f, 56f, -456f, -54f, -425f);
-        var displayRule = Image("Display Rule", modal.transform, null, new Color(Brass.r, Brass.g, Brass.b, 0.45f));
-        SetRect(displayRule.rectTransform, 0f, 1f, 1f, 1f, 56f, -459f, -54f, -457f);
-        SettingToggle(modal.transform, "FULLSCREEN", Screen.fullScreen, 488f, value => Screen.fullScreen = value);
+        SectionLabel(card, "DISPLAY", 478f);
+        SettingToggle(card, "FULLSCREEN", Screen.fullScreen, 516f, value => Screen.fullScreen = value);
 
-        var close = SimpleButton(modal.transform, "APPLY & CLOSE", () => ShowSettings(false));
-        SetRect(close.GetComponent<RectTransform>(), 0.5f, 0f, 0.5f, 0f, -170f, 34f, 170f, 92f);
+        var close = SimpleButton(card, "APPLY & CLOSE", () => ShowSettings(false));
+        SetRect(close.GetComponent<RectTransform>(), 0.5f, 0f, 0.5f, 0f, -190f, 32f, 190f, 94f);
         settingsOverlay.SetActive(false);
+    }
+
+    void SectionLabel(Transform parent, string text, float topOffset)
+    {
+        var label = Text(text + " Section", parent, text, 15, Brass, TextAnchor.MiddleLeft, false);
+        SetRect(label.rectTransform, 0f, 1f, 1f, 1f, 56f, -topOffset - 26f, -56f, -topOffset);
+        var rule = Image(text + " Rule", parent, null, new Color(Brass.r, Brass.g, Brass.b, 0.4f));
+        SetRect(rule.rectTransform, 0f, 1f, 1f, 1f, 56f, -topOffset - 28f, -56f, -topOffset - 26f);
+    }
+
+    void RowPanel(Transform row)
+    {
+        var bg = row.gameObject.AddComponent<Image>();
+        bg.color = new Color(0.045f, 0.065f, 0.072f, 0.9f);
+        bg.raycastTarget = false;
+        var bar = Image("Accent", row, null, Brass);
+        SetRect(bar.rectTransform, 0f, 0f, 0f, 1f, 0f, 0f, 4f, 0f);
     }
 
     void SettingSlider(Transform parent, string label, float initialValue, float topOffset, UnityEngine.Events.UnityAction<float> changed)
     {
         var row = RectObject(label, parent);
-        SetRect(row, 0f, 1f, 1f, 1f, 56f, -topOffset - 56f, -56f, -topOffset);
+        SetRect(row, 0f, 1f, 1f, 1f, 56f, -topOffset - 70f, -56f, -topOffset);
+        RowPanel(row);
         var labelText = Text("Label", row, label, 17, Ivory, TextAnchor.UpperLeft, false);
-        SetRect(labelText.rectTransform, 0f, 0f, 0.45f, 1f, 0f, 0f, 0f, 0f);
-        var valueText = Text("Value", row, Mathf.RoundToInt(initialValue * 100f) + "%", 16, Brass, TextAnchor.UpperRight, false);
-        SetRect(valueText.rectTransform, 0.8f, 0f, 1f, 1f, 0f, 0f, 0f, 0f);
+        SetRect(labelText.rectTransform, 0f, 0f, 0.6f, 1f, 26f, 0f, 0f, -12f);
+        var valueText = Text("Value", row, Mathf.RoundToInt(initialValue * 100f) + "%", 20, Brass, TextAnchor.UpperRight, false);
+        SetRect(valueText.rectTransform, 0.6f, 0f, 1f, 1f, 0f, 0f, -24f, -10f);
 
         var sliderObject = new GameObject("Slider", typeof(RectTransform), typeof(Slider));
         sliderObject.transform.SetParent(row, false);
-        SetRect(sliderObject.GetComponent<RectTransform>(), 0f, 0f, 1f, 0f, 0f, 2f, 0f, 16f);
+        SetRect(sliderObject.GetComponent<RectTransform>(), 0f, 0f, 1f, 0f, 26f, 14f, -26f, 26f);
         var slider = sliderObject.GetComponent<Slider>();
         slider.minValue = 0f; slider.maxValue = 1f; slider.value = initialValue;
 
-        var track = Image("Track", sliderObject.transform, null, new Color(0.18f, 0.2f, 0.2f, 1f));
+        var track = Image("Track", sliderObject.transform, null, new Color(0.13f, 0.155f, 0.16f, 1f));
         Stretch(track.rectTransform);
         var fillArea = RectObject("Fill Area", sliderObject.transform);
         Stretch(fillArea);
@@ -485,7 +556,11 @@ public class MainMenuController : MonoBehaviour
         var handleArea = RectObject("Handle Slide Area", sliderObject.transform);
         Stretch(handleArea);
         var handle = Image("Handle", handleArea, null, Ivory);
-        SetRect(handle.rectTransform, 0f, 0.5f, 0f, 0.5f, -7f, -11f, 7f, 11f);
+        SetRect(handle.rectTransform, 0f, 0.5f, 0f, 0.5f, -9f, -9f, 9f, 9f);
+        handle.rectTransform.localRotation = Quaternion.Euler(0f, 0f, 45f);
+        var handleFrame = handle.gameObject.AddComponent<Outline>();
+        handleFrame.effectColor = Brass;
+        handleFrame.effectDistance = new Vector2(2f, -2f);
         handle.raycastTarget = true;
         slider.fillRect = fill.rectTransform;
         slider.handleRect = handle.rectTransform;
@@ -501,29 +576,53 @@ public class MainMenuController : MonoBehaviour
     void SettingToggle(Transform parent, string label, bool initialValue, float topOffset, UnityEngine.Events.UnityAction<bool> changed)
     {
         var row = RectObject(label, parent);
-        SetRect(row, 0f, 1f, 1f, 1f, 56f, -topOffset - 54f, -56f, -topOffset);
+        SetRect(row, 0f, 1f, 1f, 1f, 56f, -topOffset - 64f, -56f, -topOffset);
+        RowPanel(row);
         var labelText = Text("Label", row, label, 17, Ivory, TextAnchor.MiddleLeft, false);
-        SetRect(labelText.rectTransform, 0f, 0f, 0.7f, 1f, 0f, 0f, 0f, 0f);
+        SetRect(labelText.rectTransform, 0f, 0f, 0.6f, 1f, 26f, 0f, 0f, 0f);
+        var state = Text("State", row, initialValue ? "ON" : "OFF", 16, Brass, TextAnchor.MiddleRight, false);
+        SetRect(state.rectTransform, 1f, 0f, 1f, 1f, -140f, 0f, -80f, 0f);
 
         var toggleObject = new GameObject("Toggle", typeof(RectTransform), typeof(Image), typeof(Toggle));
         toggleObject.transform.SetParent(row, false);
-        SetRect(toggleObject.GetComponent<RectTransform>(), 1f, 0.5f, 1f, 0.5f, -54f, -18f, 0f, 18f);
+        SetRect(toggleObject.GetComponent<RectTransform>(), 1f, 0.5f, 1f, 0.5f, -66f, -16f, -22f, 16f);
         var background = toggleObject.GetComponent<Image>(); background.color = ButtonIdle;
+        var frame = toggleObject.AddComponent<Outline>();
+        frame.effectColor = new Color(Brass.r, Brass.g, Brass.b, 0.8f);
+        frame.effectDistance = new Vector2(1.5f, -1.5f);
         var check = Image("Checkmark", toggleObject.transform, null, Brass);
-        SetRect(check.rectTransform, 0f, 0f, 1f, 1f, 7f, 7f, -7f, -7f);
+        SetRect(check.rectTransform, 0f, 0f, 1f, 1f, 6f, 6f, -6f, -6f);
         var toggle = toggleObject.GetComponent<Toggle>();
         toggle.targetGraphic = background; toggle.graphic = check; toggle.isOn = initialValue;
         toggle.onValueChanged.AddListener(changed);
+        toggle.onValueChanged.AddListener(on => state.text = on ? "ON" : "OFF");
     }
 
     Button SimpleButton(Transform parent, string label, UnityEngine.Events.UnityAction action)
     {
-        var go = new GameObject(label, typeof(RectTransform), typeof(Image), typeof(Button));
+        var go = new GameObject(label, typeof(RectTransform), typeof(Image), typeof(Button), typeof(MenuButtonVisual));
         go.transform.SetParent(parent, false);
         var image = go.GetComponent<Image>(); image.color = ButtonIdle;
         var button = go.GetComponent<Button>(); button.targetGraphic = image; button.onClick.AddListener(action);
-        var text = Text("Label", go.transform, label, 17, Ivory, TextAnchor.MiddleCenter, false);
+        var colors = button.colors;
+        colors.highlightedColor = ButtonHover; colors.selectedColor = ButtonHover;
+        colors.pressedColor = new Color(0.42f, 0.27f, 0.11f, 1f);
+        colors.fadeDuration = 0.12f;
+        button.colors = colors;
+        var frame = go.AddComponent<Outline>();
+        frame.effectColor = new Color(Brass.r, Brass.g, Brass.b, 0.28f);
+        frame.effectDistance = new Vector2(1.5f, -1.5f);
+        frame.useGraphicAlpha = false;
+
+        var accent = Image("Accent", go.transform, null, Brass);
+        SetRect(accent.rectTransform, 0f, 0f, 0f, 1f, 0f, 0f, 4f, 0f);
+        var text = Text("Label", go.transform, label, 19, Ivory, TextAnchor.MiddleCenter, false);
         Stretch(text.rectTransform);
+        var arrow = Text("Arrow", go.transform, "›", 30, Brass, TextAnchor.MiddleCenter, false);
+        SetRect(arrow.rectTransform, 1f, 0f, 1f, 1f, -52f, 0f, -14f, 0f);
+        var visual = go.GetComponent<MenuButtonVisual>();
+        visual.Configure(image, accent, text, arrow, ButtonIdle, ButtonHover, Brass);
+        visual.SetExtras(frame, null, null, new RectTransform[0]);
         return button;
     }
 
