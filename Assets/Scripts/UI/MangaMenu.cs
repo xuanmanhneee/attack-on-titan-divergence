@@ -1013,11 +1013,11 @@ public class MangaMenu : MonoBehaviour
         {
             "Giữ " + K(0) + " / " + K(1) + " để bắn móc trái / phải; thả phím để nhả dây. " + K(2) + " thu dây khi đang tiến về phía điểm neo.",
             "Chém gáy cần đủ tốc độ: đu dây thật nhanh rồi lao vào gáy titan và nhấn " + K(4) + ".",
-            "Hết gas? Chạy tới cột sáng xanh để tiếp tế gas và thay kiếm. Gas hồi chậm khi đứng yên.",
+            "Hết gas? Chạy tới cột sáng xanh để tiếp tế gas. Gas hồi chậm khi đứng yên.",
             "Móc vào mái nhà để đu cao; thả dây ngay khi vượt qua điểm neo để giữ đà.",
             "Va mạnh vào tường sẽ bị nảy ra. Giảm tốc trước khi chạm, hoặc giữ " + K(2) + " để bám nhẹ vào tường.",
             "Titan chỉ đập được tới tầm tay. Bay cao hơn tầm tay là an toàn.",
-            "Ở trên không thời gian chậm lại để bạn kịp ngắm. Nhấn " + K(6) + " để tắt hiệu ứng này.",
+            "Ở trên không thời gian chậm lại để bạn kịp ngắm. Nhấn " + K(5) + " để tắt hiệu ứng này.",
         };
         briefTip.text = tips[((tipIndex % tips.Length) + tips.Length) % tips.Length];
     }
@@ -1087,8 +1087,7 @@ public class MangaMenu : MonoBehaviour
             "<color=" + RedHex + ">" + K(2) + "</color>  Thu dây mạnh\n" +
             "<color=" + RedHex + ">" + K(3) + "</color>  Gas: tăng tốc, lái theo hướng nhìn\n" +
             "<color=" + RedHex + ">" + K(4) + "</color>  Chém gáy\n" +
-            "<color=" + RedHex + ">" + K(5) + "</color>  Thay kiếm\n" +
-            "<color=" + RedHex + ">" + K(6) + "</color>  Bật/tắt làm chậm thời gian\n" +
+            "<color=" + RedHex + ">" + K(5) + "</color>  Bật/tắt làm chậm thời gian\n" +
             "<color=" + RedHex + ">Esc</color>  Tạm dừng / tiếp tục";
     }
 

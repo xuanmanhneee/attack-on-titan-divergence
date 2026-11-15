@@ -44,7 +44,7 @@ public class TrostMission : MonoBehaviour
     float respawnTimer;
     bool announcedDepot;
 
-    class Depot { public Vector3 pos; public float stock; public bool restocked; }
+    class Depot { public Vector3 pos; public float stock; }
     readonly List<Depot> depots = new List<Depot>();
 
     public void Init(GameManager manager, ODMController player, PlayerCombat pc, TrostMap trostMap)
@@ -227,7 +227,7 @@ public class TrostMission : MonoBehaviour
 
             Vector3 d = odm.transform.position - dep.pos; d.y = 0f;
             bool near = d.magnitude <= depotRadius && Mathf.Abs(odm.transform.position.y - dep.pos.y) < 30f;
-            if (!near) { dep.restocked = false; continue; }
+            if (!near) continue;
 
             float need = (1f - odm.GasNormalized) * odm.maxGas;
             float give = Mathf.Min(dep.stock, need, depotFillRate * dt);
@@ -238,12 +238,6 @@ public class TrostMission : MonoBehaviour
                 if (!announcedDepot) { announcedDepot = true; gm.Say("Đang tiếp tế gas..."); }
                 refillSfxTimer -= dt;
                 if (refillSfxTimer <= 0f) { refillSfxTimer = 0.6f; GameAudio.Play2D(Sfx.Refill, 0.6f); }
-            }
-            if (!dep.restocked && dep.stock > 1f)
-            {
-                combat.Restock();
-                dep.restocked = true;
-                GameAudio.Play2D(Sfx.Reload, 0.8f);
             }
 
             // Điểm tiếp tế cũng băng bó: hồi dần máu khi đứng trong vùng

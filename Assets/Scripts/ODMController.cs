@@ -150,7 +150,10 @@ public class ODMController : MonoBehaviour
     public float GasNormalized => gas / maxGas;
     public float Speed => velocity.magnitude;
     public bool IsGrounded => isGrounded;
-    public bool IsGassing => GameInput.GetKey(KeyCode.LeftShift) && gas > 0f;
+    PlayerStamina stamina;
+    PlayerStamina Stam { get { if (stamina == null) stamina = GetComponent<PlayerStamina>(); return stamina; } }
+    bool Exhausted => Stam != null && Stam.Exhausted;
+    public bool IsGassing => GameInput.GetKey(KeyCode.LeftShift) && gas > 0f && !Exhausted;
     public int ActiveHookCount => (hookLeft.active ? 1 : 0) + (hookRight.active ? 1 : 0);
     public bool LeftHookActive => hookLeft.active;
     public bool RightHookActive => hookRight.active;
@@ -753,7 +756,7 @@ public class ODMController : MonoBehaviour
     {
         bool brakingLanding = landingBrakeWindow > 0f && GameInput.GetAxis("Vertical") < -0.5f;
         Vector3 wishDir = GetWishDirection(brakingLanding);
-        bool boosting = GameInput.GetKey(KeyCode.LeftShift) && gas > 0f && wishDir.sqrMagnitude > 0.0001f;
+        bool boosting = GameInput.GetKey(KeyCode.LeftShift) && gas > 0f && !Exhausted && wishDir.sqrMagnitude > 0.0001f;
         bool slidingRoof = TryGetSteepGround(out Vector3 roofNormal, out Vector3 downhill);
         float speed = boosting ? groundBoostSpeed : (slidingRoof ? 0f : walkSpeed);
 
@@ -896,7 +899,7 @@ public class ODMController : MonoBehaviour
     {
         bool dualHooked = hookLeft.active && hookRight.active;
         float speedLimit = maxSpeed * (dualHooked ? dualHookMaxSpeedMultiplier : 1f);
-        bool boosting = GameInput.GetKey(KeyCode.LeftShift) && gas > 0f;
+        bool boosting = GameInput.GetKey(KeyCode.LeftShift) && gas > 0f && !Exhausted;
 
         velocity.y += gravity * dt;
 
@@ -1269,7 +1272,9 @@ public class ODMController : MonoBehaviour
 
     void TryFireHook(HookState hook, Transform hip)
     {
+        if (Exhausted) return; // kiệt sức: không bắn móc được (HUD đã báo)
         if (!FindAnchor(hip, out RaycastHit hit)) return;
+        if (Stam != null && !Stam.TrySpend(Stam.stats.hookFireCost)) return;
 
         Vector3 anchor = LiftAnchor(hit);
 

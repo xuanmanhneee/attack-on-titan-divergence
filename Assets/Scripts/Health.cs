@@ -38,6 +38,9 @@ public class Health : MonoBehaviour
         if (Current <= 0f) Died?.Invoke();
     }
 
+    // Đặt thẳng máu hiện tại (không gây sự kiện sát thương), dùng khi biến hình / trở về.
+    public void SetCurrent(float value) { Current = Mathf.Clamp(value, 0f, maxHealth); }
+
     public void Heal(float amount)
     {
         if (IsDead) return;

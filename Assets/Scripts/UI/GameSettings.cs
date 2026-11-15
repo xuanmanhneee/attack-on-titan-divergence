@@ -39,11 +39,11 @@ public static class GameSettings
     // Code game luôn hỏi theo phím MẶC ĐỊNH (DefaultKeys); GameInput đổi sang phím người chơi đã gán.
     public static readonly string[] ActionLabels =
     {
-        "Bắn móc trái", "Bắn móc phải", "Thu dây mạnh", "Gas / lướt", "Chém", "Thay kiếm", "Làm chậm thời gian"
+        "Bắn móc trái", "Bắn móc phải", "Thu dây mạnh", "Gas / lướt", "Chém", "Làm chậm thời gian"
     };
     public static readonly KeyCode[] DefaultKeys =
     {
-        KeyCode.Q, KeyCode.E, KeyCode.Space, KeyCode.LeftShift, KeyCode.F, KeyCode.R, KeyCode.T
+        KeyCode.Q, KeyCode.E, KeyCode.Space, KeyCode.LeftShift, KeyCode.F, KeyCode.T
     };
     static readonly KeyCode[] keys = (KeyCode[])DefaultKeys.Clone();
 
@@ -107,7 +107,7 @@ public static class GameSettings
         ScreenShake = PlayerPrefs.GetInt(P + "screenShake", ScreenShake ? 1 : 0) == 1;
 
         for (int i = 0; i < keys.Length; i++)
-            keys[i] = (KeyCode)PlayerPrefs.GetInt(P + "key" + i, (int)DefaultKeys[i]);
+            keys[i] = (KeyCode)PlayerPrefs.GetInt(P + "k2_" + i, (int)DefaultKeys[i]);
     }
 
     public static void Save()
@@ -129,7 +129,7 @@ public static class GameSettings
         PlayerPrefs.SetInt(P + "fps", FpsLimit);
         PlayerPrefs.SetInt(P + "screenShake", ScreenShake ? 1 : 0);
 
-        for (int i = 0; i < keys.Length; i++) PlayerPrefs.SetInt(P + "key" + i, (int)keys[i]);
+        for (int i = 0; i < keys.Length; i++) PlayerPrefs.SetInt(P + "k2_" + i, (int)keys[i]);
         PlayerPrefs.Save();
     }
 

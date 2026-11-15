@@ -8,13 +8,14 @@ using UnityEngine;
 // Tự gắn vào người chơi bởi GameManager (không dùng ở Chapter 0).
 [DisallowMultipleComponent]
 [RequireComponent(typeof(ODMController))]
+[RequireComponent(typeof(PlayerStamina))]
 public class TitanForm : MonoBehaviour
 {
     [Header("Biến hình")]
     public KeyCode transformKey = KeyCode.G;
     public float formHeight = 10f;
     public float formRadius = 1.3f;
-    public float duration = 45f;
+    // Thời gian titan = (thể lực còn lại sau khi trả phí biến hình) / titanDrainPerSecond. Mọi số liệu ở PlayerStamina.stats.
     public float cooldown = 30f;
     [Tooltip("Thế giới đứng hình sau khi bấm G, chờ animation cắn tay (chưa có, tạm để trống). Nhạc titan đã chạy từ đầu đoạn này.")]
     public float biteTime = 2f;
@@ -49,6 +50,10 @@ public class TitanForm : MonoBehaviour
     public bool IsTitan => state == State.Transforming || state == State.Titan;
 
     enum State { Human, Transforming, Titan }
+    PlayerStamina stamina;
+    float titanStamina;      // thể lực lúc bắt đầu titan (sau phí biến hình)
+    float titanTotal = 1f;   // tổng thời gian titan của lần biến hình này
+    float humanHealth;       // máu dạng người, cất lại lúc biến hình
 
     ODMController odm;
     PlayerCombat combat;
@@ -142,6 +147,7 @@ public class TitanForm : MonoBehaviour
     void Awake()
     {
         odm = GetComponent<ODMController>();
+        stamina = GetComponent<PlayerStamina>();
         combat = GetComponent<PlayerCombat>();
         health = GetComponent<Health>();
         controller = GetComponent<CharacterController>();
@@ -173,13 +179,15 @@ public class TitanForm : MonoBehaviour
             case State.Human:
                 if (GameInput.GetKeyDown(transformKey))
                 {
-                    if (cooldownLeft > 0f) Say("Chưa thể hoá titan (" + Mathf.CeilToInt(cooldownLeft) + "s)");
+                    if (stamina.Exhausted || stamina.Current < stamina.stats.transformMinStamina) Say("Không đủ thể lực để hoá titan (cần " + Mathf.CeilToInt(stamina.stats.transformMinStamina / stamina.Max * 100f) + "%, đang có " + stamina.Percent + "%)");
+                    else if (cooldownLeft > 0f) Say("Chưa thể hoá titan (" + Mathf.CeilToInt(cooldownLeft) + "s)");
                     else if (!Cutscene.IsPlaying) Cutscene.PlayFirstTitan(BeginTransform); // lần đầu có cutscene, các lần sau chỉ VFX
                 }
                 break;
 
             case State.Titan:
                 stateTimer -= dt;
+                stamina.Set(titanStamina * Mathf.Clamp01(stateTimer / titanTotal)); // thể lực tụt dần theo thời gian titan còn lại
                 TitanLook();
                 TitanMove(dt);
                 TitanPunch(dt);
@@ -213,7 +221,13 @@ public class TitanForm : MonoBehaviour
         {
             Unfreeze();
             state = State.Titan;
-            stateTimer = duration;
+            stamina.Locked = true;
+            stamina.Set(stamina.Current - stamina.stats.Cost(stamina.stats.transformCost)); // phí biến hình
+            titanStamina = stamina.Current;
+            titanTotal = Mathf.Max(1f, titanStamina / Mathf.Max(0.01f, stamina.stats.Cost(stamina.stats.titanDrainPerSecond)));
+            stateTimer = titanTotal;
+            humanHealth = health.Current;      // cất máu dạng người
+            health.SetCurrent(health.maxHealth); // titan luôn đầy máu mỗi lần biến hình
             health.DamageMultiplier = damageTakenMultiplier;
             // Gầm ngay khi thời gian chạy lại. Chỉ phát khi có file thật Assets/Resources/Audio/Roar.(wav|mp3|ogg);
             // bản tổng hợp mặc định nghe khó chịu nên bỏ qua.
@@ -317,6 +331,14 @@ public class TitanForm : MonoBehaviour
         odm.suspended = false;
         health.DamageMultiplier = 1f;
 
+        // Trả máu dạng người + đổi phần thể lực (thời gian titan) còn lại thành máu
+        if (state == State.Titan && !health.IsDead)
+        {
+            health.SetCurrent(Mathf.Min(health.maxHealth, humanHealth + stamina.Current / Mathf.Max(0.01f, stamina.stats.staminaPerHealth)));
+            stamina.Set(0f);
+        }
+
+        if (stamina != null) stamina.Locked = false;
         state = State.Human;
         cooldownLeft = cooldown;
         flash = 1f;
@@ -741,7 +763,7 @@ public class TitanForm : MonoBehaviour
         Color col;
         if (state == State.Titan)
         {
-            fill = Mathf.Clamp01(stateTimer / duration);
+            fill = Mathf.Clamp01(stateTimer / titanTotal);
             text = "TITAN  " + Mathf.CeilToInt(stateTimer) + "s   (G: trở lại người)";
             col = new Color(0.95f, 0.45f, 0.15f, 0.95f);
         }
