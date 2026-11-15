@@ -31,6 +31,7 @@ public static class GameSettings
     public static bool Fullscreen = true;
     public static int ResW, ResH;           // 0 = giữ nguyên độ phân giải hiện tại
     public static bool VSync = true;
+    public static bool ScreenShake = true;  // rung màn hình khi là titan (chạy, tiếp đất)
     public static int FpsLimit = 0;         // 0 = không giới hạn
     public static readonly int[] FpsOptions = { 0, 30, 60, 90, 120, 144, 240 };
 
@@ -103,6 +104,7 @@ public static class GameSettings
         ResH = PlayerPrefs.GetInt(P + "resH", 0);
         VSync = PlayerPrefs.GetInt(P + "vsync", VSync ? 1 : 0) == 1;
         FpsLimit = PlayerPrefs.GetInt(P + "fps", 0);
+        ScreenShake = PlayerPrefs.GetInt(P + "screenShake", ScreenShake ? 1 : 0) == 1;
 
         for (int i = 0; i < keys.Length; i++)
             keys[i] = (KeyCode)PlayerPrefs.GetInt(P + "key" + i, (int)DefaultKeys[i]);
@@ -125,6 +127,7 @@ public static class GameSettings
         PlayerPrefs.SetInt(P + "resH", ResH);
         PlayerPrefs.SetInt(P + "vsync", VSync ? 1 : 0);
         PlayerPrefs.SetInt(P + "fps", FpsLimit);
+        PlayerPrefs.SetInt(P + "screenShake", ScreenShake ? 1 : 0);
 
         for (int i = 0; i < keys.Length; i++) PlayerPrefs.SetInt(P + "key" + i, (int)keys[i]);
         PlayerPrefs.Save();
@@ -198,7 +201,7 @@ public static class GameSettings
                 Commit();
                 break;
             case 2:
-                Fullscreen = true; VSync = true; FpsLimit = 0; ResW = 0; ResH = 0;
+                Fullscreen = true; VSync = true; ScreenShake = true; FpsLimit = 0; ResW = 0; ResH = 0;
                 Commit(true);
                 break;
             case 3:
