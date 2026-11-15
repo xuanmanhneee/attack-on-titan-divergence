@@ -35,6 +35,9 @@ public class TrostMission : MonoBehaviour
     GameManager gm;
     TrostMap map;
 
+    Health playerHealth;
+    float refillSfxTimer;
+    public float depotHealRate = 15f;
     float delayTimer;
     bool waiting;
     float sealProgress;
@@ -233,12 +236,19 @@ public class TrostMission : MonoBehaviour
                 odm.RefillGas(give);
                 dep.stock -= give;
                 if (!announcedDepot) { announcedDepot = true; gm.Say("Đang tiếp tế gas..."); }
+                refillSfxTimer -= dt;
+                if (refillSfxTimer <= 0f) { refillSfxTimer = 0.6f; GameAudio.Play2D(Sfx.Refill, 0.6f); }
             }
             if (!dep.restocked && dep.stock > 1f)
             {
                 combat.Restock();
                 dep.restocked = true;
+                GameAudio.Play2D(Sfx.Reload, 0.8f);
             }
+
+            // Điểm tiếp tế cũng băng bó: hồi dần máu khi đứng trong vùng
+            if (playerHealth == null) playerHealth = odm.GetComponent<Health>();
+            if (playerHealth != null && playerHealth.Current < playerHealth.maxHealth) playerHealth.Heal(depotHealRate * dt);
         }
     }
 

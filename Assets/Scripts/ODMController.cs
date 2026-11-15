@@ -300,6 +300,7 @@ public class ODMController : MonoBehaviour
 
         yaw = transform.eulerAngles.y;
         gas = maxGas;
+        controller.excludeLayers = 1 << 2; // titan (layer 2) không chặn/đẩy người chơi khi bay
 
         lineLeft = CreateRopeLine("RopeLine_Left");
         lineRight = CreateRopeLine("RopeLine_Right");
@@ -330,6 +331,7 @@ public class ODMController : MonoBehaviour
         float dt = Time.deltaTime;
 
         HandleLook();
+        UpdateAudio();
 
         // A hook embedded in a Titan must travel with its body instead of remaining
         // at the world-space point where the shot originally landed.
@@ -659,6 +661,21 @@ public class ODMController : MonoBehaviour
     }
 
     // ================= LOOK =================
+    // Tiếng xì gas, gió theo tốc độ, cảnh báo gas thấp
+    float lastGas = -1f;
+    bool lowGasWarned;
+    void UpdateAudio()
+    {
+        if (lastGas < 0f) lastGas = gas;
+        float drop = lastGas - gas;   // gas giảm so với khung trước = đang xả
+        lastGas = gas;
+        GameAudio.SetLoops(drop > 0.0005f ? 1f : 0f, velocity.magnitude / Mathf.Max(1f, maxSpeed));
+
+        float g = gas / Mathf.Max(1f, maxGas);
+        if (g < 0.2f) { if (!lowGasWarned) { lowGasWarned = true; GameAudio.Play2D(Sfx.LowGas, 0.6f); } }
+        else if (g > 0.35f) lowGasWarned = false;
+    }
+
     void HandleLook()
     {
         yaw += GameInput.GetAxis("Mouse X") * mouseSensitivity;
@@ -1128,6 +1145,7 @@ public class ODMController : MonoBehaviour
             if (isGrounded && hit.normal.y > 0.55f)
             {
                 controller.Move(displacement);
+                GameAudio.Play(Sfx.Impact, hit.point, 0.5f);
                 return;
             }
 
@@ -1188,12 +1206,12 @@ public class ODMController : MonoBehaviour
     void HandleHookInput()
     {
         // Chuột trái/phải hoặc phím móc trái/phải trong Cài đặt (mặc định Q/E, GameInput tự đổi theo phím đã gán).
-        bool leftHeld  = GameInput.GetMouseButton(0) || GameInput.GetKey(KeyCode.Q);
+        bool leftHeld = GameInput.GetMouseButton(0) || GameInput.GetKey(KeyCode.Q);
         bool rightHeld = GameInput.GetMouseButton(1) || GameInput.GetKey(KeyCode.E);
-        bool leftDown  = GameInput.GetMouseButtonDown(0) || GameInput.GetKeyDown(KeyCode.Q);
+        bool leftDown = GameInput.GetMouseButtonDown(0) || GameInput.GetKeyDown(KeyCode.Q);
         bool rightDown = GameInput.GetMouseButtonDown(1) || GameInput.GetKeyDown(KeyCode.E);
-        bool leftUp    = (GameInput.GetMouseButtonUp(0) || GameInput.GetKeyUp(KeyCode.Q)) && !leftHeld;
-        bool rightUp   = (GameInput.GetMouseButtonUp(1) || GameInput.GetKeyUp(KeyCode.E)) && !rightHeld;
+        bool leftUp = (GameInput.GetMouseButtonUp(0) || GameInput.GetKeyUp(KeyCode.Q)) && !leftHeld;
+        bool rightUp = (GameInput.GetMouseButtonUp(1) || GameInput.GetKeyUp(KeyCode.E)) && !rightHeld;
 
         if (toggleHooks)
         {
@@ -1221,6 +1239,10 @@ public class ODMController : MonoBehaviour
             if (hookLeft.active && !leftHeld) ReleaseHook(hookLeft, -1f);
             if (hookRight.active && !rightHeld) ReleaseHook(hookRight, 1f);
         }
+
+        // Nhả phím lúc đang tạm dừng thì sự kiện "nhả" bị bỏ lỡ -> kiểm tra theo trạng thái giữ phím
+        if (hookLeft.active && !(GameInput.GetKey(KeyCode.Q) || GameInput.GetMouseButton(0))) hookLeft.active = false;
+        if (hookRight.active && !(GameInput.GetKey(KeyCode.E) || GameInput.GetMouseButton(1))) hookRight.active = false;
 
         AutoReleaseCheck(hookLeft);
         AutoReleaseCheck(hookRight);
@@ -1263,6 +1285,9 @@ public class ODMController : MonoBehaviour
         hook.attached = false;
         PlayHookSound(hookLaunchClip, hookLaunchVolume, hook == hookLeft ? -1f : 1f);
 
+        GameAudio.Play2D(Sfx.HookFire, 0.7f, Random.Range(0.95f, 1.08f));
+        GameAudio.Play(Sfx.HookHit, anchor, 0.9f, Random.Range(0.92f, 1.05f), Mathf.Min(0.35f, hook.ropeLength / 120f));
+        GameVfx.Burst(anchor, new Color(0.82f, 0.8f, 0.72f, 0.8f), 10, 4f, 0.5f, 0.6f);
         if (groundHookYank && isGrounded && velocity.y <= 0.1f)
         {
             Vector3 dir = (anchor - transform.position).normalized;

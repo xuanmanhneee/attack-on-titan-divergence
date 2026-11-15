@@ -29,6 +29,23 @@ public class PlayerCombat : MonoBehaviour
     public int Spare => spareBlades;
     public bool IsReloading { get; private set; }
 
+    // Có gáy titan nào trong tầm và góc chém không (HUD dùng để báo "chém được")
+    public bool CanKillNow
+    {
+        get
+        {
+            if (odm == null || odm.cameraTransform == null) return false;
+            Transform cam = odm.cameraTransform;
+            foreach (Titan t in Titan.All)
+            {
+                if (t == null || t.IsDead || t.Nape == null) continue;
+                Vector3 to = t.Nape.position - cam.position;
+                if (to.magnitude <= napeReach && Vector3.Angle(cam.forward, to) <= slashAngle) return true;
+            }
+            return false;
+        }
+    }
+
     ODMController odm;
     float cooldown;
     float reloadTimer;
@@ -75,6 +92,7 @@ public class PlayerCombat : MonoBehaviour
         if (spareBlades <= 0) { Feedback?.Invoke("Hết kiếm dự phòng!"); return; }
         IsReloading = true;
         reloadTimer = reloadTime;
+        GameAudio.Play2D(Sfx.Reload, 0.8f);
     }
 
     void Slash()
@@ -82,6 +100,7 @@ public class PlayerCombat : MonoBehaviour
         if (cooldown > 0f) return;
         if (Durability <= 0f) { Feedback?.Invoke("Kiếm gãy! Nhấn R để thay"); return; }
         cooldown = slashCooldown;
+        GameAudio.Play2D(Sfx.Slash, 0.8f, UnityEngine.Random.Range(0.95f, 1.1f));
         GetComponent<FirstPersonSwordViewmodel>()?.PlaySlash();
 
         Transform cam = odm.cameraTransform;
@@ -95,6 +114,8 @@ public class PlayerCombat : MonoBehaviour
             if (toNape.magnitude <= napeReach && Vector3.Angle(cam.forward, toNape) <= slashAngle)
             {
                 t.KillByNape();
+                GameAudio.Play2D(Sfx.SlashHit, 1f);
+                GameVfx.Burst(t.Nape.position, new Color(1f, 1f, 1f, 0.85f), 18, 6f, 0.7f, 0.8f);
                 Durability -= durabilityOnNapeKill;
                 Feedback?.Invoke("CHÉM GÁY! Hạ gục titan");
                 continue;
@@ -109,6 +130,7 @@ public class PlayerCombat : MonoBehaviour
                 if (to.magnitude <= bodyReach && Vector3.Angle(cam.forward, to) <= slashAngle)
                 {
                     t.Damage(bodyDamage);
+                    GameAudio.Play2D(Sfx.SlashHit, 0.5f, 0.85f);
                     Durability -= durabilityPerSlash;
                     break;
                 }

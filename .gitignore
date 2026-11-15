@@ -59,3 +59,13 @@ Desktop.ini
 
 # Asset tạm / không dùng, giữ ngoài repo
 _unused_assets/
+
+
+.mcp.json
+.claude/
+Assets/Plugins/
+Assets/Plugins.meta
+dotnet-tools.json
+# Anh chup man hinh do Unity-MCP sinh ra
+Assets/Screenshots/
+Assets/Screenshots.meta

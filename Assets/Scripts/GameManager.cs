@@ -84,7 +84,7 @@ public class GameManager : MonoBehaviour
     {
         Time.timeScale = 1f;
         Titan.ResetAll();
-        odm =FindAnyObjectByType<ODMController>();
+        odm = FindAnyObjectByType<ODMController>();
         cam = odm.cameraTransform != null ? odm.cameraTransform.GetComponent<Camera>() : Camera.main;
 
         // Titans use the player's first hookable layer so ODM raycasts can hit them
@@ -117,7 +117,6 @@ public class GameManager : MonoBehaviour
         if (oldGas != null) oldGas.gameObject.SetActive(false);
         hud = GameHud.Create(this, odm, combat, playerHealth, cam);
         menu = MangaMenu.Create();
-        menu.Play += BeginLoading;
         menu.Resume += () => SetPaused(false);
         menu.Restart += Restart;
         menu.MainMenu += GoToMainMenu;
