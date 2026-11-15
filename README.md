@@ -14,6 +14,11 @@ A work-in-progress Unity fan game exploring fast, momentum-based ODM gear moveme
 - Chém bằng kiếm: áp sát và ngắm đúng gáy để hạ gục, kiếm bị mòn và phải thay
 - Đợt titan, máu người chơi, thắng/thua, tạm dừng
 - HUD: máu, gas, tốc độ, độ bền kiếm
+- Nhiệm vụ "Trận Trost" (3 giai đoạn): dọn titan trong khu phố, chặn đợt titan tràn qua cổng, giữ vùng cổng để bịt lỗ hổng; có điểm tiếp tế gas / kiếm / máu
+- Giao diện manga (đen trắng + đỏ): menu chính, cài đặt (điều khiển, âm thanh, đồ họa, đổi phím), màn hình chờ + giới thiệu nhiệm vụ, tạm dừng, thắng / thua
+- HUD manga: thanh máu / gas / kiếm, đường tốc độ khi bay nhanh, viền đỏ khi trúng đòn, chữ nổ khi hạ gục titan
+- Âm thanh và nhạc nền tổng hợp bằng code (dây, gas, chém, bước chân và tiếng gầm titan...); thay bằng file thật bằng cách bỏ vào `Assets/Resources/Audio/<TênSfx>.wav` (xem `GameAudio.cs`)
+- Hiệu ứng hạt tự dựng: hơi nước khi titan gục, bụi khi móc trúng tường
 - Universal Render Pipeline (URP)
 
 ## Controls

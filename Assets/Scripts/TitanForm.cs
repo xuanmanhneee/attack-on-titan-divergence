@@ -735,7 +735,7 @@ public class TitanForm : MonoBehaviour
 
         if (Time.timeScale <= 0.0001f) return;
 
-        float x = 30f * s, y = Screen.height - 150f * s, w = 360f * s, hgt = 22f * s;
+        float x = 30f * s, y = Screen.height - 330f * s, w = 360f * s, hgt = 22f * s;
         float fill;
         string text;
         Color col;

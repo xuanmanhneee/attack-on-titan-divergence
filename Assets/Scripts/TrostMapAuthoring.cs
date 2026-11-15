@@ -54,17 +54,17 @@ public class TrostMapAuthoring : MonoBehaviour
             var highest = new List<Renderer>();
             foreach (Renderer renderer in group.GetComponentsInChildren<Renderer>(true))
             {
+                // Renderer thuộc LODGroup con thì không được gán thêm vào LODGroup cha
+                // (nhà có LODGroup ở gốc + LODGroup ở từng chi tiết -> Unity báo "registered with more than one LODGroup").
+                LODGroup[] owners = renderer.GetComponentsInParent<LODGroup>(true);
+                if (owners.Length == 0 || owners[0] != group) continue;
+
                 string name = renderer.name.ToLowerInvariant();
                 if (name.Contains("lod1") || name.Contains("lod2") || name.Contains("lod3")) continue;
                 highest.Add(renderer);
             }
 
-            if (highest.Count == 0)
-            {
-                LOD[] existing = group.GetLODs();
-                if (existing.Length > 0) highest.AddRange(existing[0].renderers);
-            }
-            if (highest.Count == 0) continue;
+            // Nhóm cha không sở hữu renderer nào thì để rỗng, không mượn renderer của nhóm con.
             group.SetLODs(new[] { new LOD(0.001f, highest.ToArray()) });
             group.RecalculateBounds();
         }
