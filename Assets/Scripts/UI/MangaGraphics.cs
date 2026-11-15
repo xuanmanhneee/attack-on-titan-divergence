@@ -272,14 +272,15 @@ public class MangaBurst : MaskableGraphic
 // scaleFrom < 1: phóng từ nhỏ ra (kiểu "bật" lên). Chạy theo thời gian thật nên hoạt động khi game dừng.
 public class MangaSlideIn : MonoBehaviour
 {
-    Vector2 from;
-    float delay;
-    float duration = 0.38f;
-    float scaleFrom = 1f;
+    // Các giá trị này được lưu trong scene/prefab: Init chạy trong Editor (lúc bake), lúc chạy chỉ phát lại hiệu ứng.
+    [SerializeField] Vector2 from;
+    [SerializeField] float delay;
+    [SerializeField] float duration = 0.38f;
+    [SerializeField] float scaleFrom = 1f;
+    [SerializeField] Vector2 target;
+    [SerializeField] bool ready;
     RectTransform rt;
-    Vector2 target;
     float t;
-    bool ready;
 
     public MangaSlideIn Init(Vector2 fromOffset, float delaySeconds, float startScale = 1f, float seconds = 0.38f)
     {
@@ -294,8 +295,17 @@ public class MangaSlideIn : MonoBehaviour
         return this;
     }
 
+    // Đưa đối tượng về vị trí cuối (dùng khi bake trong Editor để scene không bị lệch vị trí).
+    public void ResetToTarget()
+    {
+        rt = (RectTransform)transform;
+        rt.anchoredPosition = target;
+        rt.localScale = Vector3.one;
+    }
+
     void OnEnable()
     {
+        if (rt == null) rt = (RectTransform)transform;
         if (ready) Restart();
     }
 

@@ -59,7 +59,7 @@ public partial class MainMenuController : MonoBehaviour
         SetupMenuMusic();
         SetupUISounds();
         StartCoroutine(Intro());
-        AnimateIn();
+        MangaSfx.Slam();
         GameSettings.Changed += RefreshMenuMusicVolume;
     }
 
@@ -70,19 +70,21 @@ public partial class MainMenuController : MonoBehaviour
 
     // Hiệu ứng trượt vào kiểu MangaMenu: title từ trái, thanh trên từ trên, nút từ phải lần lượt.
     // MangaSlideIn tự chạy lại mỗi khi nhóm nút được bật (START <-> CHAPTER).
-    void AnimateIn()
+    void BakeAnimations()
     {
         var canvas = rootGroup.transform;
         Slide(canvas.Find("Title Block"), new Vector2(-1000f, 0f), 0.05f);
         Slide(canvas.Find("Top Bar"), new Vector2(0f, 80f), 0f);
         SlideChildren(startNavigation, 0.12f);
         SlideChildren(chapterNavigation, 0.05f);
-        MangaSfx.Slam();
     }
 
     static void Slide(Transform t, Vector2 from, float delay)
     {
-        if (t != null) t.gameObject.AddComponent<MangaSlideIn>().Init(from, delay);
+        if (t == null) return;
+        var s = t.gameObject.AddComponent<MangaSlideIn>();
+        s.Init(from, delay);
+        s.ResetToTarget();
     }
 
     static void SlideChildren(GameObject nav, float firstDelay)
@@ -247,6 +249,7 @@ public partial class MainMenuController : MonoBehaviour
         BuildCredits(canvas.transform);
         BuildSettings(canvas.transform);
 
+        BakeAnimations();
         if (startNavigation != null) startNavigation.SetActive(true);
         if (chapterNavigation != null) chapterNavigation.SetActive(false);
 
@@ -369,7 +372,7 @@ public partial class MainMenuController : MonoBehaviour
         frame.effectColor = new Color(Brass.r, Brass.g, Brass.b, 0.55f);
         frame.effectDistance = new Vector2(1.5f, -1.5f);
         frame.useGraphicAlpha = false;
-        card.gameObject.AddComponent<MangaSlideIn>().Init(new Vector2(0f, -70f), 0f, 0.94f, 0.32f);
+        Slide(card.transform, new Vector2(0f, -70f), 0f);
 
         var top = Image("Top Rule", card.transform, null, Brass);
         SetRect(top.rectTransform, 0f, 1f, 1f, 1f, 0f, -5f, 0f, 0f);
@@ -428,7 +431,7 @@ public partial class MainMenuController : MonoBehaviour
             var bg = row.gameObject.AddComponent<Image>();
             bg.color = new Color(0.045f, 0.065f, 0.072f, 0.9f);
             bg.raycastTarget = false;
-            row.gameObject.AddComponent<MangaSlideIn>().Init(new Vector2(120f, 0f), 0.08f + i * 0.05f);
+            Slide(row, new Vector2(120f, 0f), 0.08f + i * 0.05f);
             var bar = Image("Accent", row, null, Brass);
             SetRect(bar.rectTransform, 0f, 0f, 0f, 1f, 0f, 0f, 4f, 0f);
             var num = Text("Number", row, (i + 1).ToString("00"), 14, Brass, TextAnchor.MiddleCenter, false);
@@ -715,12 +718,12 @@ public class MenuButtonVisual : MonoBehaviour, IPointerEnterHandler, IPointerExi
     public void OnSelect(BaseEventData eventData) => SetActive(true);
     public void OnDeselect(BaseEventData eventData) => SetActive(false);
 
-    Outline frame;
-    Text detail;
-    Text number;
-    RectTransform[] slideTargets;
-    Vector2[] slideOrigins;
-    Vector2 arrowOrigin;
+    [SerializeField] Outline frame;
+    [SerializeField] Text detail;
+    [SerializeField] Text number;
+    [SerializeField] RectTransform[] slideTargets;
+    [SerializeField] Vector2[] slideOrigins;
+    [SerializeField] Vector2 arrowOrigin;
     bool active;
     float t;
 
