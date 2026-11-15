@@ -4,7 +4,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
-public class MainMenuController : MonoBehaviour
+public partial class MainMenuController : MonoBehaviour
 {
     [Header("Supplied assets")]
     [SerializeField] Texture2D backgroundTexture = null;
@@ -100,7 +100,7 @@ public class MainMenuController : MonoBehaviour
         if (GameInput.GetKeyDown(KeyCode.Escape))
         {
             if (creditsOverlay != null && creditsOverlay.activeSelf) ShowCredits(false);
-            else if (settingsOverlay != null && settingsOverlay.activeSelf) ShowSettings(false);
+            else if (settingsOverlay != null && settingsOverlay.activeSelf && !SettingsEscConsumed()) ShowSettings(false);
         }
     }
 
@@ -141,26 +141,6 @@ public class MainMenuController : MonoBehaviour
         BindButton(canvas, "Primary Navigation/BACK", () => ShowChapterMenu(false));
         BindButton(canvas, "Credits Overlay/Credits Card/CLOSE ARCHIVES", () => ShowCredits(false));
         BindButton(canvas, "Settings Overlay/Settings Card/APPLY & CLOSE", () => ShowSettings(false));
-
-        BindSlider(canvas, "Settings Overlay/Settings Card/MASTER VOLUME", GameVolumeSettings.MasterVolume, value =>
-        {
-            GameVolumeSettings.MasterVolume = value;
-            GameVolumeSettings.ApplyMasterVolume();
-        });
-        BindSlider(canvas, "Settings Overlay/Settings Card/MUSIC VOLUME", GameVolumeSettings.MusicVolume, value =>
-        {
-            GameVolumeSettings.MusicVolume = value;
-            RefreshMenuMusicVolume();
-        });
-        BindSlider(canvas, "Settings Overlay/Settings Card/SFX VOLUME", GameVolumeSettings.SfxVolume,
-            value => GameVolumeSettings.SfxVolume = value);
-
-        var fullscreen = canvas.Find("Settings Overlay/Settings Card/FULLSCREEN/Toggle")?.GetComponent<Toggle>();
-        if (fullscreen != null)
-        {
-            fullscreen.SetIsOnWithoutNotify(Screen.fullScreen);
-            fullscreen.onValueChanged.AddListener(value => Screen.fullScreen = value);
-        }
 
         if (creditsOverlay != null) creditsOverlay.SetActive(false);
         if (settingsOverlay != null) settingsOverlay.SetActive(false);
@@ -224,21 +204,6 @@ public class MainMenuController : MonoBehaviour
         }
         clip.SetData(samples, 0);
         return clip;
-    }
-
-    static void BindSlider(Transform root, string path, float value, UnityEngine.Events.UnityAction<float> action)
-    {
-        var row = root.Find(path);
-        var slider = row?.Find("Slider")?.GetComponent<Slider>();
-        var valueText = row?.Find("Value")?.GetComponent<Text>();
-        if (slider == null) return;
-        slider.SetValueWithoutNotify(value);
-        if (valueText != null) valueText.text = Mathf.RoundToInt(value * 100f) + "%";
-        slider.onValueChanged.AddListener(newValue =>
-        {
-            if (valueText != null) valueText.text = Mathf.RoundToInt(newValue * 100f) + "%";
-            action.Invoke(newValue);
-        });
     }
 
     public void BuildSceneUI()
@@ -483,121 +448,6 @@ public class MainMenuController : MonoBehaviour
         creditsOverlay.SetActive(false);
     }
 
-    void BuildSettings(Transform parent)
-    {
-        settingsOverlay = RectObject("Settings Overlay", parent).gameObject;
-        Stretch(settingsOverlay.GetComponent<RectTransform>());
-        settingsOverlay.AddComponent<Image>();
-
-        var card = BuildCard(settingsOverlay.transform, "Settings Card", 940f, 760f, "SETTINGS",
-            "SYSTEM CONFIGURATION  /  CHANGES SAVE AUTOMATICALLY", "SYSTEM 02  /  AUDIO & DISPLAY");
-
-        SectionLabel(card, "AUDIO", 176f);
-        SettingSlider(card, "MASTER VOLUME", GameVolumeSettings.MasterVolume, 214f, value =>
-        {
-            GameVolumeSettings.MasterVolume = value;
-            GameVolumeSettings.ApplyMasterVolume();
-        });
-        SettingSlider(card, "MUSIC VOLUME", GameVolumeSettings.MusicVolume, 296f, value =>
-        {
-            GameVolumeSettings.MusicVolume = value;
-            RefreshMenuMusicVolume();
-        });
-        SettingSlider(card, "SFX VOLUME", GameVolumeSettings.SfxVolume, 378f, value =>
-            GameVolumeSettings.SfxVolume = value);
-
-        SectionLabel(card, "DISPLAY", 478f);
-        SettingToggle(card, "FULLSCREEN", Screen.fullScreen, 516f, value => Screen.fullScreen = value);
-
-        var close = SimpleButton(card, "APPLY & CLOSE", () => ShowSettings(false));
-        SetRect(close.GetComponent<RectTransform>(), 0.5f, 0f, 0.5f, 0f, -190f, 32f, 190f, 94f);
-        settingsOverlay.SetActive(false);
-    }
-
-    void SectionLabel(Transform parent, string text, float topOffset)
-    {
-        var label = Text(text + " Section", parent, text, 15, Brass, TextAnchor.MiddleLeft, false);
-        SetRect(label.rectTransform, 0f, 1f, 1f, 1f, 56f, -topOffset - 26f, -56f, -topOffset);
-        var rule = Image(text + " Rule", parent, null, new Color(Brass.r, Brass.g, Brass.b, 0.4f));
-        SetRect(rule.rectTransform, 0f, 1f, 1f, 1f, 56f, -topOffset - 28f, -56f, -topOffset - 26f);
-    }
-
-    void RowPanel(Transform row)
-    {
-        var bg = row.gameObject.AddComponent<Image>();
-        bg.color = new Color(0.045f, 0.065f, 0.072f, 0.9f);
-        bg.raycastTarget = false;
-        var bar = Image("Accent", row, null, Brass);
-        SetRect(bar.rectTransform, 0f, 0f, 0f, 1f, 0f, 0f, 4f, 0f);
-    }
-
-    void SettingSlider(Transform parent, string label, float initialValue, float topOffset, UnityEngine.Events.UnityAction<float> changed)
-    {
-        var row = RectObject(label, parent);
-        SetRect(row, 0f, 1f, 1f, 1f, 56f, -topOffset - 70f, -56f, -topOffset);
-        RowPanel(row);
-        var labelText = Text("Label", row, label, 17, Ivory, TextAnchor.UpperLeft, false);
-        SetRect(labelText.rectTransform, 0f, 0f, 0.6f, 1f, 26f, 0f, 0f, -12f);
-        var valueText = Text("Value", row, Mathf.RoundToInt(initialValue * 100f) + "%", 20, Brass, TextAnchor.UpperRight, false);
-        SetRect(valueText.rectTransform, 0.6f, 0f, 1f, 1f, 0f, 0f, -24f, -10f);
-
-        var sliderObject = new GameObject("Slider", typeof(RectTransform), typeof(Slider));
-        sliderObject.transform.SetParent(row, false);
-        SetRect(sliderObject.GetComponent<RectTransform>(), 0f, 0f, 1f, 0f, 26f, 14f, -26f, 26f);
-        var slider = sliderObject.GetComponent<Slider>();
-        slider.minValue = 0f; slider.maxValue = 1f; slider.value = initialValue;
-
-        var track = Image("Track", sliderObject.transform, null, new Color(0.13f, 0.155f, 0.16f, 1f));
-        Stretch(track.rectTransform);
-        var fillArea = RectObject("Fill Area", sliderObject.transform);
-        Stretch(fillArea);
-        var fill = Image("Fill", fillArea, null, Brass);
-        Stretch(fill.rectTransform);
-        var handleArea = RectObject("Handle Slide Area", sliderObject.transform);
-        Stretch(handleArea);
-        var handle = Image("Handle", handleArea, null, Ivory);
-        SetRect(handle.rectTransform, 0f, 0.5f, 0f, 0.5f, -9f, -9f, 9f, 9f);
-        handle.rectTransform.localRotation = Quaternion.Euler(0f, 0f, 45f);
-        var handleFrame = handle.gameObject.AddComponent<Outline>();
-        handleFrame.effectColor = Brass;
-        handleFrame.effectDistance = new Vector2(2f, -2f);
-        handle.raycastTarget = true;
-        slider.fillRect = fill.rectTransform;
-        slider.handleRect = handle.rectTransform;
-        slider.targetGraphic = handle;
-        slider.direction = Slider.Direction.LeftToRight;
-        slider.onValueChanged.AddListener(value =>
-        {
-            valueText.text = Mathf.RoundToInt(value * 100f) + "%";
-            changed.Invoke(value);
-        });
-    }
-
-    void SettingToggle(Transform parent, string label, bool initialValue, float topOffset, UnityEngine.Events.UnityAction<bool> changed)
-    {
-        var row = RectObject(label, parent);
-        SetRect(row, 0f, 1f, 1f, 1f, 56f, -topOffset - 64f, -56f, -topOffset);
-        RowPanel(row);
-        var labelText = Text("Label", row, label, 17, Ivory, TextAnchor.MiddleLeft, false);
-        SetRect(labelText.rectTransform, 0f, 0f, 0.6f, 1f, 26f, 0f, 0f, 0f);
-        var state = Text("State", row, initialValue ? "ON" : "OFF", 16, Brass, TextAnchor.MiddleRight, false);
-        SetRect(state.rectTransform, 1f, 0f, 1f, 1f, -140f, 0f, -80f, 0f);
-
-        var toggleObject = new GameObject("Toggle", typeof(RectTransform), typeof(Image), typeof(Toggle));
-        toggleObject.transform.SetParent(row, false);
-        SetRect(toggleObject.GetComponent<RectTransform>(), 1f, 0.5f, 1f, 0.5f, -66f, -16f, -22f, 16f);
-        var background = toggleObject.GetComponent<Image>(); background.color = ButtonIdle;
-        var frame = toggleObject.AddComponent<Outline>();
-        frame.effectColor = new Color(Brass.r, Brass.g, Brass.b, 0.8f);
-        frame.effectDistance = new Vector2(1.5f, -1.5f);
-        var check = Image("Checkmark", toggleObject.transform, null, Brass);
-        SetRect(check.rectTransform, 0f, 0f, 1f, 1f, 6f, 6f, -6f, -6f);
-        var toggle = toggleObject.GetComponent<Toggle>();
-        toggle.targetGraphic = background; toggle.graphic = check; toggle.isOn = initialValue;
-        toggle.onValueChanged.AddListener(changed);
-        toggle.onValueChanged.AddListener(on => state.text = on ? "ON" : "OFF");
-    }
-
     Button SimpleButton(Transform parent, string label, UnityEngine.Events.UnityAction action)
     {
         var go = new GameObject(label, typeof(RectTransform), typeof(Image), typeof(Button), typeof(MenuButtonVisual));
@@ -648,6 +498,12 @@ public class MainMenuController : MonoBehaviour
             backButton?.gameObject.SetActive(show);
         }
         EventSystem.current.SetSelectedGameObject(show ? firstButton?.gameObject : startButton?.gameObject);
+    }
+
+    bool SettingsEscConsumed()
+    {
+        var menu = settingsOverlay.GetComponent<SettingsMenu>();
+        return menu != null && menu.EscConsumedThisFrame;
     }
 
     void ShowSettings(bool show)
