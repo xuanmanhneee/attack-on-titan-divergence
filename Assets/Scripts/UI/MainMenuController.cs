@@ -59,12 +59,37 @@ public class MainMenuController : MonoBehaviour
         SetupMenuMusic();
         SetupUISounds();
         StartCoroutine(Intro());
+        AnimateIn();
         GameSettings.Changed += RefreshMenuMusicVolume;
     }
 
     void OnDestroy()
     {
         GameSettings.Changed -= RefreshMenuMusicVolume;
+    }
+
+    // Hiệu ứng trượt vào kiểu MangaMenu: title từ trái, thanh trên từ trên, nút từ phải lần lượt.
+    // MangaSlideIn tự chạy lại mỗi khi nhóm nút được bật (START <-> CHAPTER).
+    void AnimateIn()
+    {
+        var canvas = rootGroup.transform;
+        Slide(canvas.Find("Title Block"), new Vector2(-1000f, 0f), 0.05f);
+        Slide(canvas.Find("Top Bar"), new Vector2(0f, 80f), 0f);
+        SlideChildren(startNavigation, 0.12f);
+        SlideChildren(chapterNavigation, 0.05f);
+        MangaSfx.Slam();
+    }
+
+    static void Slide(Transform t, Vector2 from, float delay)
+    {
+        if (t != null) t.gameObject.AddComponent<MangaSlideIn>().Init(from, delay);
+    }
+
+    static void SlideChildren(GameObject nav, float firstDelay)
+    {
+        if (nav == null) return;
+        for (int i = 0; i < nav.transform.childCount; i++)
+            Slide(nav.transform.GetChild(i), new Vector2(260f, 0f), firstDelay + 0.08f * i);
     }
 
     void Update()
