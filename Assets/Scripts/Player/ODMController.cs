@@ -122,8 +122,6 @@ public class ODMController : MonoBehaviour
     public float wallLaunchGasCost = 10f;
 
     [Header("Rope Visual")]
-    public Material ropeMaterial;
-    public float ropeWidth = 0.065f;
     public float hookProjectileSpeed = 300f;
 
     [Header("Hook Audio")]
@@ -169,8 +167,7 @@ public class ODMController : MonoBehaviour
     {
         ReleaseHook(hookLeft, -1f);
         ReleaseHook(hookRight, 1f);
-        if (lineLeft != null) lineLeft.enabled = false;
-        if (lineRight != null) lineRight.enabled = false;
+        if (ropeVisual != null) ropeVisual.HideAll();
     }
 
     public void ResetMotion()
@@ -247,8 +244,7 @@ public class ODMController : MonoBehaviour
 
     private HookState hookLeft = new HookState();
     private HookState hookRight = new HookState();
-    private LineRenderer lineLeft;
-    private LineRenderer lineRight;
+    private ODMRopeVisual ropeVisual;
     private AudioSource hookAudio;
     public BackgroundMusicPlayer Music { get; private set; }
 
@@ -305,8 +301,8 @@ public class ODMController : MonoBehaviour
         gas = maxGas;
         controller.excludeLayers = 1 << 2; // titan (layer 2) không chặn/đẩy người chơi khi bay
 
-        lineLeft = CreateRopeLine("RopeLine_Left");
-        lineRight = CreateRopeLine("RopeLine_Right");
+        ropeVisual = GetComponent<ODMRopeVisual>();
+        if (ropeVisual == null) ropeVisual = gameObject.AddComponent<ODMRopeVisual>();
 
         hookAudio = gameObject.AddComponent<AudioSource>();
         hookAudio.playOnAwake = false;
@@ -1455,61 +1451,12 @@ public class ODMController : MonoBehaviour
     }
 
     // ================= ROPE VISUAL =================
-    LineRenderer CreateRopeLine(string lineName)
-    {
-        GameObject obj = new GameObject(lineName);
-        obj.transform.SetParent(transform);
-
-        LineRenderer lr = obj.AddComponent<LineRenderer>();
-        lr.positionCount = 2;
-        lr.startWidth = ropeWidth;
-        lr.endWidth = ropeWidth * 0.72f;
-        lr.useWorldSpace = true;
-        lr.numCapVertices = 2;
-        lr.numCornerVertices = 2;
-        lr.alignment = LineAlignment.View;
-
-        if (ropeMaterial != null)
-        {
-            lr.material = ropeMaterial;
-        }
-        else
-        {
-            lr.material = new Material(Shader.Find("Sprites/Default"));
-            lr.startColor = new Color(0.34f, 0.34f, 0.36f, 1f);
-            lr.endColor = new Color(0.46f, 0.43f, 0.43f, 1f);
-        }
-
-        lr.enabled = false;
-        return lr;
-    }
-
     void UpdateRopeVisuals()
     {
-        UpdateSingleLine(lineLeft, hookLeft, hipOriginLeft);
-        UpdateSingleLine(lineRight, hookRight, hipOriginRight);
-    }
-
-    void UpdateSingleLine(LineRenderer line, HookState hook, Transform origin)
-    {
-        if (hook.active)
-        {
-            line.enabled = true;
-            Vector3 start = origin != null ? origin.position : transform.position;
-            float distance = Vector3.Distance(start, hook.anchorPoint);
-            float duration = distance / Mathf.Max(1f, hookProjectileSpeed);
-            hook.visualProgress = Mathf.MoveTowards(hook.visualProgress, 1f,
-                Time.unscaledDeltaTime / Mathf.Max(0.025f, duration));
-            float eased = 1f - Mathf.Pow(1f - hook.visualProgress, 3f);
-
-            line.positionCount = 2;
-            line.SetPosition(0, start);
-            line.SetPosition(1, Vector3.Lerp(start, hook.anchorPoint, eased));
-        }
-        else
-        {
-            line.enabled = false;
-        }
+        Vector3 startL = hipOriginLeft != null ? hipOriginLeft.position : transform.position;
+        Vector3 startR = hipOriginRight != null ? hipOriginRight.position : transform.position;
+        ropeVisual.DrawLeft(hookLeft.active, startL, hookLeft.anchorPoint, ref hookLeft.visualProgress, hookProjectileSpeed);
+        ropeVisual.DrawRight(hookRight.active, startR, hookRight.anchorPoint, ref hookRight.visualProgress, hookProjectileSpeed);
     }
 
     // ================= DEBUG =================
