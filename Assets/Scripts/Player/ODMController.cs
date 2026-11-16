@@ -219,6 +219,7 @@ public class ODMController : MonoBehaviour
 
     private ODMAntiStuck antiStuck;
     private ODMGroundMovement groundMove;
+    private ODMAirMovement airMove;
 
     private HookState hookLeft = new HookState();
     private HookState hookRight = new HookState();
@@ -286,6 +287,10 @@ public class ODMController : MonoBehaviour
         groundMove = GetComponent<ODMGroundMovement>();
         if (groundMove == null) groundMove = gameObject.AddComponent<ODMGroundMovement>();
         groundMove.Init(this, controller);
+
+        airMove = GetComponent<ODMAirMovement>();
+        if (airMove == null) airMove = gameObject.AddComponent<ODMAirMovement>();
+        airMove.Init(this, hookLeft, hookRight);
 
         ropeVisual = GetComponent<ODMRopeVisual>();
         if (ropeVisual == null) ropeVisual = gameObject.AddComponent<ODMRopeVisual>();
@@ -394,13 +399,13 @@ public class ODMController : MonoBehaviour
         bool wantsRopeMovement = hooked && GameInput.GetKey(KeyCode.Space);
         if (standing && !wantsRopeMovement)
         {
-            LoosenRope(hookLeft);
-            LoosenRope(hookRight);
+            airMove.LoosenRope(hookLeft);
+            airMove.LoosenRope(hookRight);
             bool brakingLanding = landingBrakeWindow > 0f && GameInput.GetAxis("Vertical") < -0.5f;
             groundMove.Move(dt, GetWishDirection(brakingLanding), ref velocity, ref gas);
         }
         else
-            AirMovement(dt, hooked);
+            airMove.Move(dt, hooked, GetWishDirection(), ref velocity, ref gas);
     }
 
     void ResolveControllerOverlap()
@@ -524,171 +529,6 @@ public class ODMController : MonoBehaviour
         float t = Mathf.Clamp01(velocity.magnitude / fovSpeedRef);
         float target = Mathf.Lerp(baseFov, maxFov, t);
         cam.fieldOfView = Mathf.Lerp(cam.fieldOfView, target, 5f * dt);
-    }
-
-    void LoosenRope(HookState hook)
-    {
-        if (!hook.active) return;
-
-        float dist = Vector3.Distance(transform.position, hook.anchorPoint);
-        if (dist > maxHookRange)
-        {
-            hook.active = false;
-            return;
-        }
-        hook.ropeLength = Mathf.Max(hook.ropeLength, dist);
-    }
-
-    // ================= AIR MOVEMENT =================
-    void AirMovement(float dt, bool hooked)
-    {
-        bool dualHooked = hookLeft.active && hookRight.active;
-        float speedLimit = maxSpeed * (dualHooked ? dualHookMaxSpeedMultiplier : 1f);
-        bool boosting = GameInput.GetKey(KeyCode.LeftShift) && gas > 0f && !Exhausted;
-
-        velocity.y += gravity * dt;
-
-        Vector3 wish = GetWishDirection();
-        if ((!airControlRequiresGas || boosting) && wish.sqrMagnitude > 0.0001f)
-        {
-            Vector3 wishDir = wish.normalized;
-            float along = Vector3.Dot(new Vector3(velocity.x, 0f, velocity.z), wishDir);
-            float add = Mathf.Clamp(airControlMaxSpeed - along, 0f, airControl * dt);
-            velocity += wishDir * add;
-        }
-
-        if (boosting)
-        {
-            // Gas đẩy theo hướng camera; dây giới hạn bán kính và tạo cung đu.
-            Vector3 gasDirection = cameraTransform.forward.normalized;
-            float speedBeforeSteer = velocity.magnitude;
-            if (steerRate > 0f && speedBeforeSteer > 0.5f)
-            {
-                velocity = Vector3.RotateTowards(velocity,
-                                                 gasDirection * speedBeforeSteer,
-                                                 steerRate * Mathf.Deg2Rad * dt,
-                                                 0f);
-            }
-
-            float gasMultiplier = dualHooked ? dualHookGasMultiplier : 1f;
-            velocity += gasDirection * gasForce * gasMultiplier * dt;
-            gas = Mathf.Max(0f, gas - gasDrain * (hooked ? hookedGasDrainFactor : 1f) * dt);
-
-            if (velocity.magnitude > speedLimit)
-                velocity = velocity.normalized * speedLimit;
-        }
-
-        if (!hooked) return;
-
-        if (autoTakeUpSlack)
-        {
-            TakeUpSlack(hookLeft, dt);
-            TakeUpSlack(hookRight, dt);
-        }
-
-        bool strong = GameInput.GetKey(KeyCode.Space);
-        float reelMultiplier = dualHooked ? dualHookReelMultiplier : 1f;
-        ReelPull(hookLeft, dt, strong, reelMultiplier);
-        ReelPull(hookRight, dt, strong, reelMultiplier);
-
-        if (velocity.magnitude > speedLimit)
-            velocity = velocity.normalized * speedLimit;
-
-        float speedBeforeConstraint = velocity.magnitude;
-        Vector3 predicted = transform.position + velocity * dt;
-        bool constrained = false;
-        for (int i = 0; i < constraintIterations; i++)
-        {
-            if ((i & 1) == 0)
-            {
-                if (hookLeft.active) constrained |= ApplyRopeConstraint(hookLeft, ref predicted);
-                if (hookRight.active) constrained |= ApplyRopeConstraint(hookRight, ref predicted);
-            }
-            else
-            {
-                if (hookRight.active) constrained |= ApplyRopeConstraint(hookRight, ref predicted);
-                if (hookLeft.active) constrained |= ApplyRopeConstraint(hookLeft, ref predicted);
-            }
-        }
-
-        if (dt > 0f)
-            velocity = (predicted - transform.position) / dt;
-
-        if (constrained && cornerMomentumRetention > 0f && velocity.sqrMagnitude > 0.0001f)
-        {
-            float currentSpeed = velocity.magnitude;
-            float retainedSpeed = Mathf.Lerp(currentSpeed,
-                                             Mathf.Max(currentSpeed, speedBeforeConstraint),
-                                             cornerMomentumRetention);
-            velocity *= Mathf.Min(retainedSpeed, speedLimit) / currentSpeed;
-        }
-
-        velocity *= Mathf.Pow(ropeDamping, dt * 60f);
-
-        if (velocity.magnitude > speedLimit)
-            velocity = velocity.normalized * speedLimit;
-    }
-
-    void TakeUpSlack(HookState hook, float dt)
-    {
-        if (!hook.active || hook.attached) return;
-        float dist = Vector3.Distance(transform.position, hook.anchorPoint);
-        float target = Mathf.Max(attachDistance, dist);
-        if (hook.ropeLength > target)
-            hook.ropeLength = Mathf.MoveTowards(hook.ropeLength, target, slackTakeUpSpeed * dt);
-    }
-
-    void ReelPull(HookState hook, float dt, bool strong, float forceMultiplier)
-    {
-        if (!hook.active || hook.attached) return;
-
-        Vector3 toAnchor = hook.anchorPoint - transform.position;
-        float dist = toAnchor.magnitude;
-        Vector3 dir = toAnchor / Mathf.Max(dist, 0.0001f);
-
-        float intensity = strong ? 1f : 0f;
-        if (!strong && autoReel)
-        {
-            float look = Vector3.Dot(cameraTransform.forward, dir);
-            intensity = Mathf.InverseLerp(autoReelLookDot, 0.97f, look) * autoReelStrength;
-        }
-        if (reelOnlyWhenApproaching && Vector3.Dot(velocity, dir) < -reelAwayThreshold)
-            intensity = 0f;
-
-        if (intensity <= 0f) return;
-
-        if (dist <= attachDistance)
-        {
-            hook.ropeLength = attachDistance;
-            return;
-        }
-
-        if (strong)
-            hook.ropeLength = Mathf.Max(attachDistance, hook.ropeLength - reelSpeed * dt);
-
-        float approachSpeed = Vector3.Dot(velocity, dir);
-        float cap = reelMaxSpeed * forceMultiplier * Mathf.Max(0.5f, intensity);
-        float add = Mathf.Min(reelForce * forceMultiplier * intensity * dt,
-                              Mathf.Max(0f, cap - approachSpeed));
-        velocity += dir * add;
-    }
-
-    bool IsAttached(HookState hook)
-    {
-        return hook.active && hook.attached;
-    }
-
-    bool ApplyRopeConstraint(HookState hook, ref Vector3 predicted)
-    {
-        Vector3 toPos = predicted - hook.anchorPoint;
-        float dist = toPos.magnitude;
-        if (dist > hook.ropeLength && dist > 0.0001f)
-        {
-            predicted = hook.anchorPoint + toPos / dist * hook.ropeLength;
-            return true;
-        }
-
-        return false;
     }
 
     Vector3 GetWishDirection(bool suppressBackward = false)
