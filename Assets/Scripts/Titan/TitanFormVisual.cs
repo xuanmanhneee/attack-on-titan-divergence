@@ -179,6 +179,10 @@ class TitanFormVisual
         Vector3 rest = holder.TransformPoint(restEyeHolder);
         Vector3 eye = EyeWorld();
         Vector3 delta = f.transform.InverseTransformVector(eye - rest) * f.headFollow;
+        // Clip chạy làm đầu cúi/lùi về phía thân: camera đi lùi hoặc xuống sẽ chui vào trong cổ/ngực (thấy mặt trong
+        // của model). Chỉ cho camera đi theo đầu khi tiến lên hoặc nhích lên, không bao giờ lùi/hạ vào thân.
+        delta.z = Mathf.Max(0f, delta.z);
+        delta.y = Mathf.Max(0f, delta.y);
         Vector3 p = f.cam.localPosition;
         f.cam.localPosition = new Vector3(delta.x, p.y + delta.y, delta.z);
     }

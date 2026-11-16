@@ -33853,7 +33853,7 @@ GameObject:
   m_Component:
   - component: {fileID: 552719329}
   m_Layer: 0
-  m_Name: Gas_Depot_West
+  m_Name: Gas_Depot_Wall
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -33868,7 +33868,7 @@ Transform:
   m_GameObject: {fileID: 552719328}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -120, y: -2, z: -45}
+  m_LocalPosition: {x: -258, y: 48, z: 40}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -39783,8 +39783,6 @@ Transform:
   - {fileID: 1541708187}
   - {fileID: 1993591876}
   - {fileID: 552719329}
-  - {fileID: 1793055701}
-  - {fileID: 797987139}
   - {fileID: 563015491}
   - {fileID: 778862879}
   - {fileID: 1843731954}
@@ -44707,37 +44705,6 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 10.847109, y: 5.3472557, z: 9.289002}
   m_Center: {x: 1.018803, y: 2.6736274, z: 0.21242872}
---- !u!1 &797987138
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 797987139}
-  m_Layer: 0
-  m_Name: Gas_Depot_North
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &797987139
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 797987138}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -60, y: -2, z: 255}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 688185996}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &812287591
 GameObject:
   m_ObjectHideFlags: 0
@@ -58030,8 +57997,6 @@ MonoBehaviour:
   sealPoint: {fileID: 1993591876}
   depots:
   - {fileID: 552719329}
-  - {fileID: 1793055701}
-  - {fileID: 797987139}
   intersections:
   - {fileID: 563015491}
   - {fileID: 778862879}
@@ -102561,37 +102526,6 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 4071107897760886, guid: e03898b14a86f234a97b28e18ce3a154, type: 3}
   m_PrefabInstance: {fileID: 1788808722}
   m_PrefabAsset: {fileID: 0}
---- !u!1 &1793055700
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1793055701}
-  m_Layer: 0
-  m_Name: Gas_Depot_East
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &1793055701
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1793055700}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 120, y: -2, z: 135}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 688185996}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &1798769867
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -131602,6 +131536,18 @@ PrefabInstance:
     - target: {fileID: 988652501596974268, guid: b387f2c8130aab94faf73d03588fd59b, type: 3}
       propertyPath: m_Name
       value: Player
+      objectReference: {fileID: 0}
+    - target: {fileID: 6331719079431500596, guid: b387f2c8130aab94faf73d03588fd59b, type: 3}
+      propertyPath: musicLead
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6331719079431500596, guid: b387f2c8130aab94faf73d03588fd59b, type: 3}
+      propertyPath: videoDelay
+      value: 0.6
+      objectReference: {fileID: 0}
+    - target: {fileID: 7348825875733388449, guid: b387f2c8130aab94faf73d03588fd59b, type: 3}
+      propertyPath: backgroundMusicLoopEnd
+      value: 145
       objectReference: {fileID: 0}
     - target: {fileID: 7902133391496603976, guid: b387f2c8130aab94faf73d03588fd59b, type: 3}
       propertyPath: m_LocalPosition.x

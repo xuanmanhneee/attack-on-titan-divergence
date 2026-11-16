@@ -42,6 +42,7 @@ public class GameManager : MonoBehaviour
     TrostMission mission;
     PlayerCombat combat;
     TitanForm titanForm;
+    public bool PlayerTransforming => titanForm != null && titanForm.IsTransforming;
     Health playerHealth;
     Camera cam;
     TrostMap activeTrostMap;

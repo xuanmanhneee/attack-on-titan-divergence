@@ -21,7 +21,8 @@ public class TransformLightning : MonoBehaviour
         return t;
     }
 
-    static readonly Color WhiteColor = new Color(1f, 0.97f, 0.8f);
+    public const float FullWhiteAt = 0.85f; // tỉ lệ đoạn sét mà màn hình trắng kín
+    public static readonly Color WhiteColor = new Color(1f, 0.97f, 0.8f);
     static readonly Color GlowTint = new Color(1.6f, 0.8f, 0.1f);   // HDR: vàng cam, > 1 để Bloom bắt
     static readonly Color CoreTint = new Color(6f, 5f, 2.2f);         // lõi trắng vàng rất sáng
     static readonly Color SparkTint = new Color(5f, 3f, 0.6f);
@@ -30,6 +31,8 @@ public class TransformLightning : MonoBehaviour
     float total;
     float time;
     float nextSpawn;
+    float nextSky = 0.35f;
+    float impact;              // chớp ánh sáng/rung do sét đánh trời xuống, tự giảm dần
     float spike;
     Light flashLight;
     Material coreMat, glowMat, sparkMat, orbMat;
@@ -235,6 +238,14 @@ public class TransformLightning : MonoBehaviour
             nextSpawn = time + Mathf.Lerp(0.2f, 0.025f, k) * Random.Range(0.7f, 1.3f);
         }
 
+        // Sét đánh từ trên trời xuống: to hơn, thưa hơn, dồn dần.
+        if (time < total && time >= nextSky)
+        {
+            SpawnSkyBolt(k);
+            nextSky = time + Mathf.Lerp(0.9f, 0.22f, k) * Random.Range(0.7f, 1.4f);
+        }
+        impact = Mathf.Max(0f, impact - dt * 4f);
+
         // Tia chớp tắt chập chờn rồi biến mất.
         for (int i = bolts.Count - 1; i >= 0; i--)
         {
@@ -256,7 +267,7 @@ public class TransformLightning : MonoBehaviour
         // Hậu kỳ.
         if (volume != null)
         {
-            float vw = time < total ? Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(p * 1.6f)) : Mathf.Clamp01(1f - (time - total) * 0.8f);
+            float vw = time < total ? Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(p * 1.6f)) : Mathf.Clamp01(1f - (time - total) * 4f);
             volume.weight = vw;
             bloom.intensity.value = Mathf.Lerp(0.25f, 3.5f, p * p);
             chroma.intensity.value = Mathf.Lerp(0f, 0.5f, k);
@@ -267,22 +278,23 @@ public class TransformLightning : MonoBehaviour
         {
             if (time < total)
             {
-                float amp = Mathf.Lerp(0f, 1.6f, Mathf.InverseLerp(0.15f, 1f, k));
+                float amp = Mathf.Lerp(0f, 1.6f, Mathf.InverseLerp(0.15f, 1f, k)) + 2.5f * impact;
                 camT.localRotation = camBaseRot * Quaternion.Euler(Random.Range(-amp, amp), Random.Range(-amp, amp), Random.Range(-amp, amp) * 1.5f);
             }
             else { camT.localRotation = camBaseRot; shakeActive = false; }
         }
 
-        // Chói sáng: từ 60% thời gian trắng dần, kín màn hình ở cuối; sau đó giữ chút rồi mờ khi thế giới chạy lại.
-        float white = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.6f, 1f, p));
+        // Chói sáng: từ 45% thời gian trắng dần, kín màn hình từ 85%; sau đó giữ chút rồi mờ khi thế giới chạy lại.
+        float white = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.45f, FullWhiteAt, p)); // kín từ FullWhiteAt tới hết (TitanForm hiện thân titan lúc này)
         if (time > total) white = Mathf.Clamp01(1.3f - (time - total) * 0.9f);
         spike = Mathf.Max(0f, spike - dt * 3f);
-        float flash = Mathf.Max(white, spike);
+        float flash = Mathf.Max(white, spike, impact * 0.6f);
         if (flash > 0.01f && GameHud.Current != null) GameHud.Current.Flash(WhiteColor, flash);
 
-        flashLight.transform.position = LightPos();
-        float target = 500f * k * (Random.value < 0.4f ? 0.5f : 1f);
-        flashLight.intensity = time < total ? target : Mathf.Max(0f, flashLight.intensity - dt * 500f);
+        if (impact < 0.05f) flashLight.transform.position = LightPos();
+        float target = 500f * k * (Random.value < 0.4f ? 0.5f : 1f) + 3000f * impact;
+        // Hết đoạn sét là tắt hẳn đèn chớp: nếu để tắt dần thì thân titan (vừa hiện) bị rọi sáng ~1 giây.
+        flashLight.intensity = time < total ? target : 0f;
 
         if (time > total + 2f && bolts.Count == 0) Destroy(gameObject);
     }
@@ -354,6 +366,52 @@ public class TransformLightning : MonoBehaviour
             Vector3 fdir = Vector3.Slerp(dir, Random.onUnitSphere, Random.Range(0.3f, 0.6f)).normalized;
             Vector3[] fork = BuildPath(main[at], main[at] + fdir * length * Random.Range(0.25f, 0.5f), 4);
             AddBolt(fork, width * 0.55f, life * 0.85f);
+        }
+    }
+
+    // Sét đánh thẳng từ trời xuống đất trong tầm nhìn: cùng kiểu tia nhưng dày hơn nhiều, nhiều nhánh, có nổ tia lửa ở chỗ chạm đất.
+    void SpawnSkyBolt(float k)
+    {
+        Transform ct = camT != null ? camT : transform;
+        Vector3 fwd = ct.forward; fwd.y = 0f;
+        if (fwd.sqrMagnitude < 0.01f) fwd = Vector3.forward;
+        fwd.Normalize();
+        // Điểm đánh: trước mặt, lệch trái/phải trong khoảng nhìn, cách 18-80m.
+        Vector3 flat = Quaternion.Euler(0f, Random.Range(-55f, 55f), 0f) * fwd * Random.Range(18f, 80f);
+        Vector3 ground = ct.position + flat;
+        RaycastHit hit;
+        if (Physics.Raycast(ground + Vector3.up * 200f, Vector3.down, out hit, 400f, ~0, QueryTriggerInteraction.Ignore)) ground = hit.point;
+        else ground.y = ct.position.y - 1.7f;
+
+        Vector3 top = ground + Vector3.up * 160f + new Vector3(Random.Range(-18f, 18f), 0f, Random.Range(-18f, 18f));
+        float width = Mathf.Lerp(0.5f, 1.5f, k) * Random.Range(0.8f, 1.2f);
+        float life = Random.Range(0.22f, 0.4f);
+        Vector3[] main = BuildPath(top, ground, 6);
+        AddBolt(main, width, life);
+        int forks = Random.Range(2, 5);
+        for (int f = 0; f < forks; f++)
+        {
+            int at = Random.Range(main.Length / 6, main.Length * 5 / 6);
+            Vector3 fdir = Vector3.Slerp(Vector3.down, Random.onUnitSphere, Random.Range(0.35f, 0.7f)).normalized;
+            AddBolt(BuildPath(main[at], main[at] + fdir * Random.Range(15f, 45f), 4), width * 0.4f, life * 0.8f);
+        }
+
+        // Chạm đất: loé sáng, rung, bắn tia lửa.
+        impact = Mathf.Max(impact, Mathf.Lerp(0.5f, 1f, k));
+        flashLight.transform.position = ground + Vector3.up * 5f;
+        if (sparks != null)
+        {
+            for (int i = 0; i < 30; i++)
+            {
+                var ep = new ParticleSystem.EmitParams
+                {
+                    position = ground + Vector3.up * 0.3f,
+                    velocity = new Vector3(Random.Range(-12f, 12f), Random.Range(6f, 22f), Random.Range(-12f, 12f)),
+                    startLifetime = Random.Range(0.4f, 0.9f),
+                    startSize = Random.Range(0.1f, 0.3f)
+                };
+                sparks.Emit(ep, 1);
+            }
         }
     }
 

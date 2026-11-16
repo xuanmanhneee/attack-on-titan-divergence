@@ -516,7 +516,7 @@ MonoBehaviour:
   hookReleaseVolume: 0.28
   backgroundMusic: {fileID: 8300000, guid: 79e989a4e1242804b91cdc0f87cc31cf, type: 3}
   backgroundMusicVolume: 0.24
-  backgroundMusicLoopEnd: 142
+  backgroundMusicLoopEnd: 145
   backgroundMusicLoopFade: 3
   backgroundMusicReturnOnRevert: 0
   showDebugGizmos: 1
@@ -645,7 +645,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerStamina
   stats:
-    maxStamina: 300
+    maxStamina: 450
     baseRegen: 0.5
     restRegen: 12
     safeDistance: 15
@@ -653,17 +653,17 @@ MonoBehaviour:
     restMaxPath: 10
     restDelay: 3
     exhaustRecover: 45
-    runCost: 1
-    swingCostPerHook: 1.9
-    gasBoostCost: 3.2
+    runCost: 0.7
+    swingCostPerHook: 1.2
+    gasBoostCost: 2.2
     hookFireCost: 1.5
     slashCost: 4
     transformCost: 75
-    transformMinStamina: 140
+    transformMinStamina: 160
     healRate: 3
     staminaPerHealth: 1
     healMinStamina: 15
-    titanDrainPerSecond: 5
+    titanDrainPerSecond: 4.5
 --- !u!114 &6209583393874724829
 MonoBehaviour:
   m_ObjectHideFlags: 0

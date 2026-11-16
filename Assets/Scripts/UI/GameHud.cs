@@ -303,7 +303,7 @@ public class GameHud : MonoBehaviour
     void UpdateNapeMarks()
     {
         napes.Begin();
-        if (cam != null)
+        if (cam != null && (gm == null || !gm.PlayerTransforming))
         {
             foreach (Titan t in Titan.All)
             {
@@ -324,7 +324,7 @@ public class GameHud : MonoBehaviour
     void UpdateTitanBars()
     {
         titanBars.Begin();
-        if (cam != null)
+        if (cam != null && (gm == null || !gm.PlayerTransforming))
         {
             foreach (Titan t in Titan.All)
             {
@@ -343,7 +343,8 @@ public class GameHud : MonoBehaviour
     void UpdateMissionMarks()
     {
         missionMarks.Begin();
-        if (cam != null && gm.Mission != null)
+        // Đang biến hình thì không vẽ dấu nào đè lên màn hình.
+        if (cam != null && gm.Mission != null && !gm.PlayerTransforming)
         {
             foreach (var mk in gm.Mission.Markers)
             {

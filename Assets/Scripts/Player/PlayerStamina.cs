@@ -8,7 +8,7 @@ using UnityEngine;
 public class StaminaStats
 {
     [Header("Dung lượng và hồi phục")]
-    public float maxStamina = 300f;
+    public float maxStamina = 450f;
     [Tooltip("Hồi tối thiểu mỗi giây (rất nhỏ). Luôn nhỏ hơn mọi mức tiêu hao nên không thể vừa hoạt động vừa tự hồi")]
     public float baseRegen = 0.5f;
     [Tooltip("Tổng hồi mỗi giây khi nghỉ ở chỗ an toàn (thay cho hồi nền)")]
@@ -25,15 +25,19 @@ public class StaminaStats
     public float exhaustRecover = 45f;
 
     [Header("Tiêu hao khi hoạt động (điểm/giây)")]
-    public float runCost = 1f;          // chạy trên đất
-    public float swingCostPerHook = 1.9f;   // đang treo trên dây (mỗi dây)
-    public float gasBoostCost = 3.2f;     // xả gas lướt
+    public float runCost = 0.7f;          // chạy trên đất
+    public float swingCostPerHook = 1.2f;   // đang treo trên dây (mỗi dây)
+    public float gasBoostCost = 2.2f;     // xả gas lướt
 
     [Header("Tiêu hao một lần")]
     public float hookFireCost = 1.5f;
     public float slashCost = 4f;
     public float transformCost = 75f;
-    public float transformMinStamina = 140f; // phải có từng này mới được biến hình
+    public float transformMinStamina = 160f; // phải có từng này mới được biến hình
+    [Tooltip("Về dạng người: trừ thêm chừng này thể lực (phần còn lại được giữ)")]
+    public float revertCost = 25f;
+    [Tooltip("Về dạng người: luôn còn ít nhất chừng này (và hết kiệt sức) để còn chạy thoát được. Nên lớn hơn exhaustRecover")]
+    public float revertMinStamina = 60f;
 
     [Header("Hồi máu (tốn thể lực)")]
     public float healRate = 3f;           // máu hồi mỗi giây khi bị thương
@@ -41,7 +45,7 @@ public class StaminaStats
     public float healMinStamina = 15f;     // dưới mức này thì không đổi nữa
 
     [Header("Titan")]
-    public float titanDrainPerSecond = 5f; // dạng titan đốt bấy nhiêu thể lực mỗi giây (nhanh hơn mọi hoạt động dạng người)
+    public float titanDrainPerSecond = 4.5f; // dạng titan đốt bấy nhiêu thể lực mỗi giây (nhanh hơn mọi hoạt động dạng người)
 
     // Chỗ cho trang bị
     [NonSerialized] public float maxBonus;
@@ -102,6 +106,7 @@ public class PlayerStamina : MonoBehaviour
     {
         Current = Mathf.Clamp(value, 0f, Max);
         if (Current <= 0f) Exhausted = true;
+        else if (Exhausted && Current >= stats.exhaustRecover) Exhausted = false;
     }
 
     public bool CanAfford(float cost) { return !Exhausted && Current >= stats.Cost(cost); }

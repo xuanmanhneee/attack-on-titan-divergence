@@ -53,6 +53,7 @@ public class TitanForm : MonoBehaviour
     public float punchCooldown = 0.15f;
 
     public bool IsTitan => state == State.Transforming || state == State.Titan;
+    public bool IsTransforming => state == State.Transforming; // đang đứng hình biến hình: HUD ẩn các dấu trên thế giới
 
     enum State { Human, Transforming, Titan }
     PlayerStamina stamina;
@@ -136,6 +137,11 @@ public class TitanForm : MonoBehaviour
 
     void Start()
     {
+        // Nạp + Prepare video biến hình từ đầu trận để lúc bấm G không bị khựng khung hình.
+        preparedVideo = TransformVideo.Create();
+        // Giải mã sẵn nhạc biến hình (clip không preload) để Play/seek lúc bấm G không bị trễ.
+        transformSfx = Resources.Load<AudioClip>("Audio/transform_sfx");
+        if (transformSfx != null && transformSfx.loadState == AudioDataLoadState.Unloaded) transformSfx.LoadAudioData();
         cam = odm.cameraTransform;
         manager = FindAnyObjectByType<GameManager>();
         if (combat == null) combat = GetComponent<PlayerCombat>();
@@ -181,7 +187,25 @@ public class TitanForm : MonoBehaviour
     // ================= BIẾN HÌNH =================
     bool frozen; // đang giữ timeScale = 0 vì biến hình
     bool lightningStarted;
+    bool videoPlayed;
+    bool videoStarted;
+    [Tooltip("Lần biến hình đầu của trận: sét chạy bấy nhiêu giây rồi mới phát transform_vfx.")]
+    public float videoDelay = 0.6f;
+    [Tooltip("Thời gian crossfade (giây) khi nhạc nền chuyển sang đoạn titan lúc video bắt đầu.")]
+    public float videoMusicFade = 0.3f;
+    TransformVideo transformVideo;
+    TransformVideo preparedVideo;
     bool biteEnded;
+    bool bodyBuilt;
+    const float BodyAppearAt = TransformLightning.FullWhiteAt; // màn hình trắng kín từ mốc này
+
+    void BuildBody()
+    {
+        bodyBuilt = true;
+        visual.Build();
+        shake.Reset();
+        punch.Reset();
+    }
 
     void UpdateFrozenTransform()
     {
@@ -191,6 +215,14 @@ public class TitanForm : MonoBehaviour
         Time.timeScale = 0f; // chống việc thoát pause trả timeScale về 1 giữa chừng
         stateTimer += Time.unscaledDeltaTime;
 
+        // Đang bay thì vẫn trượt theo đà trong lúc đứng hình (chạy bằng đồng hồ thật), tắt dần để không khựng.
+        if (slideVelocity.sqrMagnitude > 0.01f && controller != null && controller.enabled)
+        {
+            float sdt = Time.unscaledDeltaTime;
+            controller.Move(slideVelocity * sdt);
+            slideVelocity *= Mathf.Exp(-slideDrag * sdt);
+        }
+
         // Đứng hình suốt đoạn này. Animation cắn tay chạy 0 -> biteTime. Sét vàng bắt đầu sớm (lightningStart, lúc tay
         // vừa lên miệng) và mạnh dần tới trắng xoá lúc hết transform_sfx; camera nâng lên tầm mắt titan ở cuối.
         if (!lightningStarted && stateTimer >= lightningStart)
@@ -198,17 +230,31 @@ public class TitanForm : MonoBehaviour
             lightningStarted = true;
             TransformLightning.Play(transform.position, LightningTime);
         }
+        // Lần biến hình đầu của trận: sét chạy videoDelay giây rồi mới phát video (video tự loá sáng tới hết).
+        if (transformVideo != null && !videoStarted && stateTimer >= lightningStart + videoDelay)
+        {
+            videoStarted = true;
+            // Nhạc nền sang đoạn titan (sau loopEnd) ngay lúc video bắt đầu; video loá sáng kín đúng mốc thân titan hiện ra (BodyAppearAt).
+            if (odm.Music != null) odm.Music.SetTitan(true, videoMusicFade);
+            float untilVideoEnd = LightningTime - videoDelay;
+            transformVideo.Begin(untilVideoEnd, LightningTime * BodyAppearAt - videoDelay);
+        }
         if (!biteEnded && stateTimer >= biteTime)
         {
             biteEnded = true;
             if (swordViewmodel != null) { swordViewmodel.StopBite(); swordViewmodel.enabled = false; }
         }
-        // Camera chỉ nâng lên tầm mắt titan ở 40% cuối, lúc màn hình đã gần trắng xoá.
-        float k = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.6f, 1f, (stateTimer - lightningStart) / Mathf.Max(0.01f, LightningTime)));
+        // Màn hình trắng kín từ ~85% đoạn sét: đúng lúc đó mới hiện thân titan và nâng camera lên tầm mắt titan.
+        float lp = (stateTimer - lightningStart) / Mathf.Max(0.01f, LightningTime);
+        if (!bodyBuilt && lp >= BodyAppearAt) BuildBody();
+        float k = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(BodyAppearAt, 1f, lp));
         CameraShake.SetLocalY(cam, Mathf.Lerp(oldCamLocal.y, eyeLocalY, k));
         if (stateTimer >= TransformTotal)
         {
+            if (!bodyBuilt) BuildBody();
             Unfreeze();
+            velocity = slideVelocity; // đà còn lại sau đoạn trượt
+            slideVelocity = Vector3.zero;
             state = State.Titan;
             stamina.Locked = true;
             stamina.Set(stamina.Current - stamina.stats.Cost(stamina.stats.transformCost)); // phí biến hình
@@ -233,9 +279,31 @@ public class TitanForm : MonoBehaviour
         Time.fixedDeltaTime = 0.02f;
     }
 
+    void PlayTransformSfx()
+    {
+        if (transformSfx == null) return;
+        if (sfxSource == null)
+        {
+            sfxSource = gameObject.AddComponent<AudioSource>();
+            sfxSource.playOnAwake = false;
+            sfxSource.spatialBlend = 0f;
+        }
+        sfxSource.clip = transformSfx;
+        sfxSource.volume = Mathf.Clamp01(GameSettings.Sfx);
+        sfxSource.Play();
+    }
+
+    Vector3 slideVelocity;
+    [Tooltip("Độ tắt dần của đà trượt trong lúc đứng hình (càng lớn càng dừng nhanh).")]
+    public float slideDrag = 1.2f;
+    [Tooltip("Giữ đà đang bay khi biến hình / trở lại người (m/s tối đa); 0 = như cũ (mất hết đà).")]
+    public float maxCarriedSpeed = 25f;
+
     void BeginTransform()
     {
         if (cam == null) return;
+        // Đà đang bay lúc biến hình: trượt tiếp trong lúc đứng hình, rồi giao cho titan, cuối cùng cho người, để không bị khựng.
+        slideVelocity = Vector3.ClampMagnitude(odm.Velocity, maxCarriedSpeed);
 
         odm.ReleaseAllHooks();
         odm.ResetMotion();
@@ -275,30 +343,29 @@ public class TitanForm : MonoBehaviour
         eyeLocalY = formHeight * 0.5f - 0.9f; // dự phòng nếu model không tải được
 
         Titan.Lure(transform.position); // tiếng động lớn kéo titan quanh đó tới
-        visual.Build();
+        // Thân titan chưa dựng ở đây: chỉ hiện ra khi màn hình đã trắng xoá (BuildBody, xem UpdateFrozenTransform).
+        bodyBuilt = false;
         shake.Reset();
-        velocity = Vector3.zero;
+        velocity = slideVelocity; // đang bay thì vẫn lao tiếp theo đà thay vì rơi thẳng từ đứng yên
         punch.Reset();
 
         health.DamageMultiplier = 0f; // bất tử trong lúc biến hình
-        // Nhạc titan chạy ngay từ lúc bấm G (crossfade ngắn). Sét bắt đầu sau biteTime, xem UpdateFrozenTransform.
-        if (odm.Music != null) odm.Music.SetTitan(true, 1f);
         // transform_sfx chạy suốt đoạn biến hình (cắn tay + sét); tiếng gầm phát ngay khi nó hết (xem UpdateFrozenTransform).
         if (transformSfx == null) transformSfx = Resources.Load<AudioClip>("Audio/transform_sfx");
-        if (transformSfx != null)
-        {
-            if (sfxSource == null)
-            {
-                sfxSource = gameObject.AddComponent<AudioSource>();
-                sfxSource.playOnAwake = false;
-                sfxSource.spatialBlend = 0f;
-            }
-            sfxSource.clip = transformSfx;
-            sfxSource.volume = Mathf.Clamp01(GameSettings.Sfx);
-            sfxSource.Play();
-        }
         lightningStarted = false;
         biteEnded = false;
+        // Lần biến hình đầu tiên trong trận (mỗi lần nạp scene) phát transform_vfx.mp4 thay cho sét thủ tục.
+        transformVideo = null;
+        videoStarted = false;
+        if (!videoPlayed)
+        {
+            transformVideo = preparedVideo != null ? preparedVideo : TransformVideo.Create();
+            preparedVideo = null;
+            videoPlayed = transformVideo != null;
+        }
+        PlayTransformSfx();
+        // Nhạc titan chạy ngay từ lúc bấm G (crossfade ngắn); lần đầu có video thì dời tới lúc video bắt đầu (UpdateFrozenTransform).
+        if (transformVideo == null && odm.Music != null) odm.Music.SetTitan(true, 1f);
         if (GameHud.Current != null) GameHud.Current.HideTitanBar();
         frozen = true;
         Time.timeScale = 0f; // dừng thời gian suốt lúc biến hình (xem UpdateFrozenTransform)
@@ -336,14 +403,16 @@ public class TitanForm : MonoBehaviour
 
         odm.Yaw = transform.eulerAngles.y;
         odm.ResetMotion();
+        odm.Velocity = Vector3.ClampMagnitude(velocity, maxCarriedSpeed);
         odm.suspended = false;
         health.DamageMultiplier = 1f;
 
-        // Trả máu dạng người + đổi phần thể lực (thời gian titan) còn lại thành máu
+        // Trả máu dạng người; giữ lại thể lực còn lại (trừ thêm một ít, nhưng luôn còn đủ để chạy)
         if (state == State.Titan && !health.IsDead)
         {
-            health.SetCurrent(Mathf.Min(health.maxHealth, humanHealth + stamina.Current / Mathf.Max(0.01f, stamina.stats.staminaPerHealth)));
-            stamina.Set(0f);
+            health.SetCurrent(humanHealth);
+            var st = stamina.stats;
+            stamina.Set(Mathf.Max(stamina.Current - st.Cost(st.revertCost), st.revertMinStamina));
         }
 
         if (stamina != null) stamina.Locked = false;

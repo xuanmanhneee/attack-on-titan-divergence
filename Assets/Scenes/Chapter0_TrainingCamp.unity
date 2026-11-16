@@ -22850,7 +22850,7 @@ MonoBehaviour:
   hookReleaseVolume: 0.28
   backgroundMusic: {fileID: 8300000, guid: 79e989a4e1242804b91cdc0f87cc31cf, type: 3}
   backgroundMusicVolume: 0.24
-  backgroundMusicLoopEnd: 142
+  backgroundMusicLoopEnd: 145
   backgroundMusicLoopFade: 3
   backgroundMusicReturnOnRevert: 0
   showDebugGizmos: 1
