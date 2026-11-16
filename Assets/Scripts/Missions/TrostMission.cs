@@ -94,8 +94,8 @@ public class TrostMission : MonoBehaviour
     Titan Spawn(Vector3 pos, TitanModelDef def, float height)
     {
         var t = Titan.Create(pos, height, odm.transform, def);
-        t.detectRange = 220f; // trong thành phố, titan phát hiện người chơi từ xa
-        t.loseRange = 400f;
+        t.detectRange = 70f; // trong thành phố, tầm nhìn xa hơn mặc định nhưng vẫn bị nhà chắn và có góc nhìn
+        t.loseRange = 200f;
         return t;
     }
 

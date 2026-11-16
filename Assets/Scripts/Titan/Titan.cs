@@ -40,11 +40,13 @@ public class Titan : MonoBehaviour
     public float turnSpeed = 100f;
     [Header("Cảm nhận người chơi")]
     [Tooltip("Thấy người chơi (có đường nhìn, không bị nhà chắn) trong tầm này thì lao tới, tốc độ tăng vọt")]
-    public float detectRange = 60f;
-    [Tooltip("Nghe/ngửi thấy người ở sát bên thì biết ngay, bất kể tường chắn")]
-    public float senseRange = 14f;
+    public float detectRange = 40f;
+    [Tooltip("Góc nhìn (độ) phía trước mặt; người chơi ngoài góc này (ở sau lưng) thì không bị thấy")]
+    public float viewAngle = 140f;
+    [Tooltip("Nghe/ngửi thấy người ở rất sát thì biết ngay, bất kể tường chắn")]
+    public float senseRange = 6f;
     [Tooltip("Mất dấu quá chừng này giây thì quay về lang thang")]
-    public float loseSightTime = 6f;
+    public float loseSightTime = 4f;
     public float loseRange = 120f;
     [Tooltip("Lúc chưa thấy: vẫn đại khái biết người ở đâu và lang thang quanh đó, lệch ngẫu nhiên tới bán kính này")]
     public float instinctRadius = 45f;
@@ -78,6 +80,7 @@ public class Titan : MonoBehaviour
     State state = State.Wander;
     float stateTimer;
     Vector3 wanderPoint;
+    Vector3 lastKnownPos;
     float lostSightTimer;
     public bool IsChasing => state == State.Chase || state == State.Windup || state == State.Recover;
     float wanderTimer;
@@ -150,11 +153,13 @@ public class Titan : MonoBehaviour
         return n;
     }
 
-    // Thấy người chơi: trong tầm, không bị vật cản chắn. Rất gần thì biết ngay (nghe/ngửi).
+    // Thấy người chơi: trong tầm, trong góc nhìn, không bị vật cản chắn. Rất gần thì biết ngay (nghe/ngửi).
     bool CanSense(float flatDist)
     {
         if (flatDist < senseRange) return true;
         if (flatDist > detectRange) return false;
+        Vector3 flatTo = target.position - transform.position; flatTo.y = 0f;
+        if (Vector3.Angle(transform.forward, flatTo) > viewAngle * 0.5f) return false;
         if (ObstacleMask == 0) return true;
         Vector3 eye = transform.position + Vector3.up * (Height * 0.8f);
         Vector3 aim = target.position + Vector3.up * 1f;
@@ -206,6 +211,7 @@ public class Titan : MonoBehaviour
         {
             state = State.Chase;
             lostSightTimer = 0f;
+            lastKnownPos = target.position;
             GameAudio.Play(Sfx.Roar, transform.position + Vector3.up * Height * 0.8f, Mathf.Clamp(Height / 12f, 0.5f, 1.3f), Mathf.Clamp(14f / Height, 0.7f, 1.3f));
             return;
         }
@@ -224,15 +230,17 @@ public class Titan : MonoBehaviour
 
     void UpdateChase(float dist, bool inArmHeight, float dt)
     {
-        if (CanSense(dist)) lostSightTimer = 0f; else lostSightTimer += dt;
+        bool sees = CanSense(dist);
+        if (sees) { lostSightTimer = 0f; lastKnownPos = target.position; } else lostSightTimer += dt;
         if (dist > loseRange || lostSightTimer > loseSightTime) { state = State.Wander; wanderTimer = 0f; return; }
-        if (dist <= AttackReach && inArmHeight)
+        if (sees && dist <= AttackReach && inArmHeight)
         {
             state = State.Windup;
             stateTimer = windupTime;
             return;
         }
-        MoveToward(target.position, runSpeed, dt);
+        // Mất dấu thì chỉ chạy tới chỗ thấy người chơi lần cuối, không biết vị trí thật
+        MoveToward(lastKnownPos, runSpeed, dt);
         SetArms(0f);
     }
 
