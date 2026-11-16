@@ -167,18 +167,7 @@ public class Titan : MonoBehaviour
         float dt = Time.deltaTime;
         moving = false;
 
-        if (!logged)
-        {
-            if (bornTime == 0f) bornTime = Time.time;
-            if (Time.time - bornTime > 2f)
-            {
-                logged = true;
-                if (DebugLogs) Debug.Log("[Titan] " + (def != null ? def.name : "placeholder") + " cao " + Height.ToString("F1") +
-                          "m, y=" + transform.position.y.ToString("F2") +
-                          (GroundSampler != null ? ", mặt đất=" + GroundSampler(transform.position).ToString("F2") : "") +
-                          (feet != null ? ", dịch chân=" + feet.Shift.ToString("F2") : ", không có Humanoid"));
-            }
-        }
+        LogSpawnDiagnostics();
 
         Vector3 to = target.position - transform.position;
         to.y = 0f;
@@ -187,78 +176,101 @@ public class Titan : MonoBehaviour
 
         switch (state)
         {
-            case State.Wander:
-                if (CanSense(dist) && (dist < senseRange || ChaserCount(this) < maxChasers))
-                {
-                    state = State.Chase;
-                    lostSightTimer = 0f;
-                    GameAudio.Play(Sfx.Roar, transform.position + Vector3.up * Height * 0.8f, Mathf.Clamp(Height / 12f, 0.5f, 1.3f), Mathf.Clamp(14f / Height, 0.7f, 1.3f));
-                    break;
-                }
-                wanderTimer -= dt;
-                Vector3 toPoint = wanderPoint - transform.position; toPoint.y = 0f;
-                if (wanderTimer <= 0f || toPoint.magnitude < 2f)
-                {
-                    // Linh cảm: điểm đến luôn nằm quanh vị trí người chơi (lệch ngẫu nhiên), chưa phải đuổi thẳng
-                    Vector2 r = UnityEngine.Random.insideUnitCircle.normalized * UnityEngine.Random.Range(instinctMinRadius, Mathf.Max(instinctMinRadius + 1f, instinctRadius));
-                    wanderPoint = target.position + new Vector3(r.x, 0f, r.y);
-                    wanderTimer = UnityEngine.Random.Range(instinctInterval * 0.7f, instinctInterval * 1.3f);
-                }
-                MoveToward(wanderPoint, walkSpeed, dt);
-                SetArms(0f);
-                break;
-
-            case State.Chase:
-                if (CanSense(dist)) lostSightTimer = 0f; else lostSightTimer += dt;
-                if (dist > loseRange || lostSightTimer > loseSightTime) { state = State.Wander; wanderTimer = 0f; break; }
-                if (dist <= AttackReach && inArmHeight)
-                {
-                    state = State.Windup;
-                    stateTimer = windupTime;
-                    break;
-                }
-                MoveToward(target.position, runSpeed, dt);
-                SetArms(0f);
-                break;
-
-            case State.Windup:
-                FaceTarget(dt);
-                stateTimer -= dt;
-                SetArms(Mathf.Lerp(0f, -150f, 1f - Mathf.Clamp01(stateTimer / windupTime)));
-                if (stateTimer <= 0f)
-                {
-                    DoHit();
-                    state = State.Recover;
-                    stateTimer = recoverTime;
-                }
-                break;
-
-            case State.Recover:
-                stateTimer -= dt;
-                SetArms(Mathf.Lerp(0f, 30f, Mathf.Clamp01(stateTimer / recoverTime)));
-                if (stateTimer <= 0f) state = State.Chase;
-                break;
+            case State.Wander: UpdateWander(dist, dt); break;
+            case State.Chase: UpdateChase(dist, inArmHeight, dt); break;
+            case State.Windup: UpdateWindup(dt); break;
+            case State.Recover: UpdateRecover(dt); break;
         }
 
         SnapToGround(dt);
         AnimateLegs(dt);
+        UpdateFootsteps(dt);
+        UpdateClipRole();
+    }
 
-        if (moving)
-        {
-            stepTimer -= dt * (state == State.Chase ? 1.8f : 1f);
-            if (stepTimer <= 0f)
-            {
-                stepTimer = 0.9f;
-                if (Camera.main != null && (Camera.main.transform.position - transform.position).sqrMagnitude < 150f * 150f)
-                    GameAudio.Play(Sfx.Footstep, transform.position, Mathf.Clamp(Height / 14f, 0.4f, 1.2f), Mathf.Clamp(14f / Height, 0.7f, 1.4f));
-            }
-        }
+    void LogSpawnDiagnostics()
+    {
+        if (logged) return;
+        if (bornTime == 0f) bornTime = Time.time;
+        if (Time.time - bornTime <= 2f) return;
+        logged = true;
+        if (DebugLogs) Debug.Log("[Titan] " + (def != null ? def.name : "placeholder") + " cao " + Height.ToString("F1") +
+                  "m, y=" + transform.position.y.ToString("F2") +
+                  (GroundSampler != null ? ", mặt đất=" + GroundSampler(transform.position).ToString("F2") : "") +
+                  (feet != null ? ", dịch chân=" + feet.Shift.ToString("F2") : ", không có Humanoid"));
+    }
 
-        if (clips != null)
+    void UpdateWander(float dist, float dt)
+    {
+        if (CanSense(dist) && (dist < senseRange || ChaserCount(this) < maxChasers))
         {
-            bool attacking = state == State.Windup || state == State.Recover;
-            clips.SetRole(attacking ? TitanClipPlayer.Role.Attack : moving ? TitanClipPlayer.Role.Walk : TitanClipPlayer.Role.Idle);
+            state = State.Chase;
+            lostSightTimer = 0f;
+            GameAudio.Play(Sfx.Roar, transform.position + Vector3.up * Height * 0.8f, Mathf.Clamp(Height / 12f, 0.5f, 1.3f), Mathf.Clamp(14f / Height, 0.7f, 1.3f));
+            return;
         }
+        wanderTimer -= dt;
+        Vector3 toPoint = wanderPoint - transform.position; toPoint.y = 0f;
+        if (wanderTimer <= 0f || toPoint.magnitude < 2f)
+        {
+            // Linh cảm: điểm đến luôn nằm quanh vị trí người chơi (lệch ngẫu nhiên), chưa phải đuổi thẳng
+            Vector2 r = UnityEngine.Random.insideUnitCircle.normalized * UnityEngine.Random.Range(instinctMinRadius, Mathf.Max(instinctMinRadius + 1f, instinctRadius));
+            wanderPoint = target.position + new Vector3(r.x, 0f, r.y);
+            wanderTimer = UnityEngine.Random.Range(instinctInterval * 0.7f, instinctInterval * 1.3f);
+        }
+        MoveToward(wanderPoint, walkSpeed, dt);
+        SetArms(0f);
+    }
+
+    void UpdateChase(float dist, bool inArmHeight, float dt)
+    {
+        if (CanSense(dist)) lostSightTimer = 0f; else lostSightTimer += dt;
+        if (dist > loseRange || lostSightTimer > loseSightTime) { state = State.Wander; wanderTimer = 0f; return; }
+        if (dist <= AttackReach && inArmHeight)
+        {
+            state = State.Windup;
+            stateTimer = windupTime;
+            return;
+        }
+        MoveToward(target.position, runSpeed, dt);
+        SetArms(0f);
+    }
+
+    void UpdateWindup(float dt)
+    {
+        FaceTarget(dt);
+        stateTimer -= dt;
+        SetArms(Mathf.Lerp(0f, -150f, 1f - Mathf.Clamp01(stateTimer / windupTime)));
+        if (stateTimer <= 0f)
+        {
+            DoHit();
+            state = State.Recover;
+            stateTimer = recoverTime;
+        }
+    }
+
+    void UpdateRecover(float dt)
+    {
+        stateTimer -= dt;
+        SetArms(Mathf.Lerp(0f, 30f, Mathf.Clamp01(stateTimer / recoverTime)));
+        if (stateTimer <= 0f) state = State.Chase;
+    }
+
+    void UpdateFootsteps(float dt)
+    {
+        if (!moving) return;
+        stepTimer -= dt * (state == State.Chase ? 1.8f : 1f);
+        if (stepTimer > 0f) return;
+        stepTimer = 0.9f;
+        if (Camera.main != null && (Camera.main.transform.position - transform.position).sqrMagnitude < 150f * 150f)
+            GameAudio.Play(Sfx.Footstep, transform.position, Mathf.Clamp(Height / 14f, 0.4f, 1.2f), Mathf.Clamp(14f / Height, 0.7f, 1.4f));
+    }
+
+    void UpdateClipRole()
+    {
+        if (clips == null) return;
+        bool attacking = state == State.Windup || state == State.Recover;
+        clips.SetRole(attacking ? TitanClipPlayer.Role.Attack : moving ? TitanClipPlayer.Role.Walk : TitanClipPlayer.Role.Idle);
     }
 
     float stepTimer;
@@ -282,8 +294,22 @@ public class Titan : MonoBehaviour
 
         Vector3 dirN = dir.normalized;
 
-        // Tách nhau: titan khác ở gần thì đẩy ra để không dồn thành một cục (tắt khi đã sát mục tiêu để còn đánh)
-        if (dir.magnitude > 15f)
+        dirN = ApplySeparation(dirN, dir.magnitude);
+        dirN = AvoidObstacles(dirN);
+
+        Quaternion want = Quaternion.LookRotation(dirN, Vector3.up);
+        transform.rotation = Quaternion.RotateTowards(transform.rotation, want, turnSpeed * dt);
+
+        if (dir.magnitude < 2f) return; // đã sát mục tiêu, không đi xuyên qua
+        Vector3 displacement = transform.forward * speed * dt;
+        if (TryMoveWithoutTunneling(displacement)) moving = true;
+        ClampToField();
+    }
+
+    // Tách nhau: titan khác ở gần thì đẩy ra để không dồn thành một cục (tắt khi đã sát mục tiêu để còn đánh)
+    Vector3 ApplySeparation(Vector3 dirN, float distToPoint)
+    {
+        if (distToPoint > 15f)
         {
             Vector3 push = Vector3.zero;
             float sepSq = separationRadius * separationRadius;
@@ -296,8 +322,12 @@ public class Titan : MonoBehaviour
             }
             if (push.sqrMagnitude > 0.0001f) dirN = (dirN + push * separationStrength).normalized;
         }
+        return dirN;
+    }
 
-        // Né công trình: có nhà chắn phía trước thì trượt dọc theo mặt nhà
+    // Né công trình: có nhà chắn phía trước thì trượt dọc theo mặt nhà
+    Vector3 AvoidObstacles(Vector3 dirN)
+    {
         if (ObstacleMask != 0)
         {
             Vector3 o = transform.position + Vector3.up * (3f * k);
@@ -308,13 +338,11 @@ public class Titan : MonoBehaviour
                 dirN = slide.sqrMagnitude > 0.01f ? slide.normalized : Vector3.Cross(Vector3.up, hit.normal).normalized;
             }
         }
+        return dirN;
+    }
 
-        Quaternion want = Quaternion.LookRotation(dirN, Vector3.up);
-        transform.rotation = Quaternion.RotateTowards(transform.rotation, want, turnSpeed * dt);
-
-        if (dir.magnitude < 2f) return; // đã sát mục tiêu, không đi xuyên qua
-        Vector3 displacement = transform.forward * speed * dt;
-        if (TryMoveWithoutTunneling(displacement)) moving = true;
+    void ClampToField()
+    {
         if (HasField)
         {
             Vector3 fp = transform.position;
