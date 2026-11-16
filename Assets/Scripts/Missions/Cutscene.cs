@@ -24,26 +24,11 @@ public class Cutscene : MonoBehaviour
         { this.speaker = speaker; this.caption = caption; this.tint = tint; this.duration = duration; }
     }
 
-    const string PrologueKey = "AOT_PrologueSeen";
-    const string TitanKey = "AOT_FirstTitanSeen";
+    public const string PrologueKey = "AOT_PrologueSeen";
+    public const string TitanKey = "AOT_FirstTitanSeen";
 
-    public const string ForceKey = "AOT_ForceCutscenes"; // EditorPrefs, chỉ có trong Editor
-    public const string PrologueFlag = PrologueKey, TitanFlag = TitanKey;
-
-    static bool Forced
-    {
-        get
-        {
-#if UNITY_EDITOR
-            return UnityEditor.EditorPrefs.GetBool(ForceKey, false);
-#else
-            return false;
-#endif
-        }
-    }
-
-    public static bool PrologueSeen => !Forced && PlayerPrefs.GetInt(PrologueKey, 0) == 1;
-    public static bool FirstTitanSeen => !Forced && PlayerPrefs.GetInt(TitanKey, 0) == 1;
+    public static bool PrologueSeen => PlayerPrefs.GetInt(PrologueKey, 0) == 1;
+    public static bool FirstTitanSeen => PlayerPrefs.GetInt(TitanKey, 0) == 1;
     public static bool IsPlaying { get; private set; }
 
     // ---------- Nội dung placeholder ----------
