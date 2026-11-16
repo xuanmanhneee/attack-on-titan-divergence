@@ -63,7 +63,7 @@ public class TitanClipPlayer : MonoBehaviour
         foreach (var c in Resources.LoadAll<AnimationClip>(resourcePath))
             if (c != null && !c.name.StartsWith("__preview__")) pool.Add(c);
         if (pool.Count > 0)
-            Debug.Log("[Titan] " + model.name + " có " + pool.Count + " clip riêng: " + string.Join(", ", pool.ConvertAll(c => c.name)));
+            if (Titan.DebugLogs) Debug.Log("[Titan] " + model.name + " có " + pool.Count + " clip riêng: " + string.Join(", ", pool.ConvertAll(c => c.name)));
 
         for (int role = 2; role >= 0; role--)
         {
@@ -80,7 +80,7 @@ public class TitanClipPlayer : MonoBehaviour
 
         var player = model.AddComponent<TitanClipPlayer>();
         for (int i = 0; i < 3; i++) player.clips[i] = clips[i];
-        Debug.Log("[Titan] " + model.name + " dùng clip - Idle: " + clips[0].name + ", Walk: " + clips[1].name + ", Attack: " + clips[2].name);
+        if (Titan.DebugLogs) Debug.Log("[Titan] " + model.name + " dùng clip - Idle: " + clips[0].name + ", Walk: " + clips[1].name + ", Attack: " + clips[2].name);
         player.Build(model);
         return player;
     }

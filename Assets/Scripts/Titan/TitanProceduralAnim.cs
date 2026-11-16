@@ -33,7 +33,7 @@ public class TitanProceduralAnim : MonoBehaviour
         var animator = model.GetComponentInChildren<Animator>();
         if (animator == null || animator.avatar == null || !animator.avatar.isValid || !animator.avatar.isHuman)
         {
-            Debug.Log("[Titan] " + model.name + ": không có Humanoid avatar hợp lệ, dùng hiệu ứng lắc nhẹ. " +
+            if (Titan.DebugLogs) Debug.Log("[Titan] " + model.name + ": không có Humanoid avatar hợp lệ, dùng hiệu ứng lắc nhẹ. " +
                       "(Chọn FBX > Rig > Animation Type = Humanoid > Apply, xem có báo lỗi map xương không)");
             return null;
         }

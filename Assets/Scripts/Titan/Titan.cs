@@ -28,6 +28,7 @@ public class Titan : MonoBehaviour
     // Vùng đi lại của titan (mặt phẳng XZ). Titan không được bước ra khỏi khu phố.
     public static Rect Field;
     public static bool HasField;
+    public static bool DebugLogs;
 
     public static void ResetAll() { All.Clear(); ObstacleMask = 0; GroundSampler = null; HasField = false; }
 
@@ -338,7 +339,7 @@ public class Titan : MonoBehaviour
 
         Bounds exact = ExactBounds(renderers);
         Bounds quick = CalcBounds(renderers);
-        Debug.Log("[Titan] " + def.name + ": bounds mặc định cao " + quick.size.y.ToString("F2") +
+        if (DebugLogs) Debug.Log("[Titan] " + def.name + ": bounds mặc định cao " + quick.size.y.ToString("F2") +
                   ", đo chính xác cao " + exact.size.y.ToString("F2") +
                   " (đáy lệch " + (exact.min.y - quick.min.y).ToString("F2") + ")");
 
@@ -562,7 +563,7 @@ public class Titan : MonoBehaviour
             if (Time.time - bornTime > 2f)
             {
                 logged = true;
-                Debug.Log("[Titan] " + (def != null ? def.name : "placeholder") + " cao " + Height.ToString("F1") +
+                if (DebugLogs) Debug.Log("[Titan] " + (def != null ? def.name : "placeholder") + " cao " + Height.ToString("F1") +
                           "m, y=" + transform.position.y.ToString("F2") +
                           (GroundSampler != null ? ", mặt đất=" + GroundSampler(transform.position).ToString("F2") : "") +
                           (feet != null ? ", dịch chân=" + feet.Shift.ToString("F2") : ", không có Humanoid"));
