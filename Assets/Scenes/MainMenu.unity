@@ -730,7 +730,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 61153602}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 980007768}
+  m_Script: {fileID: 11500000, guid: dde8a37bbea64d8fb61c9c9c829a5f43, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MangaSlideIn
   from: {x: 0, y: -70}
@@ -2416,7 +2416,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 219901141}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 1115770365}
+  m_Script: {fileID: 11500000, guid: b5adf2f18390ccb4aa7f5fede809e013, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MenuButtonVisual
   background: {fileID: 219901146}
@@ -2876,7 +2876,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 260603918}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 980007768}
+  m_Script: {fileID: 11500000, guid: dde8a37bbea64d8fb61c9c9c829a5f43, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MangaSlideIn
   from: {x: 260, y: 0}
@@ -2909,7 +2909,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 260603918}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 1115770365}
+  m_Script: {fileID: 11500000, guid: b5adf2f18390ccb4aa7f5fede809e013, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MenuButtonVisual
   background: {fileID: 260603924}
@@ -3155,7 +3155,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 270809190}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 1115770365}
+  m_Script: {fileID: 11500000, guid: b5adf2f18390ccb4aa7f5fede809e013, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MenuButtonVisual
   background: {fileID: 270809195}
@@ -3826,7 +3826,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 324981448}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 1115770365}
+  m_Script: {fileID: 11500000, guid: b5adf2f18390ccb4aa7f5fede809e013, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MenuButtonVisual
   background: {fileID: 324981453}
@@ -6943,7 +6943,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 581751832}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 980007768}
+  m_Script: {fileID: 11500000, guid: dde8a37bbea64d8fb61c9c9c829a5f43, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MangaSlideIn
   from: {x: 120, y: 0}
@@ -7725,7 +7725,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 640889502}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 1115770365}
+  m_Script: {fileID: 11500000, guid: b5adf2f18390ccb4aa7f5fede809e013, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MenuButtonVisual
   background: {fileID: 640889507}
@@ -7890,7 +7890,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 646895066}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 1115770365}
+  m_Script: {fileID: 11500000, guid: b5adf2f18390ccb4aa7f5fede809e013, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MenuButtonVisual
   background: {fileID: 646895071}
@@ -8135,7 +8135,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 662803610}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 1115770365}
+  m_Script: {fileID: 11500000, guid: b5adf2f18390ccb4aa7f5fede809e013, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MenuButtonVisual
   background: {fileID: 662803615}
@@ -8819,7 +8819,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 688036357}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 1115770365}
+  m_Script: {fileID: 11500000, guid: b5adf2f18390ccb4aa7f5fede809e013, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MenuButtonVisual
   background: {fileID: 688036362}
@@ -10078,7 +10078,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 764517827}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 980007768}
+  m_Script: {fileID: 11500000, guid: dde8a37bbea64d8fb61c9c9c829a5f43, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MangaSlideIn
   from: {x: 120, y: 0}
@@ -10175,7 +10175,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 766002924}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 980007768}
+  m_Script: {fileID: 11500000, guid: dde8a37bbea64d8fb61c9c9c829a5f43, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MangaSlideIn
   from: {x: 0, y: 80}
@@ -12445,7 +12445,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 925223195}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 1115770365}
+  m_Script: {fileID: 11500000, guid: b5adf2f18390ccb4aa7f5fede809e013, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MenuButtonVisual
   background: {fileID: 925223200}
@@ -12752,7 +12752,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 937790668}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 980007768}
+  m_Script: {fileID: 11500000, guid: dde8a37bbea64d8fb61c9c9c829a5f43, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MangaSlideIn
   from: {x: 260, y: 0}
@@ -12785,7 +12785,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 937790668}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 1115770365}
+  m_Script: {fileID: 11500000, guid: b5adf2f18390ccb4aa7f5fede809e013, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MenuButtonVisual
   background: {fileID: 937790674}
@@ -13809,7 +13809,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 1042345429}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 980007768}
+  m_Script: {fileID: 11500000, guid: dde8a37bbea64d8fb61c9c9c829a5f43, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MangaSlideIn
   from: {x: 120, y: 0}
@@ -14298,7 +14298,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 1085325577}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 980007768}
+  m_Script: {fileID: 11500000, guid: dde8a37bbea64d8fb61c9c9c829a5f43, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MangaSlideIn
   from: {x: 260, y: 0}
@@ -14331,7 +14331,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 1085325577}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 1115770365}
+  m_Script: {fileID: 11500000, guid: b5adf2f18390ccb4aa7f5fede809e013, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MenuButtonVisual
   background: {fileID: 1085325583}
@@ -14722,7 +14722,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 1100291150}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 1115770365}
+  m_Script: {fileID: 11500000, guid: b5adf2f18390ccb4aa7f5fede809e013, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MenuButtonVisual
   background: {fileID: 1100291155}
@@ -15091,7 +15091,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 1106128347}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 980007768}
+  m_Script: {fileID: 11500000, guid: dde8a37bbea64d8fb61c9c9c829a5f43, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MangaSlideIn
   from: {x: 260, y: 0}
@@ -15124,7 +15124,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 1106128347}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 1115770365}
+  m_Script: {fileID: 11500000, guid: b5adf2f18390ccb4aa7f5fede809e013, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MenuButtonVisual
   background: {fileID: 1106128353}
@@ -15619,7 +15619,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 1143030006}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 1115770365}
+  m_Script: {fileID: 11500000, guid: b5adf2f18390ccb4aa7f5fede809e013, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MenuButtonVisual
   background: {fileID: 1143030011}
@@ -16006,7 +16006,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 1173058596}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 980007768}
+  m_Script: {fileID: 11500000, guid: dde8a37bbea64d8fb61c9c9c829a5f43, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MangaSlideIn
   from: {x: 120, y: 0}
@@ -18020,7 +18020,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 1329726171}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 980007768}
+  m_Script: {fileID: 11500000, guid: dde8a37bbea64d8fb61c9c9c829a5f43, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MangaSlideIn
   from: {x: 120, y: 0}
@@ -18835,7 +18835,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 1371168439}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 980007768}
+  m_Script: {fileID: 11500000, guid: dde8a37bbea64d8fb61c9c9c829a5f43, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MangaSlideIn
   from: {x: 0, y: -70}
@@ -21122,7 +21122,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 1511638632}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 980007768}
+  m_Script: {fileID: 11500000, guid: dde8a37bbea64d8fb61c9c9c829a5f43, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MangaSlideIn
   from: {x: 260, y: 0}
@@ -21155,7 +21155,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 1511638632}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 1115770365}
+  m_Script: {fileID: 11500000, guid: b5adf2f18390ccb4aa7f5fede809e013, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MenuButtonVisual
   background: {fileID: 1511638637}
@@ -21481,7 +21481,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 1518942407}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 1115770365}
+  m_Script: {fileID: 11500000, guid: b5adf2f18390ccb4aa7f5fede809e013, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MenuButtonVisual
   background: {fileID: 1518942412}
@@ -24287,7 +24287,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 1794861336}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 1115770365}
+  m_Script: {fileID: 11500000, guid: b5adf2f18390ccb4aa7f5fede809e013, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MenuButtonVisual
   background: {fileID: 1794861341}
@@ -24452,7 +24452,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 1796215696}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 1115770365}
+  m_Script: {fileID: 11500000, guid: b5adf2f18390ccb4aa7f5fede809e013, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MenuButtonVisual
   background: {fileID: 1796215701}
@@ -24602,7 +24602,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 1802251273}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 980007768}
+  m_Script: {fileID: 11500000, guid: dde8a37bbea64d8fb61c9c9c829a5f43, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MangaSlideIn
   from: {x: 120, y: 0}
@@ -26598,7 +26598,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 1886189995}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 980007768}
+  m_Script: {fileID: 11500000, guid: dde8a37bbea64d8fb61c9c9c829a5f43, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MangaSlideIn
   from: {x: 260, y: 0}
@@ -26631,7 +26631,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 1886189995}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 1115770365}
+  m_Script: {fileID: 11500000, guid: b5adf2f18390ccb4aa7f5fede809e013, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MenuButtonVisual
   background: {fileID: 1886190001}
@@ -28423,7 +28423,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 2040292623}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 1287803224}
+  m_Script: {fileID: 11500000, guid: 3bccf0b85e52a9546bd4f1ed85ea79fa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HorizontalGradientGraphic
   m_Material: {fileID: 0}
@@ -28550,7 +28550,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 2066640985}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 980007768}
+  m_Script: {fileID: 11500000, guid: dde8a37bbea64d8fb61c9c9c829a5f43, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MangaSlideIn
   from: {x: 260, y: 0}
@@ -28583,7 +28583,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 2066640985}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 1115770365}
+  m_Script: {fileID: 11500000, guid: b5adf2f18390ccb4aa7f5fede809e013, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MenuButtonVisual
   background: {fileID: 2066640987}
@@ -28996,7 +28996,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 2107658135}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 980007768}
+  m_Script: {fileID: 11500000, guid: dde8a37bbea64d8fb61c9c9c829a5f43, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MangaSlideIn
   from: {x: -1000, y: 0}
