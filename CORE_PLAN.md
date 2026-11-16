@@ -17,22 +17,22 @@ Mỗi giai đoạn nên làm trong 1 phiên riêng.
 ---
 
 ## Giai đoạn 0: Dọn nhẹ
-- [ ] **T1. Cập nhật `Assets/Scripts/README.md`**
+- [x] **T1. Cập nhật `Assets/Scripts/README.md`**
   - Bỏ dòng "ODMController ~1500 dòng nên tách" và `TitanImportSettings` trong mục Editor.
   - Thêm bảng các file ODM, mỗi file 1 dòng mô tả.
   - Test: không cần.
-- [ ] **T2. Gom log spawn titan sau cờ debug**
+- [x] **T2. Gom log spawn titan sau cờ debug**
   - Thêm `static bool DebugLogs` trong `Titan`.
   - Bọc log ở: `Titan.cs:341`, `Titan.cs:565`, `TitanClipPlayer.cs:66`, `TitanClipPlayer.cs:83`, `TitanProceduralAnim.cs:36`.
   - Test: vào Chapter1, Console không spam khi titan spawn.
 
 ## Giai đoạn 1: Tách `Titan/Titan.cs` (889 dòng)
-- [ ] **T3. Tạo `Titan/TitanBuilder.cs` (static)**
+- [x] **T3. Tạo `Titan/TitanBuilder.cs` (static)**
   - Chuyển: `BuildBody`, `BuildPureTitan`, `CalcBounds`, `ExactBounds`, `IsWeaponRenderer`,
     `ApplyMaterials`, `SetLayerRecursively` (khoảng dòng 132–530).
   - `Titan.Create` gọi `TitanBuilder.Build(titan, def)`. Mục tiêu: `Titan.cs` ~450 dòng, chỉ còn AI.
   - Test: titan spawn đúng chiều cao, vật liệu, layer; chém gáy vẫn được.
-- [ ] **T4. Chia nhỏ `Titan.Update` (~100 dòng) và `MoveToward` (~95 dòng)**
+- [x] **T4. Chia nhỏ `Titan.Update` (~100 dòng) và `MoveToward` (~95 dòng)**
   - `Update` → `UpdateTargeting`, `UpdateAttack`, `UpdateMovement`.
   - `MoveToward` → tách phần né vật cản và phần tính bước đi.
   - Chỉ đổi cấu trúc, không đổi hành vi.
