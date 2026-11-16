@@ -54,7 +54,7 @@ Mỗi giai đoạn nên làm trong 1 phiên riêng.
   - Thanh Titan (fill + text + màu) trên canvas HUD.
   - Image flash toàn màn hình trên canvas FX.
   - API: `GameHud.SetTitanBar(fill, text, color)`, `HideTitanBar()`, `Flash(color, alpha)`.
-- [ ] **T9. Xóa `OnGUI` ở `TitanForm.cs` (~dòng 746) và `TransformLightning.cs` (~dòng 243)** (cần T8)
+- [x] **T9. Xóa `OnGUI` ở `TitanForm.cs` (~dòng 746) và `TransformLightning.cs` (~dòng 243)** (cần T8)
   - Chuyển sang gọi API của T8.
   - Test: lúc biến hình có lóe sáng; thanh hồi chiêu và thời gian titan đúng; ẩn khi pause.
 - [ ] **T10. Chuyển panel `Chapter0Training` (`OnGUI` ~dòng 153) sang uGUI**

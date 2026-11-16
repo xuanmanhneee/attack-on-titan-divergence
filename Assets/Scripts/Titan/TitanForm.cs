@@ -169,6 +169,8 @@ public class TitanForm : MonoBehaviour
                 if (GameInput.GetKeyDown(transformKey) || stateTimer <= 0f) EndTransform();
                 break;
         }
+
+        UpdateHud();
     }
 
     // ================= BIẾN HÌNH =================
@@ -269,6 +271,7 @@ public class TitanForm : MonoBehaviour
         // Nhạc titan chạy ngay từ lúc bấm G (crossfade ngắn). Sét bắt đầu sau biteTime, xem UpdateFrozenTransform.
         if (odm.Music != null) odm.Music.SetTitan(true, 1f);
         lightningStarted = false;
+        if (GameHud.Current != null) GameHud.Current.HideTitanBar();
         frozen = true;
         Time.timeScale = 0f; // dừng thời gian suốt lúc biến hình (xem UpdateFrozenTransform)
         state = State.Transforming;
@@ -408,53 +411,22 @@ public class TitanForm : MonoBehaviour
     }
 
     // ================= HUD =================
-    void OnGUI()
+    // Thanh titan (thời gian / hồi sức) và loé màn hình nằm trong prefab GameHud; ở đây chỉ đẩy dữ liệu lên.
+    void UpdateHud()
     {
-        float s = Screen.height / 1080f;
+        var hud = GameHud.Current;
+        if (hud == null) return;
 
-        if (flash > 0f)
-        {
-            Color old = GUI.color;
-            GUI.color = new Color(1f, 0.95f, 0.7f, Mathf.Clamp01(flash));
-            GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
-            GUI.color = old;
-        }
+        if (flash > 0f) hud.Flash(new Color(1f, 0.95f, 0.7f), flash);
 
-        if (Time.timeScale <= 0.0001f) return;
-
-        float x = 30f * s, y = Screen.height - 330f * s, w = 360f * s, hgt = 22f * s;
-        float fill;
-        string text;
-        Color col;
         if (state == State.Titan)
-        {
-            fill = Mathf.Clamp01(stateTimer / titanTotal);
-            text = "TITAN  " + Mathf.CeilToInt(stateTimer) + "s   (G: trở lại người)";
-            col = new Color(0.95f, 0.45f, 0.15f, 0.95f);
-        }
+            hud.SetTitanBar(Mathf.Clamp01(stateTimer / titanTotal),
+                "TITAN  " + Mathf.CeilToInt(stateTimer) + "s   (G: trở lại người)", new Color(0.95f, 0.45f, 0.15f, 0.95f));
         else if (state == State.Human && cooldownLeft > 0f)
-        {
-            fill = 1f - Mathf.Clamp01(cooldownLeft / cooldown);
-            text = "Hồi sức hoá titan  " + Mathf.CeilToInt(cooldownLeft) + "s";
-            col = new Color(0.55f, 0.55f, 0.6f, 0.9f);
-        }
+            hud.SetTitanBar(1f - Mathf.Clamp01(cooldownLeft / cooldown),
+                "Hồi sức hoá titan  " + Mathf.CeilToInt(cooldownLeft) + "s", new Color(0.55f, 0.55f, 0.6f, 0.9f));
         else if (state == State.Human)
-        {
-            fill = 1f;
-            text = "G: hoá titan (sẵn sàng)";
-            col = new Color(1f, 0.82f, 0.15f, 0.95f);
-        }
-        else return;
-
-        Color prev = GUI.color;
-        GUI.color = new Color(0f, 0f, 0f, 0.5f);
-        GUI.DrawTexture(new Rect(x, y, w, hgt), Texture2D.whiteTexture);
-        GUI.color = col;
-        GUI.DrawTexture(new Rect(x + 3f * s, y + 3f * s, (w - 6f * s) * fill, hgt - 6f * s), Texture2D.whiteTexture);
-        GUI.color = prev;
-
-        var style = new GUIStyle(GUI.skin.label) { fontSize = Mathf.RoundToInt(20 * s) };
-        style.normal.textColor = Color.white;
-        GUI.Label(new Rect(x, y - 30f * s, 700f * s, 30f * s), text, style);
+            hud.SetTitanBar(1f, "G: hoá titan (sẵn sàng)", new Color(1f, 0.82f, 0.15f, 0.95f));
+        else hud.HideTitanBar();
     }
 }

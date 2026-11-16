@@ -93,6 +93,7 @@ public class TransformLightning : MonoBehaviour
         }
 
         screenFlash = Mathf.Max(0f, screenFlash - dt * 1.1f);
+        if (screenFlash > 0.01f && GameHud.Current != null) GameHud.Current.Flash(new Color(0.92f, 0.95f, 1f), screenFlash); // loá trắng màn hình (canvas FX của GameHud)
         flashLight.intensity = Mathf.Max(0f, flashLight.intensity - dt * 120f);
 
         if (bigDone && time > bigAt + 2.5f && bolts.Count == 0 && !audioSrc.isPlaying) Destroy(gameObject);
@@ -237,17 +238,6 @@ public class TransformLightning : MonoBehaviour
         var clip = AudioClip.Create(big ? "ThunderBig" : "ThunderSmall", n, 1, rate, false);
         clip.SetData(data, 0);
         return clip;
-    }
-
-    // ================= LOÁ MÀN HÌNH =================
-    void OnGUI()
-    {
-        if (screenFlash <= 0.01f) return;
-        Color old = GUI.color;
-        GUI.depth = -1000;
-        GUI.color = new Color(0.92f, 0.95f, 1f, Mathf.Clamp01(screenFlash));
-        GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
-        GUI.color = old;
     }
 
     void OnDestroy()
