@@ -633,12 +633,12 @@ public class TitanForm : MonoBehaviour
         var renderers = model.GetComponentsInChildren<Renderer>();
         if (renderers.Length == 0) { Destroy(measure.gameObject); return; }
 
-        Bounds b = Titan.ExactBounds(renderers);
-        if (b.size.y < 0.0001f) b = Titan.CalcBounds(renderers);
+        Bounds b = TitanBuilder.ExactBounds(renderers);
+        if (b.size.y < 0.0001f) b = TitanBuilder.CalcBounds(renderers);
         float s = formHeight / b.size.y;
         model.transform.localScale = Vector3.one * s;
         model.transform.localPosition = new Vector3(-b.center.x * s, -(b.center.y - b.extents.y) * s, -b.center.z * s);
-        Titan.ApplyMaterials(renderers, def);
+        TitanBuilder.ApplyMaterials(renderers, def);
         if (def.hideInFirstPerson != null)
         {
             foreach (var r in renderers)
