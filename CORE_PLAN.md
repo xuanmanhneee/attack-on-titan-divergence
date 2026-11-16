@@ -62,7 +62,7 @@ Mỗi giai đoạn nên làm trong 1 phiên riêng.
   - Test: chạy hết màn huấn luyện, panel cập nhật đúng từng bước.
 
 ## Giai đoạn 4: Chốt
-- [ ] **T11. Xóa code chết trong `UI/MangaMenu.cs`**
+- [x] **T11. Xóa code chết trong `UI/MangaMenu.cs`**
   - Xóa trang Title, Chapters, Credits.
   - Trước khi xóa: kiểm tra mọi chỗ gọi `ShowTitle()` và `returnPage = Page.Title`;
     nếu còn dùng thì đổi sang load scene `MainMenu`.

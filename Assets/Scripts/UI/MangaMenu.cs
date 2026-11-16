@@ -12,10 +12,9 @@ using UnityEngine.UI;
 // Điều khiển: chuột (di chuột, bấm, kéo thanh trượt) hoặc Lên/Xuống + Trái/Phải + Enter, Esc = quay lại.
 public class MangaMenu : MonoBehaviour
 {
-    public enum Page { None, Title, Chapters, Credits, Settings, Briefing, Pause, Result }
+    public enum Page { None, Settings, Briefing, Pause, Result }
 
     public event Action Resume, Restart, MainMenu, Quit;
-    public event Action<string> Chapter;   // tên scene chương được chọn ở menu chính
 
     public Page Current { get; private set; }
     public bool InSettings { get { return Current == Page.Settings; } }
@@ -45,7 +44,7 @@ public class MangaMenu : MonoBehaviour
     int captureAction;
     Vector2 lastMouse;
     int escFrame = -1;
-    Page returnPage = Page.Title;
+    Page returnPage = Page.Pause;
 
     // Settings
     RectTransform rowsRoot;
@@ -82,8 +81,6 @@ public class MangaMenu : MonoBehaviour
     // =====================================================================
     //  API cho GameManager
     // =====================================================================
-    public void ShowTitle() { ShowPage(Page.Title); MangaSfx.Slam(); }
-
     public void ShowBriefing()
     {
         BriefingConfirmed = false;
@@ -158,9 +155,6 @@ public class MangaMenu : MonoBehaviour
         scaler.matchWidthOrHeight = 0.5f;
         canvasRt = (RectTransform)cgo.transform;
 
-        BuildTitle();
-        BuildChapters();
-        BuildCredits();
         BuildSettings();
         BuildBriefing();
         BuildPause();
@@ -194,7 +188,7 @@ public class MangaMenu : MonoBehaviour
         lastMouse = GameInput.MousePosition;
         ApplyFocus();
 
-        bool music = p == Page.Title || p == Page.Chapters || p == Page.Credits || p == Page.Briefing || (p == Page.Settings && returnPage == Page.Title);
+        bool music = p == Page.Briefing;
         MangaSfx.Music(music);
     }
 
@@ -308,12 +302,6 @@ public class MangaMenu : MonoBehaviour
             }
             if (GameInput.GetKeyDownRaw(KeyCode.Return) || GameInput.GetKeyDownRaw(KeyCode.Space))
                 Activate(cur, new Vector2(float.NaN, float.NaN));
-        }
-
-        if ((Current == Page.Chapters || Current == Page.Credits) && GameInput.GetKeyDownRaw(KeyCode.Escape))
-        {
-            MangaSfx.Back();
-            ShowPage(Page.Title);
         }
 
         if (Current == Page.Settings)
@@ -528,85 +516,6 @@ public class MangaMenu : MonoBehaviour
         };
         item.onFocus(false);
         return item;
-    }
-
-    // =====================================================================
-    //  TITLE
-    // =====================================================================
-    // Nền chung của các trang menu chính: ảnh nền + lớp tối bên trái + thanh trên (giống menu codex)
-    void MainBackdrop(RectTransform page, string context)
-    {
-        var bg = Stretch(NewRT("Background", page)).gameObject.AddComponent<RawImage>();
-        bg.texture = MangaStyle.Background;
-        bg.color = bg.texture != null ? Color.white : Paper;
-        bg.raycastTarget = false;
-        Fill(page, new Color(0.01f, 0.025f, 0.035f, 0.24f));
-
-        var grad = Stretch(NewRT("LeftGradient", page)).gameObject.AddComponent<HorizontalGradientGraphic>();
-        grad.rectTransform.anchorMax = new Vector2(0.68f, 1f);
-        grad.LeftColor = new Color(0.015f, 0.025f, 0.03f, 0.96f);
-        grad.RightColor = new Color(0.015f, 0.025f, 0.03f, 0.02f);
-        grad.raycastTarget = false;
-
-        var bar = Bar(page, "TopBar", new Vector2(0f, 540f - 33f), new Vector2(1920f, 66f), new Color(0.025f, 0.04f, 0.045f, 0.82f));
-        Bar(bar.transform, "Accent", new Vector2(0f, -32f), new Vector2(1920f, 2f), Red);
-        TextAt(bar.transform, context, 17, Gray, TextAnchor.MiddleLeft, new Vector2(-320f, 0f), new Vector2(1100f, 60f), false, FontStyle.Normal);
-        TextAt(bar.transform, "DIVERGENCE  //  BUILD 0.1", 15, Gray, TextAnchor.MiddleRight, new Vector2(660f, 0f), new Vector2(500f, 60f), false, FontStyle.Normal);
-    }
-
-    const float NavX = 588f;   // tâm cột nút bên phải
-
-    Text MainTitle(RectTransform page, string subtitle)
-    {
-        var title = TextAt(page, "ATTACK ON TITAN: DIVERGENCE", 120, Ink, TextAnchor.MiddleLeft, new Vector2(2f, 330f), new Vector2(1700f, 160f), false, FontStyle.Bold);
-        title.font = MangaStyle.TitleFont;
-        var o = Stroke(title, new Color(0f, 0f, 0f, 0.9f), 4f);
-        o.useGraphicAlpha = false;
-        TextAt(page, subtitle, 22, Red, TextAnchor.MiddleLeft, new Vector2(2f, 235f), new Vector2(1700f, 36f), false, FontStyle.Normal);
-        return title;
-    }
-
-    void BuildTitle()
-    {
-        var page = NewPage(Page.Title);
-        var list = pageItems[Page.Title];
-        MainBackdrop(page, "SCOUT REGIMENT   /   OPERATIONS TERMINAL");
-        MainTitle(page, "FAN GAME PHI THƯƠNG MẠI  ·  ĐỒ ÁN HỌC TẬP");
-
-        list.Add(MakeButton(page, "BẮT ĐẦU", new Vector2(NavX, -150f), new Vector2(560f, 70f), 0f, () => { MangaSfx.Click(); ShowPage(Page.Chapters); }, 0.10f, 30));
-        list.Add(MakeButton(page, "CÀI ĐẶT", new Vector2(NavX, -232f), new Vector2(560f, 70f), 0f, () => OpenSettings(Page.Title), 0.18f, 30));
-        list.Add(MakeButton(page, "TƯ LIỆU", new Vector2(NavX, -314f), new Vector2(560f, 70f), 0f, () => ShowPage(Page.Credits), 0.26f, 30));
-        list.Add(MakeButton(page, "THOÁT", new Vector2(NavX, -396f), new Vector2(560f, 70f), 0f, () => { if (Quit != null) Quit(); }, 0.34f, 30));
-
-        TextAt(page, "Chuột, hoặc phím Lên/Xuống + Enter để chọn", 18, Gray, TextAnchor.MiddleCenter, new Vector2(NavX, -460f), new Vector2(560f, 30f), false, FontStyle.Normal);
-    }
-
-    void BuildChapters()
-    {
-        var page = NewPage(Page.Chapters);
-        var list = pageItems[Page.Chapters];
-        MainBackdrop(page, "SCOUT REGIMENT   /   SELECT OPERATION");
-        MainTitle(page, "CHỌN NHIỆM VỤ");
-
-        list.Add(MakeButton(page, "CHƯƠNG 0  ·  TRẠI HUẤN LUYỆN", new Vector2(NavX, -232f), new Vector2(560f, 70f), 0f, () => { if (Chapter != null) Chapter("Chapter0_TrainingCamp"); }, 0.05f, 26));
-        list.Add(MakeButton(page, "CHƯƠNG 1  ·  TRẬN TROST", new Vector2(NavX, -314f), new Vector2(560f, 70f), 0f, () => { if (Chapter != null) Chapter("Chapter1_BattleOfTrost"); }, 0.12f, 26));
-        list.Add(MakeButton(page, "QUAY LẠI", new Vector2(NavX, -396f), new Vector2(560f, 70f), 0f, () => { MangaSfx.Back(); ShowPage(Page.Title); }, 0.19f, 26));
-    }
-
-    void BuildCredits()
-    {
-        var page = NewPage(Page.Credits);
-        var list = pageItems[Page.Credits];
-        MainBackdrop(page, "SCOUT REGIMENT   /   FIELD ARCHIVES");
-
-        var card = Panel(page, "Card", new Vector2(0f, -20f), new Vector2(1100f, 640f), new Color(0.035f, 0.05f, 0.055f, 0.99f), 0f, 2f, 0f);
-        Bar(card.transform, "TopRule", new Vector2(0f, 318f), new Vector2(1100f, 3f), Red);
-        TextAt(card.transform, "TƯ LIỆU", 46, Ink, TextAnchor.MiddleCenter, new Vector2(0f, 250f), new Vector2(1000f, 70f), false, FontStyle.Bold);
-        TextAt(card.transform, "ATTACK ON TITAN: DIVERGENCE", 16, Red, TextAnchor.MiddleCenter, new Vector2(0f, 200f), new Vector2(1000f, 30f), false, FontStyle.Normal);
-        TextAt(card.transform,
-            "GAME FAN-MADE PHI THƯƠNG MẠI — ĐỒ ÁN HỌC TẬP\n\nThiết kế & lập trình: nhóm Divergence\nẢnh nền và font tiêu đề do dự án cung cấp.\nChi tiết tài nguyên bên thứ ba: Assets/CREDITS.md\n\nCảm ơn bạn đã chơi.",
-            26, Ink, TextAnchor.UpperCenter, new Vector2(0f, 20f), new Vector2(980f, 300f), true, FontStyle.Normal);
-        list.Add(MakeButton(card.transform, "ĐÓNG", new Vector2(0f, -250f), new Vector2(420f, 64f), 0f, () => { MangaSfx.Back(); ShowPage(Page.Title); }, 0.05f, 26));
     }
 
     // =====================================================================
