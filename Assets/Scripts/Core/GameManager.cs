@@ -94,15 +94,12 @@ public class GameManager : MonoBehaviour
         for (int i = 0; i < 32; i++)
             if ((hookMask & (1 << i)) != 0) { Titan.HookableLayer = i; break; }
 
+        // PlayerCombat, TimeFocus, TitanForm, Health gắn sẵn trên Player (prefab Assets/Prefabs/Player).
         combat = odm.GetComponent<PlayerCombat>();
-        if (combat == null) combat = odm.gameObject.AddComponent<PlayerCombat>();
-
-        if (odm.GetComponent<TimeFocus>() == null) odm.gameObject.AddComponent<TimeFocus>();
         titanForm = odm.GetComponent<TitanForm>();
-        if (titanForm == null) titanForm = odm.gameObject.AddComponent<TitanForm>();
-
         playerHealth = odm.GetComponent<Health>();
-        if (playerHealth == null) playerHealth = odm.gameObject.AddComponent<Health>();
+        if (combat == null || titanForm == null || playerHealth == null || odm.GetComponent<TimeFocus>() == null)
+            Debug.LogError("[GameManager] Player thiếu PlayerCombat/TimeFocus/TitanForm/Health. Dùng prefab Assets/Prefabs/Player.", odm);
         playerHealth.Init(playerMaxHealth);
         playerHealth.Died += OnPlayerDied;
 

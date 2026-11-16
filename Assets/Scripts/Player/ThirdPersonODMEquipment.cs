@@ -29,14 +29,6 @@ public sealed class ThirdPersonODMEquipment : MonoBehaviour
     Material bladeMetal;
     Material leather;
 
-    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-    static void InstallIfMissing()
-    {
-        FirstPersonCharacterVisual visual = FindAnyObjectByType<FirstPersonCharacterVisual>();
-        if (visual != null && visual.GetComponent<ThirdPersonODMEquipment>() == null)
-            visual.gameObject.AddComponent<ThirdPersonODMEquipment>();
-    }
-
     void Awake()
     {
         characterVisual = GetComponent<FirstPersonCharacterVisual>();

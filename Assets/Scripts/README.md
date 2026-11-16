@@ -18,10 +18,14 @@ Dự án **tự dựng gần hết bằng code lúc chạy**. Trong scene chỉ 
 
 ## Ai tạo ai
 
-- **Có sẵn trong scene**: `ODMController`, `Crosshair`, `FirstPersonSwordViewmodel` (Chapter0, Chapter1, SampleScene);
-  `Chapter0Training` (Chapter0); `TrostMapAuthoring` (Chapter1); `MainMenuController` (MainMenu).
-- **Tự tạo khi load scene** (`AfterSceneLoad`): `GameManager`, `ThirdPersonObservationCamera`, `ThirdPersonODMEquipment`.
-- **`GameManager` gắn thêm vào player** nếu thiếu: `PlayerCombat`, `TimeFocus`, `TitanForm`, `Health`; và tạo `TrostMission`.
+- **Player gắn sẵn trong scene** (object `Player`, prefab `Assets/Prefabs/Player.prefab`, dựng từ Chapter1):
+  `ODMController` + 6 phần ODM (`ODMHooks`, `ODMGroundMovement`, `ODMAirMovement`, `ODMCollision`, `ODMAntiStuck`, `ODMRopeVisual`),
+  `FirstPersonSwordViewmodel`, `ThirdPersonObservationCamera`; con `ErenHumanVisual` có `ThirdPersonODMEquipment`.
+  Chapter1 và SampleScene có thêm `PlayerStamina`, `PlayerCombat`, `Health`, `TimeFocus`, `TitanForm`.
+  Chapter0 không có nhóm chiến đấu này (không có `GameManager`), nên Player ở Chapter0 không phải prefab instance.
+  Code không còn tự `AddComponent` cho player; thiếu component là lỗi cấu hình scene.
+- **Có sẵn trong scene khác**: `Crosshair`; `Chapter0Training` (Chapter0); `TrostMapAuthoring` (Chapter1); `MainMenuController` (MainMenu).
+- **Tự tạo khi load scene** (`AfterSceneLoad`): `GameManager` (không tạo ở Chapter0); `GameManager` tạo `TrostMission`.
 - **Singleton tạo sẵn**: `GameAudio`, `GameVfx`, `Titan` (đăng ký lúc `SubsystemRegistration`), `GameSettings`.
 - **`Titan.Spawn`** tạo titan, rồi gắn `Health`, `Rigidbody` và các script animation tương ứng.
 - **UI là scene/prefab, không sinh bằng code**: menu chính nằm trong scene `MainMenu` (Main Menu Canvas), HUD là prefab `Resources/UI/GameHud` đặt sẵn trong Chapter0, Chapter1, SampleScene (3 canvas: FX 10 < Markers 15 < HUD 20). Sửa trực tiếp trong Unity, không còn builder nào ghi đè. Ngoại lệ còn lại: `MangaMenu` (Pause, Settings, Briefing, Result trong trận) vẫn dựng bằng code.

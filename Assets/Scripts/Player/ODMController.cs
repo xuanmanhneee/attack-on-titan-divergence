@@ -6,7 +6,10 @@ using UnityEngine;
 // Tự động (có công tắc): smart aim, rút dây chùng, thu dây nhẹ khi nhìn về phía móc, tự nhả đúng lúc.
 // Mọi con số là điểm khởi đầu, cần tự tune khi chơi thử.
 
+// Các phần ODM là component riêng, gắn sẵn trên Player (scene/prefab), không tự thêm lúc chạy.
 [RequireComponent(typeof(CharacterController))]
+[RequireComponent(typeof(ODMHooks), typeof(ODMGroundMovement), typeof(ODMAirMovement))]
+[RequireComponent(typeof(ODMCollision), typeof(ODMAntiStuck), typeof(ODMRopeVisual))]
 public class ODMController : MonoBehaviour
 {
     [Header("References")]
@@ -274,26 +277,20 @@ public class ODMController : MonoBehaviour
         controller.excludeLayers = 1 << 2; // titan (layer 2) không chặn/đẩy người chơi khi bay
 
         antiStuck = GetComponent<ODMAntiStuck>();
-        if (antiStuck == null) antiStuck = gameObject.AddComponent<ODMAntiStuck>();
         antiStuck.Init(controller, movementCollisionMask, logRoofCollisionDebug);
 
         groundMove = GetComponent<ODMGroundMovement>();
-        if (groundMove == null) groundMove = gameObject.AddComponent<ODMGroundMovement>();
         groundMove.Init(this, controller);
 
         airMove = GetComponent<ODMAirMovement>();
-        if (airMove == null) airMove = gameObject.AddComponent<ODMAirMovement>();
         airMove.Init(this, hookLeft, hookRight);
 
         collision = GetComponent<ODMCollision>();
-        if (collision == null) collision = gameObject.AddComponent<ODMCollision>();
         collision.Init(this, controller, antiStuck, groundMove, hookLeft, hookRight);
 
         ropeVisual = GetComponent<ODMRopeVisual>();
-        if (ropeVisual == null) ropeVisual = gameObject.AddComponent<ODMRopeVisual>();
 
         hooks = GetComponent<ODMHooks>();
-        if (hooks == null) hooks = gameObject.AddComponent<ODMHooks>();
         hooks.Init(this, hookLeft, hookRight);
         hooks.Fired += OnHookFired;
 

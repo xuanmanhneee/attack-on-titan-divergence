@@ -36,14 +36,6 @@ public sealed class ThirdPersonObservationCamera : MonoBehaviour
 
     public bool IsThirdPersonActive => thirdPersonActive;
 
-    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-    static void InstallIfMissing()
-    {
-        ODMController controller = FindAnyObjectByType<ODMController>();
-        if (controller != null && controller.GetComponent<ThirdPersonObservationCamera>() == null)
-            controller.gameObject.AddComponent<ThirdPersonObservationCamera>();
-    }
-
     void Awake()
     {
         if (odm == null)

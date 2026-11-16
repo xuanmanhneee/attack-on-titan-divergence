@@ -196,7 +196,10 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 2318591605537053881, guid: 2fd7af8f3a0ee5640b8bf798a2bbb718, type: 3}
       insertIndex: -1
       addedObject: {fileID: 534436866}
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 2318591605536883019, guid: 2fd7af8f3a0ee5640b8bf798a2bbb718, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 134308180}
   m_SourcePrefab: {fileID: 100100000, guid: 2fd7af8f3a0ee5640b8bf798a2bbb718, type: 3}
 --- !u!4 &134308177 stripped
 Transform:
@@ -208,6 +211,23 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 2318591605537053995, guid: 2fd7af8f3a0ee5640b8bf798a2bbb718, type: 3}
   m_PrefabInstance: {fileID: 134308176}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &134308179 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 2318591605536883019, guid: 2fd7af8f3a0ee5640b8bf798a2bbb718, type: 3}
+  m_PrefabInstance: {fileID: 134308176}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &134308180
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 134308179}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1b5f4c44d10f4d54a2afc8dc16390fae, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ThirdPersonODMEquipment
 --- !u!1 &330585543
 GameObject:
   m_ObjectHideFlags: 0
@@ -1107,8 +1127,20 @@ GameObject:
   - component: {fileID: 1643340618}
   - component: {fileID: 1643340617}
   - component: {fileID: 1643340619}
+  - component: {fileID: 1643340631}
+  - component: {fileID: 1643340630}
+  - component: {fileID: 1643340629}
+  - component: {fileID: 1643340628}
+  - component: {fileID: 1643340627}
+  - component: {fileID: 1643340626}
+  - component: {fileID: 1643340625}
+  - component: {fileID: 1643340624}
+  - component: {fileID: 1643340623}
+  - component: {fileID: 1643340622}
+  - component: {fileID: 1643340621}
+  - component: {fileID: 1643340620}
   m_Layer: 0
-  m_Name: Capsule
+  m_Name: Player
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1315,8 +1347,6 @@ MonoBehaviour:
   wallCollisionSkin: 0.03
   wallLaunchSpeed: 16
   wallLaunchGasCost: 10
-  ropeMaterial: {fileID: 0}
-  ropeWidth: 0.065
   hookProjectileSpeed: 300
   hookLaunchClip: {fileID: 0}
   hookReleaseClip: {fileID: 0}
@@ -1391,6 +1421,240 @@ MonoBehaviour:
   rightGripEuler: {x: 0, y: 0, z: 0}
   revealPitch: 0.48
   lookDownLift: 0.34
+--- !u!114 &1643340620
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1643340612}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f6d9616a4d8cc0549b6aed3733253aa8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ThirdPersonObservationCamera
+  odm: {fileID: 0}
+  firstPersonCamera: {fileID: 0}
+  toggleKey: 118
+  localOffset: {x: 0.32, y: 1.25, z: -3.8}
+  localLookOffset: {x: 0, y: 0.34, z: 0}
+  forwardLook: 0.7
+  pitchHeightInfluence: 0.75
+  followSharpness: 11
+  rotationSharpness: 16
+  collisionRadius: 0.24
+  collisionPadding: 0.16
+  minimumModelClearance: 0.9
+  groundClearance: 0.22
+  ignoreRoofNormalY: 0.62
+  groundNormalY: 0.82
+--- !u!114 &1643340621
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1643340612}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aa587bb814b23314ca284c37c89b4d9d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TitanForm
+  transformKey: 103
+  formHeight: 10
+  formRadius: 1.3
+  cooldown: 30
+  biteTime: 2
+  lightningTime: 2.2
+  damageTakenMultiplier: 0.5
+  walkSpeed: 12
+  runSpeed: 20
+  acceleration: 40
+  jumpSpeed: 18
+  gravity: -80
+  stepShake: 0.16
+  landShakeMin: 0.35
+  landShakeScale: 1
+  shakeDecay: 2.6
+  punchDamage: 45
+  heavyMultiplier: 2
+  napeMultiplier: 3
+  punchReach: 7.5
+  punchAngle: 60
+  punchTime: 0.32
+  heavyPunchTime: 0.55
+  punchCooldown: 0.15
+  modelName: AttackTitan
+  eyeForward: 0.25
+  eyeUp: 0.1
+  punchClipName: Punching
+  punchAnimSpeed: 0.9
+  comboAnimSpeed: 1
+  runClipPath: Titans/AttackTitanRigged/AttackTitanTreadmillRunning
+  runClipName: Running
+  runAnimSpeed: 1
+  minRunAnimSpeed: 0.6
+  headFollow: 0.6
+  collapseHead: 1
+  guardLowerUpperArm: 12
+  guardLowerForearm: 15
+  guardSpread: 20
+  legSwingAngle: 28
+  kneeBendAngle: 35
+--- !u!114 &1643340622
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1643340612}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f0f83d1e7e16bf244a2318b11a30f5e5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TimeFocus
+  enabledEffect: 1
+  dualHookTimeScale: 0.65
+  freeAimTimeScale: 0.55
+  singleHookTimeScale: 0.5
+  airDelay: 0.08
+  blendSpeed: 8
+--- !u!114 &1643340623
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1643340612}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bff6554ad5331f045a7e060babf75ec4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Health
+  maxHealth: 100
+--- !u!114 &1643340624
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1643340612}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8b823915cae134e4aaee71518c89308d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerCombat
+  napeReach: 10
+  bodyReach: 5
+  slashAngle: 80
+  bodyDamage: 8
+  slashCooldown: 0.45
+--- !u!114 &1643340625
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1643340612}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7e6b45a273956af44872d5427cc99853, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerStamina
+  stats:
+    maxStamina: 300
+    baseRegen: 0.5
+    restRegen: 12
+    safeDistance: 15
+    restWindow: 5
+    restMaxPath: 10
+    restDelay: 3
+    exhaustRecover: 45
+    runCost: 1
+    swingCostPerHook: 1.9
+    gasBoostCost: 3.2
+    hookFireCost: 1.5
+    slashCost: 4
+    transformCost: 75
+    transformMinStamina: 140
+    healRate: 3
+    staminaPerHealth: 1
+    healMinStamina: 15
+    titanDrainPerSecond: 5
+--- !u!114 &1643340626
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1643340612}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e9d8edc503394fd4baf0ff359d019ff7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ODMRopeVisual
+  ropeMaterial: {fileID: 0}
+  ropeWidth: 0.065
+--- !u!114 &1643340627
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1643340612}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f8c425e4c41f2e542be7982c60c6961d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ODMAntiStuck
+--- !u!114 &1643340628
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1643340612}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 80e604dd19e1c6f48a74cd8eea696828, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ODMCollision
+--- !u!114 &1643340629
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1643340612}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 71b3ac32533ec6349be36dc5831b5268, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ODMAirMovement
+--- !u!114 &1643340630
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1643340612}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 530cbc07c422b844895d6505aead1b6f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ODMGroundMovement
+--- !u!114 &1643340631
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1643340612}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 72232d8a2afece043b5b71641ffe747f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ODMHooks
 --- !u!1 &1675263298
 GameObject:
   m_ObjectHideFlags: 0
