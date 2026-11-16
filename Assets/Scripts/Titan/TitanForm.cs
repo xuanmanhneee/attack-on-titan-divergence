@@ -284,6 +284,7 @@ public class TitanForm : MonoBehaviour
         oldCamLocal = cam.localPosition;
         eyeLocalY = formHeight * 0.5f - 0.9f; // dự phòng nếu model không tải được
 
+        Titan.Lure(transform.position); // tiếng động lớn kéo titan quanh đó tới
         BuildVisual();
         ResetShake();
         velocity = Vector3.zero;

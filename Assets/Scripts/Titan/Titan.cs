@@ -48,8 +48,8 @@ public class Titan : MonoBehaviour
     [Tooltip("Mất dấu quá chừng này giây thì quay về lang thang")]
     public float loseSightTime = 4f;
     public float loseRange = 120f;
-    [Tooltip("Người chơi đang là titan thì titan trong tầm này bị thu hút: biết vị trí ngay, xuyên nhà, không bị giới hạn số con đuổi")]
-    public float lureRange = 150f;
+    [Tooltip("Người chơi hoá titan thì titan còn sống trong tầm này bị thu hút, chạy tới chỗ hoá (vẫn vòng qua nhà)")]
+    public float lureRange = 110f;
     [Tooltip("Lúc chưa thấy: vẫn đại khái biết người ở đâu và lang thang quanh đó, lệch ngẫu nhiên tới bán kính này")]
     public float instinctRadius = 45f;
     public float instinctInterval = 6f;
@@ -83,6 +83,7 @@ public class Titan : MonoBehaviour
     float stateTimer;
     Vector3 wanderPoint;
     Vector3 lastKnownPos;
+    float lureTimer;
     float lostSightTimer;
     public bool IsChasing => state == State.Chase || state == State.Windup || state == State.Recover;
     float wanderTimer;
@@ -155,23 +156,25 @@ public class Titan : MonoBehaviour
         return n;
     }
 
-    TitanForm targetForm;
-    bool targetFormChecked;
-
-    // Người chơi đang ở dạng titan (kể cả lúc biến hình) thì gây tiếng động lớn, kéo titan tới
-    bool Lured
+    // Tiếng động lớn (vd. người chơi hoá titan): titan còn sống trong tầm lao tới vị trí đó, vẫn vòng qua nhà.
+    // Không cho biết vị trí người chơi về sau; thấy người chơi thì theo tầm nhìn bình thường.
+    public static void Lure(Vector3 pos)
     {
-        get
+        foreach (Titan t in All)
         {
-            if (!targetFormChecked) { targetForm = target != null ? target.GetComponent<TitanForm>() : null; targetFormChecked = true; }
-            return targetForm != null && targetForm.IsTitan;
+            if (t == null || t.IsDead || t.state == State.Windup || t.state == State.Recover) continue;
+            Vector3 d = pos - t.transform.position; d.y = 0f;
+            if (d.magnitude > t.lureRange) continue;
+            t.state = State.Chase;
+            t.lastKnownPos = pos;
+            t.lostSightTimer = 0f;
+            t.lureTimer = d.magnitude / Mathf.Max(1f, t.runSpeed) + 3f; // đủ thời gian chạy tới nơi
         }
     }
 
     // Thấy người chơi: trong tầm, trong góc nhìn, không bị vật cản chắn. Rất gần thì biết ngay (nghe/ngửi).
     bool CanSense(float flatDist)
     {
-        if (Lured) return flatDist < lureRange;
         if (flatDist < senseRange) return true;
         if (flatDist > detectRange) return false;
         Vector3 flatTo = target.position - transform.position; flatTo.y = 0f;
@@ -223,7 +226,7 @@ public class Titan : MonoBehaviour
 
     void UpdateWander(float dist, float dt)
     {
-        if (CanSense(dist) && (dist < senseRange || Lured || ChaserCount(this) < maxChasers))
+        if (CanSense(dist) && (dist < senseRange || ChaserCount(this) < maxChasers))
         {
             state = State.Chase;
             lostSightTimer = 0f;
@@ -247,7 +250,9 @@ public class Titan : MonoBehaviour
     void UpdateChase(float dist, bool inArmHeight, float dt)
     {
         bool sees = CanSense(dist);
-        if (sees) { lostSightTimer = 0f; lastKnownPos = target.position; } else lostSightTimer += dt;
+        if (sees) { lostSightTimer = 0f; lastKnownPos = target.position; }
+        else if (lureTimer > 0f) lureTimer -= dt; // đang chạy tới chỗ tiếng động, chưa tính mất dấu
+        else lostSightTimer += dt;
         if (dist > loseRange || lostSightTimer > loseSightTime) { state = State.Wander; wanderTimer = 0f; return; }
         if (sees && dist <= AttackReach && inArmHeight)
         {
