@@ -8,13 +8,25 @@ Dự án **tự dựng gần hết bằng code lúc chạy**. Trong scene chỉ 
 | Thư mục | Nội dung |
 | --- | --- |
 | `Core/` | `GameManager` (trạng thái game, nối các hệ thống), `GameInput`, `Health`, `TimeFocus` |
-| `Player/` | `ODMController` (di chuyển ODM, lớn nhất), `PlayerCombat`, `PlayerStamina`, camera/viewmodel/trang bị, `Crosshair` |
+| `Player/` | `ODMController` (điều phối ODM) + các phần ODM, `PlayerCombat`, `PlayerStamina`, camera/viewmodel/trang bị, `Crosshair` |
 | `Titan/` | `Titan` (AI), `TitanForm` (Eren biến hình), các script animation: `TitanModels`, `TitanClipPlayer`, `TitanProceduralAnim`, `TitanPunchAnimator`, `TitanFootGrounder` |
 | `Missions/` | `TrostMission`, `TrostCity`, `TrostMapAuthoring`, `Chapter0Training`, `Cutscene` |
 | `Audio/` | `GameAudio` (singleton SFX/nhạc), `BackgroundMusicPlayer` |
 | `Vfx/` | `GameVfx` (hạt), `TransformLightning` (sét biến hình) |
 | `UI/` | `GameHud` (HUD), `MangaMenu` (menu trong game), `MainMenuController` (menu scene MainMenu), `MangaGraphics`, `GameSettings` |
-| `../Editor/` | Chỉ còn tool nhỏ: `TitanImportSettings` (cấu hình import model titan), `CutsceneMenu` (reset cutscene để test). Không còn script nào dựng scene. |
+| `../Editor/` | Chỉ còn `CutsceneMenu` (reset cutscene để test). Không còn script nào dựng scene. |
+
+## Các file ODM (`Player/`)
+
+| File | Vai trò |
+| --- | --- |
+| `ODMController` | Điều phối: trạng thái, input, gas, FOV; gọi các phần dưới |
+| `ODMHooks` | Bắn/giữ/thu móc, điểm bám |
+| `ODMGroundMovement` | Di chuyển trên mặt đất |
+| `ODMAirMovement` | Di chuyển trên không, lực kéo dây, lướt |
+| `ODMCollision` | Đẩy ra khỏi va chạm, trượt tường, tiếp xúc |
+| `ODMAntiStuck` | Chống kẹt |
+| `ODMRopeVisual` | Hiển thị dây |
 
 ## Ai tạo ai
 
@@ -45,5 +57,4 @@ Dự án **tự dựng gần hết bằng code lúc chạy**. Trong scene chỉ 
   - Trang Title, Chapters, Credits của `MangaMenu` là code chết (menu chính đã dùng scene), xóa được ngay.
   - Trang Settings trùng với `SettingsMenu` của menu chính; khi chuyển nên dùng chung một prefab.
   - Crosshair vẫn là Image trong canvas riêng của từng scene; cân nhắc đưa vào prefab `GameHud`.
-- `ODMController` (~1500 dòng) nên tách: di chuyển / dây / gas / FOV.
 - `MangaMenu` (~1100 dòng) nên tách theo từng `Page`.
