@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.UI;
 
 // Chapter 0 is a safe, non-combat onboarding course. The level geometry and
 // checkpoint references are baked into Chapter0_TrainingCamp by the editor builder.
@@ -8,6 +9,13 @@ public class Chapter0Training : MonoBehaviour
     public Transform[] checkpoints;
     public float checkpointRadius = 8f;
     public float voidY = -15f;
+
+    [Header("UI (canvas trong scene)")]
+    [SerializeField] Text titleText = null;
+    [SerializeField] Text objectiveText = null;
+    [SerializeField] RectTransform marker = null;
+    [SerializeField] Text markerText = null;
+    [SerializeField] GameObject pauseOverlay = null;
 
     readonly string[] objectives =
     {
@@ -29,9 +37,6 @@ public class Chapter0Training : MonoBehaviour
     bool paused;
     Vector3 respawnPosition;
     Quaternion respawnRotation;
-    GUIStyle titleStyle;
-    GUIStyle textStyle;
-    GUIStyle centerStyle;
 
     void Start()
     {
@@ -127,67 +132,33 @@ public class Chapter0Training : MonoBehaviour
         Time.timeScale = 1f;
     }
 
-    void EnsureStyles()
+    // ---------- UI (canvas dựng sẵn trong scene) ----------
+    void LateUpdate()
     {
-        if (titleStyle != null) return;
-        titleStyle = new GUIStyle(GUI.skin.label)
-        {
-            fontSize = 28,
-            fontStyle = FontStyle.Bold,
-            alignment = TextAnchor.MiddleCenter
-        };
-        titleStyle.normal.textColor = Color.white;
-        textStyle = new GUIStyle(GUI.skin.label) { fontSize = 20, alignment = TextAnchor.MiddleCenter };
-        textStyle.normal.textColor = new Color(0.9f, 0.95f, 1f);
-        centerStyle = new GUIStyle(titleStyle) { fontSize = 44 };
+        if (player == null || titleText == null) return;
+
+        titleText.text = complete ? "CHAPTER 0 — HOÀN THÀNH" : "CHAPTER 0 — TRẠI HUẤN LUYỆN";
+        objectiveText.text = complete ? "Bạn đã sẵn sàng cho nhiệm vụ đầu tiên." : objectives[step];
+        pauseOverlay.SetActive(paused);
+        marker.gameObject.SetActive(TryPlaceMarker());
     }
 
-    static void DrawBox(Rect rect, Color color)
+    // Đặt dấu mục tiêu lên màn hình. Trả về false nếu không có / nằm sau lưng.
+    bool TryPlaceMarker()
     {
-        Color old = GUI.color;
-        GUI.color = color;
-        GUI.DrawTexture(rect, Texture2D.whiteTexture);
-        GUI.color = old;
-    }
+        if (complete) return false;
+        Transform target = CurrentTarget();
+        Camera cam = player.cameraTransform != null ? player.cameraTransform.GetComponent<Camera>() : Camera.main;
+        if (target == null || cam == null) return false;
 
-    void OnGUI()
-    {
-        if (player == null) return;
-        EnsureStyles();
-        float scale = Mathf.Max(0.7f, Screen.height / 1080f);
+        Vector3 screen = cam.WorldToScreenPoint(target.position + Vector3.up * 3f);
+        if (screen.z <= 0f) return false;
 
-        Rect panel = new Rect(Screen.width * 0.5f - 440f * scale, 24f * scale, 880f * scale, 92f * scale);
-        DrawBox(panel, new Color(0.025f, 0.04f, 0.055f, 0.82f));
-        GUI.Label(new Rect(panel.x, panel.y + 5f * scale, panel.width, 34f * scale),
-            complete ? "CHAPTER 0 — HOÀN THÀNH" : "CHAPTER 0 — TRẠI HUẤN LUYỆN", titleStyle);
-        GUI.Label(new Rect(panel.x + 20f * scale, panel.y + 43f * scale, panel.width - 40f * scale, 42f * scale),
-            complete ? "Bạn đã sẵn sàng cho nhiệm vụ đầu tiên." : objectives[step], textStyle);
-
-        if (!complete)
-        {
-            Transform target = CurrentTarget();
-            Camera cam = player.cameraTransform != null ? player.cameraTransform.GetComponent<Camera>() : Camera.main;
-            if (target != null && cam != null)
-            {
-                Vector3 screen = cam.WorldToScreenPoint(target.position + Vector3.up * 3f);
-                if (screen.z > 0f)
-                {
-                    float x = Mathf.Clamp(screen.x, 70f, Screen.width - 70f);
-                    float y = Mathf.Clamp(Screen.height - screen.y, 130f, Screen.height - 100f);
-                    DrawBox(new Rect(x - 7f, y - 7f, 14f, 14f), new Color(0.2f, 1f, 0.65f));
-                    GUI.Label(new Rect(x - 120f, y + 10f, 240f, 30f),
-                        "MỤC TIÊU  " + Mathf.RoundToInt(Vector3.Distance(player.transform.position, target.position)) + " m", textStyle);
-                }
-            }
-        }
-
-        GUI.Label(new Rect(0f, Screen.height - 48f * scale, Screen.width, 36f * scale),
-            "R: trở lại checkpoint   •   Esc: tạm dừng", textStyle);
-
-        if (paused)
-        {
-            DrawBox(new Rect(0, 0, Screen.width, Screen.height), new Color(0, 0, 0, 0.65f));
-            GUI.Label(new Rect(0, Screen.height * 0.4f, Screen.width, 80f), "TẠM DỪNG", centerStyle);
-        }
+        float x = Mathf.Clamp(screen.x, 70f, Screen.width - 70f);
+        float yTop = Mathf.Clamp(Screen.height - screen.y, 130f, Screen.height - 100f);
+        float canvasScale = Screen.height / 1080f; // canvas Scale With Screen Size, match chiều cao
+        marker.anchoredPosition = new Vector2(x, Screen.height - yTop) / canvasScale;
+        markerText.text = "MỤC TIÊU  " + Mathf.RoundToInt(Vector3.Distance(player.transform.position, target.position)) + " m";
+        return true;
     }
 }
