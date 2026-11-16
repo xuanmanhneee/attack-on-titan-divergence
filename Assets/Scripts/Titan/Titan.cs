@@ -231,7 +231,6 @@ public class Titan : MonoBehaviour
             state = State.Chase;
             lostSightTimer = 0f;
             lastKnownPos = target.position;
-            GameAudio.Play(Sfx.Roar, transform.position + Vector3.up * Height * 0.8f, Mathf.Clamp(Height / 12f, 0.5f, 1.3f), Mathf.Clamp(14f / Height, 0.7f, 1.3f));
             return;
         }
         wanderTimer -= dt;
