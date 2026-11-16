@@ -39,13 +39,13 @@ Mỗi giai đoạn nên làm trong 1 phiên riêng.
   - Test: titan đuổi, đánh, không xuyên nhà như trước.
 
 ## Giai đoạn 2: Tách `Titan/TitanForm.cs` (795 dòng)
-- [ ] **T5. Tạo `Titan/TitanFormVisual.cs`**
+- [x] **T5. Tạo `Titan/TitanFormVisual.cs`**
   - Chuyển: `BuildVisual`, `DestroyVisual`, `FindClip`, `AnimateFists`, `RotateBone`, phần xoay xương trong `LateUpdate`.
   - Test: biến hình hiện đúng model, đủ animation chạy và đấm.
-- [ ] **T6. Tạo `Titan/TitanFormCombat.cs`**
+- [x] **T6. Tạo `Titan/TitanFormCombat.cs`**
   - Chuyển: `TitanPunch`, `StartPunch`, `ClipPunch`, `ResolvePunch`.
   - Test: đấm nhẹ và đấm mạnh đều gây sát thương, giết được titan.
-- [ ] **T7. Tách camera shake**
+- [x] **T7. Tách camera shake**
   - Chuyển `AddShake`, `UpdateShake`, `ResetShake`, `SetCameraLocalY` sang 1 class nhỏ (dùng chung được).
   - Mục tiêu: `TitanForm` ~300 dòng, chỉ lo trạng thái (Human/Transforming/Titan), thời gian, di chuyển.
 

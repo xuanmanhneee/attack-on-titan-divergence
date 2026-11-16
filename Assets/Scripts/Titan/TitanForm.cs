@@ -59,28 +59,31 @@ public class TitanForm : MonoBehaviour
     PlayerCombat combat;
     Health health;
     CharacterController controller;
-    Transform cam;
+    internal Transform cam;
     ThirdPersonObservationCamera thirdPerson;
     GameManager manager;
+
+    internal TitanFormVisual visual;
+    TitanFormCombat punch;
+    readonly CameraShake shake = new CameraShake();
 
     State state = State.Human;
     float stateTimer;     // Transforming: thời gian đã qua. Titan: thời gian còn lại.
     float cooldownLeft;
-    float flash;
+    internal float flash;
 
     // Giá trị gốc để khôi phục
     float oldHeight, oldRadius, oldStep;
     Vector3 oldCenter, oldCamLocal;
-    float eyeLocalY;
+    internal float eyeLocalY;
     static readonly string[] ViewmodelNames = { "ODM_Viewmodel", "WRAD_Sword_Viewmodel" };
     readonly System.Collections.Generic.List<GameObject> hiddenViewmodels = new System.Collections.Generic.List<GameObject>();
     FirstPersonSwordViewmodel swordViewmodel;
 
     // Chuyển động
     Vector3 velocity;
-    float bobPhase;
+    internal float bobPhase;
 
-    // Đấm
     [Header("Model")]
     public string modelName = "AttackTitan";
     // Chỉ dùng khi model không có xương Head / eyeFromHead: camera đứng trước mặt trước nhất của thân.
@@ -109,43 +112,15 @@ public class TitanForm : MonoBehaviour
     public float legSwingAngle = 28f;
     public float kneeBendAngle = 35f;
 
-    Transform bodyRoot;            // gốc model, đặt ở chân capsule
-    Transform holder;
-    TitanProceduralAnim proc;
-    TitanPunchAnimator punchAnim;
-    Transform headBone;
-    Transform[] legBones;          // đùi trái, đùi phải, cẳng chân trái, cẳng chân phải
-    Transform[] armBones;          // cánh tay trên trái, phải, cẳng tay trái, phải
-    Vector3 eyeInHead;             // điểm mắt so với xương đầu (theo hướng xương, không theo scale)
-    Vector3 restEyeHolder;         // điểm mắt lúc thủ thế, trong không gian holder
-    float walkAmount;
 
-    // Các đoạn trong clip Mixamo "Punching" (30 fps): khung bắt đầu, khung trúng đích, khung kết thúc.
-    // Cú đấm đơn luân phiên: trái - phải - trái - phải. Chuột phải phát chuỗi 4 cú liên hoàn.
-    const float ClipFps = 30f;
-    static readonly Vector3Int[] lightSegments =
-    {
-        new Vector3Int(8, 14, 19),   // trái
-        new Vector3Int(29, 34, 39),  // phải
-        new Vector3Int(50, 55, 59),  // trái
-        new Vector3Int(39, 43, 49),  // phải
-    };
-    const int comboStart = 50, comboEnd = 90;
-    static readonly int[] comboHits = { 55, 62, 69, 76 };
-    int lightIndex;
-    float[] pendingHits = new float[0];
-    int nextHit;
-    bool clipHeavy;
 
-    float punchT = 1f;
-    float punchLen;
-    bool punchHeavy;
-    bool punchRightArm;
-    bool punchHitDone;
-    float punchCooldownLeft;
+
 
     void Awake()
     {
+        visual = new TitanFormVisual(this);
+        punch = new TitanFormCombat(this);
+        shake.Decay = shakeDecay;
         odm = GetComponent<ODMController>();
         stamina = GetComponent<PlayerStamina>();
         combat = GetComponent<PlayerCombat>();
@@ -190,7 +165,7 @@ public class TitanForm : MonoBehaviour
                 stamina.Set(titanStamina * Mathf.Clamp01(stateTimer / titanTotal)); // thể lực tụt dần theo thời gian titan còn lại
                 TitanLook();
                 TitanMove(dt);
-                TitanPunch(dt);
+                punch.Update(dt);
                 if (GameInput.GetKeyDown(transformKey) || stateTimer <= 0f) EndTransform();
                 break;
         }
@@ -216,7 +191,7 @@ public class TitanForm : MonoBehaviour
             TransformLightning.Play(transform.position, lightningTime);
         }
         float k = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((stateTimer - biteTime) / Mathf.Max(0.01f, lightningTime)));
-        SetCameraLocalY(Mathf.Lerp(oldCamLocal.y, eyeLocalY, k));
+        CameraShake.SetLocalY(cam, Mathf.Lerp(oldCamLocal.y, eyeLocalY, k));
         if (stateTimer >= TransformTotal)
         {
             Unfreeze();
@@ -285,11 +260,10 @@ public class TitanForm : MonoBehaviour
         eyeLocalY = formHeight * 0.5f - 0.9f; // dự phòng nếu model không tải được
 
         Titan.Lure(transform.position); // tiếng động lớn kéo titan quanh đó tới
-        BuildVisual();
-        ResetShake();
+        visual.Build();
+        shake.Reset();
         velocity = Vector3.zero;
-        punchT = 1f;
-        punchCooldownLeft = 0f;
+        punch.Reset();
 
         health.DamageMultiplier = 0f; // bất tử trong lúc biến hình
         // Nhạc titan chạy ngay từ lúc bấm G (crossfade ngắn). Sét bắt đầu sau biteTime, xem UpdateFrozenTransform.
@@ -317,8 +291,9 @@ public class TitanForm : MonoBehaviour
         controller.enabled = true;
 
         if (cam != null) cam.localPosition = oldCamLocal;
-        ResetShake();
-        DestroyVisual();
+        shake.Reset();
+        visual.Destroy();
+        punch.Reset();
 
         foreach (var vm in hiddenViewmodels) if (vm != null) vm.SetActive(true);
         hiddenViewmodels.Clear();
@@ -352,6 +327,13 @@ public class TitanForm : MonoBehaviour
         if (state != State.Human && odm != null && health != null && controller != null) EndTransform();
     }
 
+    // Sau khi Animator đã dựng tư thế: thêm bước chân và cho camera đi theo đầu.
+    void LateUpdate()
+    {
+        if (state == State.Human) return;
+        visual.LateUpdate();
+    }
+
     // ================= ĐIỀU KHIỂN TITAN =================
     void TitanLook()
     {
@@ -359,7 +341,7 @@ public class TitanForm : MonoBehaviour
         odm.Pitch -= GameInput.GetAxis("Mouse Y") * odm.mouseSensitivity;
         odm.Pitch = Mathf.Clamp(odm.Pitch, -70f, 85f);
         transform.rotation = Quaternion.Euler(0f, odm.Yaw, 0f);
-        cam.localRotation = Quaternion.Euler(odm.Pitch + shakePitch, 0f, shakeRoll);
+        cam.localRotation = Quaternion.Euler(odm.Pitch + shake.Pitch, 0f, shake.Roll);
     }
 
     void TitanMove(float dt)
@@ -385,357 +367,39 @@ public class TitanForm : MonoBehaviour
 
         // Tiếp đất: rơi càng nhanh rung càng mạnh.
         bool nowGrounded = controller.isGrounded;
-        if (nowGrounded && !wasGroundedShake && preMoveVy < -6f)
-            AddShake(Mathf.Clamp01(landShakeMin + (-preMoveVy - 6f) / 30f * landShakeScale));
-        wasGroundedShake = nowGrounded;
+        if (nowGrounded && !shake.WasGrounded && preMoveVy < -6f)
+            shake.Add(Mathf.Clamp01(landShakeMin + (-preMoveVy - 6f) / 30f * landShakeScale));
+        shake.WasGrounded = nowGrounded;
 
         // Bước chân nặng nề: camera nhấp nhô theo nhịp chạy
         float moveAmount = grounded ? flat.magnitude / runSpeed : 0f;
         float prevStep = Mathf.Floor(bobPhase / Mathf.PI);
         bobPhase += flat.magnitude * dt * 0.45f;
-        if (grounded && Mathf.Floor(bobPhase / Mathf.PI) != prevStep) AddShake(stepShake * Mathf.Clamp01(moveAmount * 1.3f)); // mỗi bước chạm đất
-        UpdateShake(dt);
+        if (grounded && Mathf.Floor(bobPhase / Mathf.PI) != prevStep) shake.Add(stepShake * Mathf.Clamp01(moveAmount * 1.3f)); // mỗi bước chạm đất
+        shake.Update(dt);
         float bob = Mathf.Abs(Mathf.Sin(bobPhase)) * 0.35f * moveAmount;
         // Clip chạy đã làm đầu nhấp nhô (camera bám đầu) -> bớt nhấp nhô giả.
-        if (punchAnim != null && punchAnim.HasRun) bob *= 1f - punchAnim.RunWeight;
-        SetCameraLocalY(eyeLocalY + bob + shakeY);
-        walkAmount = Mathf.MoveTowards(walkAmount, grounded && flat.sqrMagnitude > 0.5f ? flat.magnitude / runSpeed : 0f, dt * 3f);
-        if (punchAnim != null)
+        if (visual.punchAnim != null && visual.punchAnim.HasRun) bob *= 1f - visual.punchAnim.RunWeight;
+        CameraShake.SetLocalY(cam, eyeLocalY + bob + shake.Y);
+        visual.walkAmount = Mathf.MoveTowards(visual.walkAmount, grounded && flat.sqrMagnitude > 0.5f ? flat.magnitude / runSpeed : 0f, dt * 3f);
+        if (visual.punchAnim != null)
         {
             bool moving = grounded && flat.sqrMagnitude > 0.5f;
-            punchAnim.Locomotion = moving ? Mathf.Clamp01(flat.magnitude / Mathf.Max(0.01f, walkSpeed * 0.5f)) : 0f;
-            punchAnim.RunSpeed = Mathf.Max(minRunAnimSpeed, flat.magnitude / Mathf.Max(0.01f, runSpeed)) * runAnimSpeed;
+            visual.punchAnim.Locomotion = moving ? Mathf.Clamp01(flat.magnitude / Mathf.Max(0.01f, walkSpeed * 0.5f)) : 0f;
+            visual.punchAnim.RunSpeed = Mathf.Max(minRunAnimSpeed, flat.magnitude / Mathf.Max(0.01f, runSpeed)) * runAnimSpeed;
         }
-        if (proc != null)
+        if (visual.proc != null)
         {
-            proc.walkPhase = bobPhase;
-            proc.moveAmount = grounded && flat.sqrMagnitude > 0.5f ? 1f : 0f;
+            visual.proc.walkPhase = bobPhase;
+            visual.proc.moveAmount = grounded && flat.sqrMagnitude > 0.5f ? 1f : 0f;
         }
     }
 
-    // ----- Rung màn hình (dùng thời gian thật của khung hình, dùng nhiễu Perlin cho mượt) -----
-    float shake, shakeY, shakePitch, shakeRoll;
-    bool wasGroundedShake = true;
 
-    void AddShake(float amount)
-    {
-        if (!GameSettings.ScreenShake) return; // người chơi đã tắt trong Cài đặt > Đồ họa
-        shake = Mathf.Max(shake, Mathf.Clamp01(amount));
-    }
 
-    void UpdateShake(float dt)
-    {
-        shake = Mathf.Max(0f, shake - shakeDecay * dt);
-        float a = shake * shake * 0.5f + shake * 0.5f; // đường cong nhẹ: rung nhỏ vẫn thấy được, rung lớn gắt
-        float t = Time.time * 28f;
-        shakeY = (Mathf.PerlinNoise(t, 0.3f) - 0.5f) * 2f * a * 0.5f;      // tối đa ~0.5m
-        shakePitch = (Mathf.PerlinNoise(t, 1.7f) - 0.5f) * 2f * a * 2.5f;  // độ
-        shakeRoll = (Mathf.PerlinNoise(t, 5.1f) - 0.5f) * 2f * a * 3f;     // độ
-    }
 
-    void ResetShake()
-    {
-        shake = shakeY = shakePitch = shakeRoll = 0f;
-        wasGroundedShake = true;
-    }
 
-    void SetCameraLocalY(float y)
-    {
-        Vector3 p = cam.localPosition;
-        p.y = y;
-        cam.localPosition = p;
-    }
 
-    // ================= ĐẤM =================
-    void TitanPunch(float dt)
-    {
-        if (punchAnim != null) { ClipPunch(); return; }
-        punchCooldownLeft -= dt;
-
-        if (punchT < 1f)
-        {
-            punchT = Mathf.Min(1f, punchT + dt / punchLen);
-            if (!punchHitDone && punchT >= 0.4f)
-            {
-                punchHitDone = true;
-                ResolvePunch(punchDamage * (punchHeavy ? heavyMultiplier : 1f), punchReach * (punchHeavy ? 1.15f : 1f));
-            }
-        }
-        else if (punchCooldownLeft <= 0f)
-        {
-            bool light = GameInput.GetMouseButtonDown(0) || GameInput.GetKeyDown(KeyCode.F);
-            bool heavy = GameInput.GetMouseButtonDown(1);
-            if (light || heavy) StartPunch(heavy);
-        }
-
-        AnimateFists();
-    }
-
-    void StartPunch(bool heavy)
-    {
-        punchHeavy = heavy;
-        punchLen = heavy ? heavyPunchTime : punchTime;
-        punchT = 0f;
-        punchHitDone = false;
-        punchCooldownLeft = punchLen + punchCooldown;
-        if (!heavy) punchRightArm = !punchRightArm;
-    }
-
-    // Đấm bằng clip: gây sát thương đúng khung nắm đấm duỗi hết. Cú đơn được nối ngay sau khi trúng
-    // (bấm liên tục ra combo trái-phải), chuỗi liên hoàn thì phải đánh hết mới ra đòn mới.
-    void ClipPunch()
-    {
-        while (nextHit < pendingHits.Length && punchAnim.CurrentTime >= pendingHits[nextHit])
-        {
-            nextHit++;
-            if (clipHeavy) ResolvePunch(punchDamage * heavyMultiplier * 0.5f, punchReach * 1.1f);
-            else ResolvePunch(punchDamage, punchReach);
-        }
-
-        bool free = !punchAnim.Playing || (!clipHeavy && nextHit >= pendingHits.Length);
-        if (!free) return;
-
-        if (GameInput.GetMouseButtonDown(1))
-        {
-            clipHeavy = true;
-            pendingHits = new float[comboHits.Length];
-            for (int i = 0; i < comboHits.Length; i++) pendingHits[i] = comboHits[i] / ClipFps;
-            nextHit = 0;
-            punchAnim.Play(comboStart / ClipFps, comboEnd / ClipFps, comboAnimSpeed);
-        }
-        else if (GameInput.GetMouseButtonDown(0) || GameInput.GetKeyDown(KeyCode.F))
-        {
-            Vector3Int seg = lightSegments[lightIndex];
-            lightIndex = (lightIndex + 1) % lightSegments.Length;
-            clipHeavy = false;
-            pendingHits = new[] { seg.y / ClipFps };
-            nextHit = 0;
-            punchAnim.Play(seg.x / ClipFps, seg.z / ClipFps, punchAnimSpeed);
-        }
-    }
-
-    // Sau khi Animator đã dựng tư thế: thêm bước chân và cho camera đi theo đầu.
-    void LateUpdate()
-    {
-        if (state == State.Human || punchAnim == null || headBone == null || cam == null) return;
-        if (Time.timeScale <= 0.0001f) return;
-
-        // Có clip chạy thì chân/tay đã do clip điều khiển; bước chân giả và tư thế thủ chỉ bù phần còn lại.
-        float noRun = 1f - punchAnim.RunWeight;
-        float legAmount = walkAmount * noRun;
-        if (legBones != null && legAmount > 0.001f)
-        {
-            float sw = Mathf.Sin(bobPhase);
-            Vector3 axis = transform.right;
-            RotateBone(legBones[0], -legSwingAngle * sw * legAmount, axis);
-            RotateBone(legBones[1], legSwingAngle * sw * legAmount, axis);
-            RotateBone(legBones[2], kneeBendAngle * Mathf.Max(0f, sw) * legAmount, axis);
-            RotateBone(legBones[3], kneeBendAngle * Mathf.Max(0f, -sw) * legAmount, axis);
-        }
-
-        float guard = (1f - punchAnim.ActionWeight) * noRun;
-        if (armBones != null && guard > 0.001f)
-        {
-            Vector3 right = transform.right, up = transform.up;
-            // Xoay quanh trục ngang (dương = hạ xuống), rồi quanh trục đứng để tách hai tay ra hai bên.
-            RotateBone(armBones[0], guardLowerUpperArm * guard, right);
-            RotateBone(armBones[1], guardLowerUpperArm * guard, right);
-            RotateBone(armBones[0], -guardSpread * guard, up);
-            RotateBone(armBones[1], guardSpread * guard, up);
-            RotateBone(armBones[2], guardLowerForearm * guard, right);
-            RotateBone(armBones[3], guardLowerForearm * guard, right);
-        }
-
-        // Update đã đặt lại độ cao camera (eyeLocalY + nhấp nhô); ở đây cộng thêm độ lệch của đầu.
-        Vector3 rest = holder.TransformPoint(restEyeHolder);
-        Vector3 eye = EyeWorld();
-        Vector3 delta = transform.InverseTransformVector(eye - rest) * headFollow;
-        Vector3 p = cam.localPosition;
-        cam.localPosition = new Vector3(delta.x, p.y + delta.y, delta.z);
-    }
-
-    Vector3 EyeWorld() => headBone.position + headBone.rotation * eyeInHead;
-
-    static void RotateBone(Transform bone, float angle, Vector3 axis)
-    {
-        if (bone != null) bone.rotation = Quaternion.AngleAxis(angle, axis) * bone.rotation;
-    }
-
-    void ResolvePunch(float damage, float reach)
-    {
-        bool hitAny = false;
-
-        foreach (Titan t in Titan.All.ToArray())
-        {
-            if (t == null || t.IsDead) continue;
-
-            // Gáy: đòn chí mạng
-            Vector3 toNape = t.Nape.position - cam.position;
-            if (toNape.magnitude <= reach + 1.5f && Vector3.Angle(cam.forward, toNape) <= punchAngle * 0.6f)
-            {
-                t.Damage(damage * napeMultiplier);
-                hitAny = true;
-                continue;
-            }
-
-            foreach (Collider col in t.BodyColliders)
-            {
-                if (col == null) continue;
-                Vector3 to = col.ClosestPoint(cam.position) - cam.position;
-                if (to.magnitude <= reach && Vector3.Angle(cam.forward, to) <= punchAngle)
-                {
-                    t.Damage(damage);
-                    hitAny = true;
-                    break;
-                }
-            }
-        }
-
-        if (hitAny) flash = Mathf.Max(flash, 0.12f);
-    }
-
-    // Tay đấm bằng animation Humanoid của model: giơ tay rồi đập xuống, luân phiên trái/phải.
-    void AnimateFists()
-    {
-        if (proc == null) return;
-
-        float raise = 0f, slam = 0f;
-        if (punchT < 1f)
-        {
-            if (punchT < 0.4f) raise = punchT / 0.4f;
-            else slam = 1f - (punchT - 0.4f) / 0.6f;
-        }
-        proc.attackRaise = raise;
-        proc.attackSlam = slam;
-        proc.attackMaskL = punchHeavy || !punchRightArm ? 1f : 0f;
-        proc.attackMaskR = punchHeavy || punchRightArm ? 1f : 0f;
-    }
-
-    // ================= HÌNH ẢNH =================
-    // Dùng model titan thật làm thân người chơi. Model Humanoid có clip đấm: camera đặt ở mắt và bám theo
-    // xương đầu, tóc/mắt/răng chỉ đổ bóng để không che tầm nhìn. Model khác: camera đứng trước mặt.
-    void BuildVisual()
-    {
-        var def = TitanModels.Get(modelName);
-        GameObject prefab = def != null ? Resources.Load<GameObject>(def.modelPath) : null;
-        if (prefab == null) { Debug.LogWarning("[TitanForm] Không tải được model '" + modelName + "', chỉ có camera."); return; }
-
-        // Đo kích thước ở gốc toạ độ, không xoay, để kết quả không phụ thuộc vị trí/hướng người chơi.
-        var measure = new GameObject("TitanForm_Measure").transform;
-        var model = Instantiate(prefab, measure);
-        model.name = def.name;
-        Quaternion importRotation = model.transform.localRotation;
-        model.transform.localPosition = Vector3.zero;
-        model.transform.localRotation = Quaternion.Euler(0f, def.yawOffset, 0f) * importRotation;
-        // Prefab FBX có scale gốc riêng; đo ở scale 1 để hệ số s bên dưới là tuyệt đối (giống Titan.BuildFromModel).
-        model.transform.localScale = Vector3.one;
-        foreach (var c in model.GetComponentsInChildren<Collider>()) Destroy(c);
-
-        var renderers = model.GetComponentsInChildren<Renderer>();
-        if (renderers.Length == 0) { Destroy(measure.gameObject); return; }
-
-        Bounds b = TitanBuilder.ExactBounds(renderers);
-        if (b.size.y < 0.0001f) b = TitanBuilder.CalcBounds(renderers);
-        float s = formHeight / b.size.y;
-        model.transform.localScale = Vector3.one * s;
-        model.transform.localPosition = new Vector3(-b.center.x * s, -(b.center.y - b.extents.y) * s, -b.center.z * s);
-        TitanBuilder.ApplyMaterials(renderers, def);
-        if (def.hideInFirstPerson != null)
-        {
-            foreach (var r in renderers)
-                foreach (string part in def.hideInFirstPerson)
-                    if (r.name.Contains(part)) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;
-        }
-
-        // feetRoot (chân capsule) > holder (TitanFootGrounder dịch lên/xuống) > model
-        bodyRoot = new GameObject("TitanForm_Body").transform;
-        bodyRoot.SetParent(transform, false);
-        bodyRoot.localPosition = new Vector3(0f, -formHeight * 0.5f, 0f);
-        holder = new GameObject("Holder").transform;
-        holder.SetParent(bodyRoot, false);
-        // Giữ toạ độ cục bộ (đã tính quanh gốc measure) -> model đứng đúng dưới chân người chơi.
-        model.transform.SetParent(holder, false);
-        Destroy(measure.gameObject);
-
-        var animator = model.GetComponentInChildren<Animator>();
-        bool human = animator != null && animator.avatar != null && animator.avatar.isValid && animator.avatar.isHuman;
-        if (human)
-        {
-            headBone = animator.GetBoneTransform(HumanBodyBones.Head);
-            AnimationClip runClip = string.IsNullOrEmpty(runClipPath) ? null : FindClip(runClipPath, runClipName);
-            if (!string.IsNullOrEmpty(runClipPath) && runClip == null)
-                Debug.LogWarning("[TitanForm] Không tải được clip chạy '" + runClipPath + "', dùng bước chân giả.");
-            punchAnim = TitanPunchAnimator.TryCreate(model, FindClip(def.modelPath, punchClipName), 0f, runClip); // dựng tư thế thủ ngay
-            legBones = new[]
-            {
-                animator.GetBoneTransform(HumanBodyBones.LeftUpperLeg),
-                animator.GetBoneTransform(HumanBodyBones.RightUpperLeg),
-                animator.GetBoneTransform(HumanBodyBones.LeftLowerLeg),
-                animator.GetBoneTransform(HumanBodyBones.RightLowerLeg),
-            };
-            armBones = new[]
-            {
-                animator.GetBoneTransform(HumanBodyBones.LeftUpperArm),
-                animator.GetBoneTransform(HumanBodyBones.RightUpperArm),
-                animator.GetBoneTransform(HumanBodyBones.LeftLowerArm),
-                animator.GetBoneTransform(HumanBodyBones.RightLowerArm),
-            };
-        }
-
-        if (headBone != null && def.eyeFromHead != Vector3.zero)
-        {
-            // Mắt = xương đầu + độ lệch (đơn vị model, nhân scale). Dời model để mắt nằm đúng trên trục camera.
-            Vector3 eyeWorld = headBone.position + holder.rotation * (def.eyeFromHead * s);
-            eyeInHead = Quaternion.Inverse(headBone.rotation) * (eyeWorld - headBone.position);
-            Vector3 eyeLocal = bodyRoot.InverseTransformPoint(eyeWorld);
-            model.transform.localPosition -= new Vector3(eyeLocal.x, 0f, eyeLocal.z);
-            restEyeHolder = holder.InverseTransformPoint(EyeWorld());
-            eyeLocalY = -formHeight * 0.5f + eyeLocal.y;
-            if (collapseHead) headBone.localScale = Vector3.one * 0.001f; // animation Humanoid không ghi scale nên giữ nguyên
-        }
-        else
-        {
-            // Đầu: dùng xương Head nếu có, không thì ước lượng theo gáy. Camera đứng trước mặt trước nhất của
-            // thân (mặt/bụng) một khoảng eyeForward -> không bị kẹt trong đầu.
-            Vector3 head = headBone != null
-                ? bodyRoot.InverseTransformPoint(headBone.position)
-                : new Vector3(0f, formHeight * (def.napeHeight + 0.03f), 0f);
-            float frontZ = b.extents.z * s;
-            model.transform.localPosition += new Vector3(-head.x, 0f, -frontZ - eyeForward);
-            eyeLocalY = -formHeight * 0.5f + head.y + eyeUp;
-            headBone = null; // không bám theo đầu khi không có điểm mắt
-        }
-
-        if (punchAnim == null) proc = TitanProceduralAnim.TryCreate(model);
-        TitanFootGrounder.TryCreate(model, bodyRoot, holder);
-    }
-
-    static AnimationClip FindClip(string resourcePath, string clipName)
-    {
-        AnimationClip fallback = null;
-        foreach (var c in Resources.LoadAll<AnimationClip>(resourcePath))
-        {
-            if (c == null || c.name.StartsWith("__preview__")) continue;
-            if (c.name == clipName) return c;
-            if (fallback == null && c.humanMotion) fallback = c;
-        }
-        return fallback;
-    }
-
-    void DestroyVisual()
-    {
-        if (bodyRoot != null) Destroy(bodyRoot.gameObject);
-        bodyRoot = null;
-        holder = null;
-        proc = null;
-        punchAnim = null;
-        headBone = null;
-        legBones = null;
-        armBones = null;
-        walkAmount = 0f;
-        pendingHits = new float[0];
-        nextHit = 0;
-    }
 
     void Say(string m)
     {
