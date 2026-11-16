@@ -17,11 +17,16 @@ public class TitanForm : MonoBehaviour
     public float formRadius = 1.3f;
     // Thời gian titan = (thể lực còn lại sau khi trả phí biến hình) / titanDrainPerSecond. Mọi số liệu ở PlayerStamina.stats.
     public float cooldown = 30f;
-    [Tooltip("Thế giới đứng hình sau khi bấm G, chờ animation cắn tay (chưa có, tạm để trống). Nhạc titan đã chạy từ đầu đoạn này.")]
+    [Tooltip("Thế giới đứng hình sau khi bấm G, diễn animation đưa tay lên miệng cắn (FirstPersonSwordViewmodel.PlayBite). Nhạc titan đã chạy từ đầu đoạn này.")]
     public float biteTime = 2f;
-    [Tooltip("Chuỗi sét chớp rồi sét lớn đánh xuống, sau đoạn cắn tay.")]
+    [Tooltip("Sét vàng tăng dần tới chói sáng, sau đoạn cắn tay. Nếu có Resources/Audio/transform_sfx thì tự lấy (độ dài sfx - biteTime) để sét và sfx kết thúc cùng lúc.")]
     public float lightningTime = 2.2f;
-    float TransformTotal => biteTime + lightningTime;
+    AudioClip transformSfx;
+    AudioSource sfxSource;
+    [Tooltip("Sét bắt đầu từ giây này (tay vừa đưa lên miệng), chồng lên đoạn cắn tay chứ không chờ cắn xong.")]
+    public float lightningStart = 0.4f;
+    float TransformTotal => transformSfx != null ? Mathf.Max(biteTime + 1f, transformSfx.length) : biteTime + lightningTime;
+    float LightningTime => Mathf.Max(1f, TransformTotal - lightningStart);
     [Range(0f, 1f)] public float damageTakenMultiplier = 0.5f;
 
     [Header("Di chuyển")]
@@ -76,7 +81,7 @@ public class TitanForm : MonoBehaviour
     float oldHeight, oldRadius, oldStep;
     Vector3 oldCenter, oldCamLocal;
     internal float eyeLocalY;
-    static readonly string[] ViewmodelNames = { "ODM_Viewmodel", "WRAD_Sword_Viewmodel" };
+    static readonly string[] ViewmodelNames = { "ODM_Viewmodel" }; // viewmodel kiếm tự quản: dùng lại làm tay cắn
     readonly System.Collections.Generic.List<GameObject> hiddenViewmodels = new System.Collections.Generic.List<GameObject>();
     FirstPersonSwordViewmodel swordViewmodel;
 
@@ -176,6 +181,7 @@ public class TitanForm : MonoBehaviour
     // ================= BIẾN HÌNH =================
     bool frozen; // đang giữ timeScale = 0 vì biến hình
     bool lightningStarted;
+    bool biteEnded;
 
     void UpdateFrozenTransform()
     {
@@ -185,14 +191,20 @@ public class TitanForm : MonoBehaviour
         Time.timeScale = 0f; // chống việc thoát pause trả timeScale về 1 giữa chừng
         stateTimer += Time.unscaledDeltaTime;
 
-        // Giai đoạn 1 (0 -> biteTime): đứng hình, chỗ để chèn animation cắn tay + cutscene chuyển hoá.
-        // Giai đoạn 2 (biteTime -> hết): sét chớp, sét lớn, camera nâng lên tầm mắt titan.
-        if (!lightningStarted && stateTimer >= biteTime)
+        // Đứng hình suốt đoạn này. Animation cắn tay chạy 0 -> biteTime. Sét vàng bắt đầu sớm (lightningStart, lúc tay
+        // vừa lên miệng) và mạnh dần tới trắng xoá lúc hết transform_sfx; camera nâng lên tầm mắt titan ở cuối.
+        if (!lightningStarted && stateTimer >= lightningStart)
         {
             lightningStarted = true;
-            TransformLightning.Play(transform.position, lightningTime);
+            TransformLightning.Play(transform.position, LightningTime);
         }
-        float k = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((stateTimer - biteTime) / Mathf.Max(0.01f, lightningTime)));
+        if (!biteEnded && stateTimer >= biteTime)
+        {
+            biteEnded = true;
+            if (swordViewmodel != null) { swordViewmodel.StopBite(); swordViewmodel.enabled = false; }
+        }
+        // Camera chỉ nâng lên tầm mắt titan ở 40% cuối, lúc màn hình đã gần trắng xoá.
+        float k = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.6f, 1f, (stateTimer - lightningStart) / Mathf.Max(0.01f, LightningTime)));
         CameraShake.SetLocalY(cam, Mathf.Lerp(oldCamLocal.y, eyeLocalY, k));
         if (stateTimer >= TransformTotal)
         {
@@ -206,8 +218,8 @@ public class TitanForm : MonoBehaviour
             humanHealth = health.Current;      // cất máu dạng người
             health.SetCurrent(health.maxHealth); // titan luôn đầy máu mỗi lần biến hình
             health.DamageMultiplier = damageTakenMultiplier;
-            // Gầm ngay khi thời gian chạy lại. Chỉ phát khi có file thật Assets/Resources/Audio/Roar.(wav|mp3|ogg);
-            // bản tổng hợp mặc định nghe khó chịu nên bỏ qua.
+            // Gầm ngay khi transform_sfx vừa hết (cũng là lúc thời gian chạy lại). Chỉ phát khi có file thật
+            // Assets/Resources/Audio/Roar.(wav|mp3|ogg); bản tổng hợp mặc định nghe khó chịu nên bỏ qua.
             if (Resources.Load<AudioClip>("Audio/Roar") != null) GameAudio.Play2D(Sfx.Roar, 1f, 1f);
             Say("TITAN! Chuột trái/phải: đấm");
         }
@@ -239,8 +251,9 @@ public class TitanForm : MonoBehaviour
             Transform vm = cam.Find(n);
             if (vm != null && vm.gameObject.activeSelf) { vm.gameObject.SetActive(false); hiddenViewmodels.Add(vm.gameObject); }
         }
+        // Viewmodel kiếm vẫn chạy trong đoạn đứng hình để diễn animation đưa tay lên miệng cắn; tắt khi hết biteTime.
         swordViewmodel = GetComponent<FirstPersonSwordViewmodel>();
-        if (swordViewmodel != null && swordViewmodel.enabled) swordViewmodel.enabled = false;
+        if (swordViewmodel != null && swordViewmodel.enabled) swordViewmodel.PlayBite(biteTime);
         else swordViewmodel = null;
 
         // Phình capsule giữ nguyên vị trí bàn chân.
@@ -270,7 +283,22 @@ public class TitanForm : MonoBehaviour
         health.DamageMultiplier = 0f; // bất tử trong lúc biến hình
         // Nhạc titan chạy ngay từ lúc bấm G (crossfade ngắn). Sét bắt đầu sau biteTime, xem UpdateFrozenTransform.
         if (odm.Music != null) odm.Music.SetTitan(true, 1f);
+        // transform_sfx chạy suốt đoạn biến hình (cắn tay + sét); tiếng gầm phát ngay khi nó hết (xem UpdateFrozenTransform).
+        if (transformSfx == null) transformSfx = Resources.Load<AudioClip>("Audio/transform_sfx");
+        if (transformSfx != null)
+        {
+            if (sfxSource == null)
+            {
+                sfxSource = gameObject.AddComponent<AudioSource>();
+                sfxSource.playOnAwake = false;
+                sfxSource.spatialBlend = 0f;
+            }
+            sfxSource.clip = transformSfx;
+            sfxSource.volume = Mathf.Clamp01(GameSettings.Sfx);
+            sfxSource.Play();
+        }
         lightningStarted = false;
+        biteEnded = false;
         if (GameHud.Current != null) GameHud.Current.HideTitanBar();
         frozen = true;
         Time.timeScale = 0f; // dừng thời gian suốt lúc biến hình (xem UpdateFrozenTransform)
@@ -281,6 +309,7 @@ public class TitanForm : MonoBehaviour
 
     void EndTransform()
     {
+        if (sfxSource != null && state == State.Transforming) sfxSource.Stop(); // bị ngắt giữa chừng thì cắt sfx
         Unfreeze(); // bị tắt giữa lúc đang đứng hình thì trả thời gian lại
         if (odm != null && odm.Music != null) { odm.Music.SetDuck(1f); odm.Music.SetTitan(false, 2f); }
         float feetY = transform.position.y - formHeight * 0.5f;
@@ -300,7 +329,7 @@ public class TitanForm : MonoBehaviour
 
         foreach (var vm in hiddenViewmodels) if (vm != null) vm.SetActive(true);
         hiddenViewmodels.Clear();
-        if (swordViewmodel != null) swordViewmodel.enabled = true; // LateUpdate của nó tự ẩn/hiện lại tay kiếm
+        if (swordViewmodel != null) { swordViewmodel.StopBite(); swordViewmodel.enabled = true; } // LateUpdate của nó tự ẩn/hiện lại tay kiếm
         swordViewmodel = null;
         if (thirdPerson != null) thirdPerson.enabled = true;
         if (combat != null) combat.enabled = true;

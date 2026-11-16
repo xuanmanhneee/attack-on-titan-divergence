@@ -74,6 +74,36 @@ public sealed class FirstPersonSwordViewmodel : MonoBehaviour
         armsAlbedo = albedo;
     }
 
+    // ---- Hoá titan: đưa tay phải lên sát miệng như cắn. Chạy bằng thời gian thật (thế giới đang đứng hình). ----
+    [Header("Bite (hoá titan)")]
+    // Không serialize: sửa số ở đây là có hiệu lực ngay (đã chỉnh bằng cách chụp màn hình trong Play mode).
+    Vector3 biteHandPosition = new Vector3(0.06f, -0.13f, 0.28f);
+    Vector3 biteForearmDirection = new Vector3(-0.35f, 0.6f, 0.7f);
+    Vector3 biteFingerDirection = new Vector3(-0.25f, 0.75f, 0.6f);
+    // Hướng lưỡi kiếm tay phải lúc cắn: nằm ngang qua mặt (âm X = chĩa sang trái).
+    Vector3 biteBladeDirection = new Vector3(-1f, 0.1f, 0.2f);
+    Vector3 biteLeftHandPosition = new Vector3(-0.26f, -0.32f, 0.50f); // tay trái hạ nhẹ, giữ kiếm
+    float biteTime = -1f;
+    float biteDuration;
+    float biteK;
+    Vector3 biteShakeOffset;
+    public bool IsBiting => biteTime >= 0f;
+
+    public void PlayBite(float duration)
+    {
+        biteTime = 0f;
+        biteDuration = Mathf.Max(0.3f, duration);
+        biteK = 0f;
+        slashTime = -1f;
+    }
+
+    public void StopBite()
+    {
+        biteTime = -1f;
+        biteK = 0f;
+        SetVisible(false);
+    }
+
     public void PlaySlash()
     {
         slashTime = 0f;
@@ -217,6 +247,20 @@ public sealed class FirstPersonSwordViewmodel : MonoBehaviour
 
             Vector3 dir = Mirror(forearmDirection, side).normalized;
             Vector3 wrist = Mirror(handPosition, side);
+            Vector3 blade = Mirror(bladeDirection, side).normalized;
+            Vector3 fingers = Mirror(fingerDirection, side);
+            if (biteK > 0f)
+            {
+                // Tay phải lên miệng (run nhẹ), tay trái hạ khỏi màn hình.
+                Vector3 bWrist = side == 1 ? biteHandPosition + biteShakeOffset : biteLeftHandPosition;
+                Vector3 bDir = side == 1 ? biteForearmDirection : Mirror(forearmDirection, 0);
+                Vector3 bFingers = side == 1 ? biteFingerDirection : fingers;
+                wrist = Vector3.Lerp(wrist, bWrist, biteK);
+                dir = Vector3.Slerp(dir, bDir.normalized, biteK);
+                fingers = Vector3.Slerp(fingers, bFingers.normalized, biteK);
+                // Tay phải cầm kiếm dựng đứng bên mặt; tay trái giữ kiếm như thường.
+                if (side == 1) blade = Vector3.Slerp(blade, biteBladeDirection.normalized, biteK);
+            }
             Vector3 elbow = wrist - dir * (forearmLength * armsScale);
             Quaternion bind = forearmBind[side];
             float roll = side == 0 ? forearmRoll : -forearmRoll;
@@ -231,8 +275,6 @@ public sealed class FirstPersonSwordViewmodel : MonoBehaviour
             forearm.position = worldPos;
             forearm.rotation = worldRot;
 
-            Vector3 blade = Mirror(bladeDirection, side).normalized;
-            Vector3 fingers = Mirror(fingerDirection, side);
             hand.rotation = viewRoot.rotation * Quaternion.LookRotation(blade, fingers);
         }
         for (int side = 0; side < 2; side++)
@@ -306,6 +348,27 @@ public sealed class FirstPersonSwordViewmodel : MonoBehaviour
         if (GetComponent<PlayerCombat>() == null
             && (GameInput.GetKeyDown(KeyCode.F) || GameInput.GetMouseButtonDown(2)))
             PlaySlash();
+
+        if (biteTime >= 0f)
+        {
+            biteTime += Time.unscaledDeltaTime;
+            float t = biteTime;
+            float up = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(t / 0.5f));
+            // Cuối đoạn: tay ép sát vào miệng (cắn) rồi giữ.
+            float press = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(biteDuration * 0.6f, biteDuration * 0.8f, t));
+            biteK = up;
+            biteShakeOffset = new Vector3(0f, 0f, -0.05f * press); // không rung: chỉ ép tay vào miệng
+            SetVisible(true);
+            viewRoot.localPosition = baseRootPosition;
+            viewRoot.localRotation = Quaternion.identity;
+            armsInstance.localPosition = armsPosition;
+            armsInstance.localScale = Vector3.one * armsScale;
+            ApplyPose();
+            // Vẫn cầm kiếm: kiếm đi theo bàn tay.
+            PoseSword(leftSword, leftSocket, leftGripOffset, leftGripEuler);
+            PoseSword(rightSword, rightSocket, rightGripOffset, rightGripEuler);
+            return;
+        }
 
         if (slashTime >= 0f)
         {
