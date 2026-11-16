@@ -149,7 +149,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 288644581570241731}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 0}
+  m_Script: {fileID: 11500000, guid: 3bccf0b85e52a9546bd4f1ed85ea79fa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HorizontalGradientGraphic
   m_Material: {fileID: 0}
@@ -217,7 +217,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 383957497049829784}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 0}
+  m_Script: {fileID: 11500000, guid: 3bccf0b85e52a9546bd4f1ed85ea79fa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HorizontalGradientGraphic
   m_Material: {fileID: 0}
@@ -789,7 +789,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 1535353206006032044}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 0}
+  m_Script: {fileID: 11500000, guid: 3bccf0b85e52a9546bd4f1ed85ea79fa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HorizontalGradientGraphic
   m_Material: {fileID: 0}
@@ -3169,7 +3169,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 7172080493584657582}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 0}
+  m_Script: {fileID: 11500000, guid: 3bccf0b85e52a9546bd4f1ed85ea79fa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HorizontalGradientGraphic
   m_Material: {fileID: 0}
