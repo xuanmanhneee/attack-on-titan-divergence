@@ -50,7 +50,7 @@ Mỗi giai đoạn nên làm trong 1 phiên riêng.
   - Mục tiêu: `TitanForm` ~300 dòng, chỉ lo trạng thái (Human/Transforming/Titan), thời gian, di chuyển.
 
 ## Giai đoạn 3: Bỏ hết `OnGUI`, gom về `GameHud`
-- [ ] **T8. Mở rộng prefab `Resources/UI/GameHud`**
+- [x] **T8. Mở rộng prefab `Resources/UI/GameHud`**
   - Thanh Titan (fill + text + màu) trên canvas HUD.
   - Image flash toàn màn hình trên canvas FX.
   - API: `GameHud.SetTitanBar(fill, text, color)`, `HideTitanBar()`, `Flash(color, alpha)`.

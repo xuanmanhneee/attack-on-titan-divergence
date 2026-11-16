@@ -40,13 +40,23 @@ public class GameHud : MonoBehaviour
     [SerializeField] Text toastText = null;
     [SerializeField] Text hintText = null;
 
+    [Header("Thanh Titan (hoá titan: thời gian / hồi sức)")]
+    [SerializeField] GameObject titanBarRoot = null;
+    [SerializeField] RectTransform titanBarFill = null;
+    [SerializeField] Image titanBarFillImage = null;
+    [SerializeField] Text titanBarText = null;
+
     [Header("FX")]
     [SerializeField] CanvasGroup hurtGroup = null;
+    [SerializeField] Image flashImage = null;
 
     [Header("Markers (template ẩn, nhân bản khi cần)")]
     [SerializeField] RectTransform napeTemplate = null;
     [SerializeField] RectTransform titanBarTemplate = null;
     [SerializeField] RectTransform missionTemplate = null;
+
+    // HUD đang có trong scene (null nếu chưa có). Dùng cho các hệ thống chỉ cần đẩy dữ liệu lên HUD.
+    public static GameHud Current { get; private set; }
 
     GameManager gm;
     ODMController odm;
@@ -131,10 +141,53 @@ public class GameHud : MonoBehaviour
 
     void Awake()
     {
+        Current = this;
+        if (titanBarRoot != null) titanBarRoot.SetActive(false);
         napes = new Pool { template = napeTemplate };
         titanBars = new Pool { template = titanBarTemplate };
         missionMarks = new Pool { template = missionTemplate };
         SetLayers(false);
+    }
+
+    void OnDestroy()
+    {
+        if (Current == this) Current = null;
+    }
+
+    // ---------- API cho hệ thống khác ----------
+    Color flashColor;
+    float flashAlpha;
+
+    /// <summary>Hiện thanh Titan (hoá titan). Gọi mỗi khung khi cần hiện; thôi gọi hoặc gọi HideTitanBar thì ẩn.</summary>
+    public void SetTitanBar(float fill, string text, Color color)
+    {
+        if (titanBarRoot == null) return;
+        if (!titanBarRoot.activeSelf) titanBarRoot.SetActive(true);
+        SetFill(titanBarFill, fill);
+        titanBarFillImage.color = color;
+        titanBarText.text = text;
+    }
+
+    public void HideTitanBar()
+    {
+        if (titanBarRoot != null && titanBarRoot.activeSelf) titanBarRoot.SetActive(false);
+    }
+
+    /// <summary>Loé cả màn hình. Gọi mỗi khung khi cần; nhiều nguồn cùng khung thì lấy nguồn mạnh nhất.</summary>
+    public void Flash(Color color, float alpha)
+    {
+        if (alpha <= flashAlpha) return;
+        flashAlpha = alpha;
+        flashColor = color;
+    }
+
+    void ApplyFlash()
+    {
+        if (flashImage == null) return;
+        var c = flashColor;
+        c.a = Mathf.Clamp01(flashAlpha);
+        flashImage.color = c;
+        flashAlpha = 0f;
     }
 
     void SetLayers(bool on)
@@ -147,7 +200,8 @@ public class GameHud : MonoBehaviour
     {
         bool playing = odm != null && gm != null && gm.Current == GameManager.State.Playing;
         if (playing != visible) SetLayers(playing);
-        if (!playing) return;
+        if (!playing) { flashAlpha = 0f; return; }
+        ApplyFlash();
 
         float dt = Time.unscaledDeltaTime;
         toastTimer -= dt;
