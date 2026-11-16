@@ -7,13 +7,13 @@ Dự án **tự dựng gần hết bằng code lúc chạy**. Trong scene chỉ 
 
 | Thư mục | Nội dung |
 | --- | --- |
-| `Core/` | `GameManager` (trạng thái game, nối các hệ thống), `GameInput`, `Health`, `TimeFocus` |
+| `Core/` | `GameManager` (trạng thái game, nối các hệ thống), `GameInput`, `Health`, `TimeFocus`, `CameraShake` (rung camera dùng chung) |
 | `Player/` | `ODMController` (điều phối ODM) + các phần ODM, `PlayerCombat`, `PlayerStamina`, camera/viewmodel/trang bị, `Crosshair` |
-| `Titan/` | `Titan` (AI), `TitanForm` (Eren biến hình), các script animation: `TitanModels`, `TitanClipPlayer`, `TitanProceduralAnim`, `TitanPunchAnimator`, `TitanFootGrounder` |
+| `Titan/` | `Titan` (AI), `TitanBuilder` (dựng titan), `TitanForm` (Eren biến hình, tách `TitanFormVisual` + `TitanFormCombat`), các script animation: `TitanModels`, `TitanClipPlayer`, `TitanProceduralAnim`, `TitanPunchAnimator`, `TitanFootGrounder` |
 | `Missions/` | `TrostMission`, `TrostCity`, `TrostMapAuthoring`, `Chapter0Training`, `Cutscene` |
 | `Audio/` | `GameAudio` (singleton SFX/nhạc), `BackgroundMusicPlayer` |
 | `Vfx/` | `GameVfx` (hạt), `TransformLightning` (sét biến hình) |
-| `UI/` | `GameHud` (HUD), `MangaMenu` (menu trong game), `MainMenuController` (menu scene MainMenu), `MangaGraphics`, `GameSettings` |
+| `UI/` | `GameHud` (HUD; `GameHud.Current` để script khác gọi thanh Titan, loé màn hình), `MangaMenu` (Pause, Settings, Briefing, Result trong trận), `MainMenuController` (menu scene MainMenu), `MangaGraphics`, `GameSettings` |
 | `../Editor/` | Chỉ còn `CutsceneMenu` (reset cutscene để test). Không còn script nào dựng scene. |
 
 ## Các file ODM (`Player/`)
@@ -36,7 +36,7 @@ Dự án **tự dựng gần hết bằng code lúc chạy**. Trong scene chỉ 
   Chapter1 và SampleScene có thêm `PlayerStamina`, `PlayerCombat`, `Health`, `TimeFocus`, `TitanForm`.
   Chapter0 không có nhóm chiến đấu này (không có `GameManager`), nên Player ở Chapter0 không phải prefab instance.
   Code không còn tự `AddComponent` cho player; thiếu component là lỗi cấu hình scene.
-- **Có sẵn trong scene khác**: `Crosshair`; `Chapter0Training` (Chapter0); `TrostMapAuthoring` (Chapter1); `MainMenuController` (MainMenu).
+- **Có sẵn trong scene khác**: `Crosshair`; `Chapter0Training` (Chapter0, panel hướng dẫn là canvas Training UI trong scene); `TrostMapAuthoring` (Chapter1); `MainMenuController` (MainMenu).
 - **Tự tạo khi load scene** (`AfterSceneLoad`): `GameManager` (không tạo ở Chapter0); `GameManager` tạo `TrostMission`.
 - **Singleton tạo sẵn**: `GameAudio`, `GameVfx`, `Titan` (đăng ký lúc `SubsystemRegistration`), `GameSettings`.
 - **`Titan.Spawn`** tạo titan, rồi gắn `Health`, `Rigidbody` và các script animation tương ứng.
@@ -54,7 +54,6 @@ Dự án **tự dựng gần hết bằng code lúc chạy**. Trong scene chỉ 
 ## Nợ kỹ thuật (chưa làm)
 
 - **[LÀM SAU] `MangaMenu`** (đang ổn, tạm giữ nguyên): chuyển Briefing, Pause, Settings, Result sang canvas dựng sẵn trong scene/prefab rồi bỏ code dựng UI (~1100 dòng).
-  - Trang Title, Chapters, Credits của `MangaMenu` là code chết (menu chính đã dùng scene), xóa được ngay.
   - Trang Settings trùng với `SettingsMenu` của menu chính; khi chuyển nên dùng chung một prefab.
   - Crosshair vẫn là Image trong canvas riêng của từng scene; cân nhắc đưa vào prefab `GameHud`.
 - `MangaMenu` (~1100 dòng) nên tách theo từng `Page`.
