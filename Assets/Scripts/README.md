@@ -14,7 +14,7 @@ Dự án **tự dựng gần hết bằng code lúc chạy**. Trong scene chỉ 
 | `Audio/` | `GameAudio` (singleton SFX/nhạc), `BackgroundMusicPlayer` |
 | `Vfx/` | `GameVfx` (hạt), `TransformLightning` (sét biến hình) |
 | `UI/` | `GameHud` (HUD; `GameHud.Current` để script khác gọi thanh Titan, loé màn hình), `MangaMenu` (Pause, Settings, Briefing, Result trong trận), `MainMenuController` (menu scene MainMenu), `MangaGraphics`, `GameSettings` |
-| `../Editor/` | Chỉ còn `CutsceneMenu` (reset cutscene để test). Không còn script nào dựng scene. |
+| `../Editor/` | Trống (không còn script nào dựng scene). |
 
 ## Các file ODM (`Player/`)
 
@@ -55,5 +55,6 @@ Dự án **tự dựng gần hết bằng code lúc chạy**. Trong scene chỉ 
 
 - **[LÀM SAU] `MangaMenu`** (đang ổn, tạm giữ nguyên): chuyển Briefing, Pause, Settings, Result sang canvas dựng sẵn trong scene/prefab rồi bỏ code dựng UI (~1100 dòng).
   - Trang Settings trùng với `SettingsMenu` của menu chính; khi chuyển nên dùng chung một prefab.
+  - Cài đặt dùng MỘT giao diện: prefab `Resources/UI/SettingsCanvas` (`SettingsMenu`), mở bằng `SettingsMenu.Open(onClose)` từ menu chính và menu tạm dừng. Danh sách cài đặt nằm ở `SettingsSchema`; hàng được nhân từ `RowTemplate` trong prefab. Thêm cài đặt mới: biến + Load/Save/Reset trong `GameSettings`, rồi một dòng trong `SettingsSchema` (không cần sửa scene).
   - Crosshair vẫn là Image trong canvas riêng của từng scene; cân nhắc đưa vào prefab `GameHud`.
 - `MangaMenu` (~1100 dòng) nên tách theo từng `Page`.

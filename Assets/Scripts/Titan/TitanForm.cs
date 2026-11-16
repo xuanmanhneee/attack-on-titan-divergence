@@ -137,8 +137,11 @@ public class TitanForm : MonoBehaviour
 
     void Start()
     {
-        // Nạp + Prepare video biến hình từ đầu trận để lúc bấm G không bị khựng khung hình.
-        preparedVideo = TransformVideo.Create();
+        // Nạp + Prepare video biến hình theo cài đặt "Cutscene hoá titan" để lúc bấm G không bị khựng khung hình;
+        // đổi cài đặt giữa trận thì nạp lại / huỷ ngay (SyncCutsceneVideo).
+        watchedMode = GameSettings.TitanCutscene;
+        GameSettings.Changed += OnSettingsChanged;
+        SyncCutsceneVideo();
         // Giải mã sẵn nhạc biến hình (clip không preload) để Play/seek lúc bấm G không bị trễ.
         transformSfx = Resources.Load<AudioClip>("Audio/transform_sfx");
         if (transformSfx != null && transformSfx.loadState == AudioDataLoadState.Unloaded) transformSfx.LoadAudioData();
@@ -153,6 +156,7 @@ public class TitanForm : MonoBehaviour
     {
         // Lúc biến hình thế giới đứng im (timeScale = 0), chỉ đồng hồ thật chạy.
         if (state == State.Transforming) { UpdateFrozenTransform(); return; }
+        if (cutsceneSyncPending) SyncCutsceneVideo();
 
         if (Time.timeScale <= 0.0001f) return;
         float dt = Time.deltaTime;
@@ -167,7 +171,7 @@ public class TitanForm : MonoBehaviour
                 {
                     if (stamina.Exhausted || stamina.Current < stamina.stats.transformMinStamina) Say("Không đủ thể lực để hoá titan (cần " + Mathf.CeilToInt(stamina.stats.transformMinStamina / stamina.Max * 100f) + "%, đang có " + stamina.Percent + "%)");
                     else if (cooldownLeft > 0f) Say("Chưa thể hoá titan (" + Mathf.CeilToInt(cooldownLeft) + "s)");
-                    else if (!Cutscene.IsPlaying) Cutscene.PlayFirstTitan(BeginTransform); // lần đầu có cutscene, các lần sau chỉ VFX
+                    else if (!Cutscene.IsPlaying) BeginTransform();
                 }
                 break;
 
@@ -195,6 +199,8 @@ public class TitanForm : MonoBehaviour
     public float videoMusicFade = 0.3f;
     TransformVideo transformVideo;
     TransformVideo preparedVideo;
+    int loadedMode = -1;      // chế độ cutscene mà preparedVideo đang được chuẩn bị theo
+    bool cutsceneSyncPending; // đổi cài đặt lúc đang biến hình: đồng bộ sau khi xong
     bool biteEnded;
     bool bodyBuilt;
     const float BodyAppearAt = TransformLightning.FullWhiteAt; // màn hình trắng kín từ mốc này
@@ -354,14 +360,17 @@ public class TitanForm : MonoBehaviour
         if (transformSfx == null) transformSfx = Resources.Load<AudioClip>("Audio/transform_sfx");
         lightningStarted = false;
         biteEnded = false;
-        // Lần biến hình đầu tiên trong trận (mỗi lần nạp scene) phát transform_vfx.mp4 thay cho sét thủ tục.
+        // Tuỳ Cài đặt, transform_vfx.mp4 phát thay cho sét thủ tục (lần đầu của trận / mọi lần / không).
         transformVideo = null;
         videoStarted = false;
-        if (!videoPlayed)
+        // Cài đặt "Cutscene hoá titan" (chính là video này): 0 = mọi lần, 1 = không, 2 = chỉ lần đầu của trận.
+        int mode = GameSettings.TitanCutscene;
+        if (WantsVideo(mode))
         {
-            transformVideo = preparedVideo != null ? preparedVideo : TransformVideo.Create();
-            preparedVideo = null;
+            transformVideo = preparedVideo != null ? preparedVideo : TransformVideo.Create(mode == 0);
+            if (mode != 0) preparedVideo = null; // "xem 1 lần": video tự huỷ sau khi phát; "luôn xem": giữ lại để dùng tiếp
             videoPlayed = transformVideo != null;
+            loadedMode = mode == 0 ? 0 : -1;
         }
         PlayTransformSfx();
         // Nhạc titan chạy ngay từ lúc bấm G (crossfade ngắn); lần đầu có video thì dời tới lúc video bắt đầu (UpdateFrozenTransform).
@@ -420,6 +429,57 @@ public class TitanForm : MonoBehaviour
         cooldownLeft = cooldown;
         flash = 1f;
         Say("Trở lại dạng người");
+    }
+
+    // ---------- Video cutscene theo cài đặt ----------
+    // 0 = luôn xem (giữ trong RAM sau khi phát), 1 = không xem (không nạp), 2 = chỉ lần đầu mỗi trận (phát xong huỷ).
+    bool WantsVideo(int mode) { return mode == 0 || (mode == 2 && !videoPlayed); }
+
+    // Chỉ phản ứng khi chính cài đặt cutscene đổi, và chờ người chơi ngừng bấm một lúc mới nạp lại
+    // (bấm qua nhiều mục liên tiếp sẽ không nạp / huỷ video dồn dập).
+    int watchedMode = -1;
+    Coroutine syncRoutine;
+
+    void OnSettingsChanged()
+    {
+        if (GameSettings.TitanCutscene == watchedMode) return;
+        watchedMode = GameSettings.TitanCutscene;
+        if (syncRoutine != null) StopCoroutine(syncRoutine);
+        syncRoutine = StartCoroutine(SyncCutsceneLater());
+    }
+
+    System.Collections.IEnumerator SyncCutsceneLater()
+    {
+        yield return new WaitForSecondsRealtime(0.5f); // chạy được cả khi đang Pause (timeScale = 0)
+        syncRoutine = null;
+        SyncCutsceneVideo();
+    }
+
+    // Đưa video đã nạp về đúng theo cài đặt hiện tại: không cần thì huỷ, cần mà chưa có thì nạp.
+    // Đổi cài đặt thì nạp lại cho khớp chế độ mới. Đang biến hình thì hoãn, vì video đang phát.
+    void SyncCutsceneVideo()
+    {
+        if (state == State.Transforming) { cutsceneSyncPending = true; return; }
+        cutsceneSyncPending = false;
+
+        int mode = GameSettings.TitanCutscene;
+        if (!WantsVideo(mode))
+        {
+            if (preparedVideo != null) preparedVideo.Discard();
+            preparedVideo = null;
+            loadedMode = -1;
+            return;
+        }
+        if (preparedVideo != null && loadedMode == mode) return; // đã nạp đúng chế độ
+        if (preparedVideo != null) preparedVideo.Discard();
+        preparedVideo = TransformVideo.Create(mode == 0);
+        loadedMode = preparedVideo != null ? mode : -1;
+    }
+
+    void OnDestroy()
+    {
+        GameSettings.Changed -= OnSettingsChanged;
+        if (preparedVideo != null) preparedVideo.Discard();
     }
 
     void OnDisable()

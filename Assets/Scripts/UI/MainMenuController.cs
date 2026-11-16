@@ -15,7 +15,6 @@ public class MainMenuController : MonoBehaviour
 
     [SerializeField] CanvasGroup rootGroup;
     [SerializeField] GameObject creditsOverlay;
-    [SerializeField] GameObject settingsOverlay;
     [SerializeField] GameObject startNavigation;
     [SerializeField] GameObject chapterNavigation;
     [SerializeField] Button startButton;
@@ -38,19 +37,26 @@ public class MainMenuController : MonoBehaviour
         CacheAuthoredUI();
         if (!enabled) return;
         WireAuthoredUI();
-        // Lần đầu mở game: prologue chạy trước, chưa có nhạc/âm menu cho tới khi vào menu.
-        if (Cutscene.PrologueSeen) StartMenu();
-        else Cutscene.PlayPrologue(StartMenu);
+        // Mỗi lần mở game: cutscene mở đầu chạy trước. Gần cuối video nhạc menu vào trước (StartMenuAudio),
+        // rồi video mờ dần và menu hiện ra (ShowMenu). Tắt cutscene thì cả hai chạy ngay.
+        rootGroup.alpha = 0f;
+        rootGroup.interactable = rootGroup.blocksRaycasts = false; // chưa bấm được khi cutscene còn che
+        Cutscene.PlayPrologue(StartMenuAudio, ShowMenu);
     }
 
-    void StartMenu()
+    void StartMenuAudio()
     {
         if (this == null) return;
         SetupMenuMusic();
         SetupUISounds();
+        GameSettings.Changed += RefreshMenuMusicVolume;
+    }
+
+    void ShowMenu()
+    {
+        if (this == null) return;
         StartCoroutine(Intro());
         MangaSfx.Slam();
-        GameSettings.Changed += RefreshMenuMusicVolume;
     }
 
     void OnDestroy()
@@ -68,7 +74,6 @@ public class MainMenuController : MonoBehaviour
         if (GameInput.GetKeyDown(KeyCode.Escape))
         {
             if (creditsOverlay != null && creditsOverlay.activeSelf) ShowCredits(false);
-            else if (settingsOverlay != null && settingsOverlay.activeSelf && !SettingsEscConsumed()) ShowSettings(false);
         }
     }
 
@@ -84,7 +89,6 @@ public class MainMenuController : MonoBehaviour
 
         rootGroup = canvas.GetComponent<CanvasGroup>();
         creditsOverlay = canvas.Find("Credits Overlay")?.gameObject;
-        settingsOverlay = canvas.Find("Settings Overlay")?.gameObject;
         chapterNavigation = canvas.Find("Primary Navigation")?.gameObject;
         startNavigation = canvas.Find("Start Navigation")?.gameObject;
         if (startNavigation != null)
@@ -102,16 +106,14 @@ public class MainMenuController : MonoBehaviour
         var canvas = rootGroup.transform;
         BindButton(canvas, startNavigation != null ? "Start Navigation/START" : "Primary Navigation/START", () => ShowChapterMenu(true));
         BindButton(canvas, "Start Navigation/ARCHIVES", () => ShowCredits(true));
-        BindButton(canvas, "Start Navigation/SETTINGS", () => ShowSettings(true));
+        BindButton(canvas, "Start Navigation/SETTINGS", ShowSettings);
         BindButton(canvas, "Start Navigation/QUIT GAME", Quit);
         BindButton(canvas, "Primary Navigation/CHAPTER 0", () => Load("Chapter0_TrainingCamp"));
         BindButton(canvas, "Primary Navigation/CHAPTER 1", () => Load("Chapter1_BattleOfTrost"));
         BindButton(canvas, "Primary Navigation/BACK", () => ShowChapterMenu(false));
         BindButton(canvas, "Credits Overlay/Credits Card/CLOSE ARCHIVES", () => ShowCredits(false));
-        BindButton(canvas, "Settings Overlay/Settings Card/APPLY & CLOSE", () => ShowSettings(false));
 
         if (creditsOverlay != null) creditsOverlay.SetActive(false);
-        if (settingsOverlay != null) settingsOverlay.SetActive(false);
         if (startNavigation != null) startNavigation.SetActive(true);
         if (chapterNavigation != null) chapterNavigation.SetActive(startNavigation != null ? false : true);
         if (startNavigation == null) ShowChapterMenu(false);
@@ -165,7 +167,6 @@ public class MainMenuController : MonoBehaviour
 
     void ShowCredits(bool show)
     {
-        if (show && settingsOverlay != null) settingsOverlay.SetActive(false);
         creditsOverlay.SetActive(show);
         EventSystem.current.SetSelectedGameObject(show ? creditsOverlay.transform.Find("Credits Card/CLOSE ARCHIVES")?.gameObject : firstButton.gameObject);
     }
@@ -187,17 +188,15 @@ public class MainMenuController : MonoBehaviour
         EventSystem.current.SetSelectedGameObject(show ? firstButton?.gameObject : startButton?.gameObject);
     }
 
-    bool SettingsEscConsumed()
+    void ShowSettings()
     {
-        var menu = settingsOverlay.GetComponent<SettingsMenu>();
-        return menu != null && menu.EscConsumedThisFrame;
-    }
-
-    void ShowSettings(bool show)
-    {
-        if (show && creditsOverlay != null) creditsOverlay.SetActive(false);
-        settingsOverlay.SetActive(show);
-        EventSystem.current.SetSelectedGameObject(show ? settingsOverlay.transform.Find("Settings Card/APPLY & CLOSE")?.gameObject : firstButton.gameObject);
+        if (creditsOverlay != null) creditsOverlay.SetActive(false);
+        var es = EventSystem.current;
+        if (es != null) es.SetSelectedGameObject(null); // Enter/Space không được kích hoạt nút phía sau
+        SettingsMenu.Open(() =>
+        {
+            if (es != null && startButton != null) es.SetSelectedGameObject(startButton.gameObject);
+        });
     }
 
     void SetupMenuMusic()
@@ -268,6 +267,7 @@ public class MainMenuController : MonoBehaviour
             yield return null;
         }
         rootGroup.alpha = 1f;
+        rootGroup.interactable = rootGroup.blocksRaycasts = true;
     }
 
     static void EnsureMenuCamera()

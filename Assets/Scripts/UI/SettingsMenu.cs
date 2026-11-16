@@ -1,287 +1,385 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// Trang Settings của menu chính. Cấu trúc UI (tab, hàng, thanh trượt...) do MainMenuSceneBuilder dựng sẵn trong scene;
-/// script này chỉ nối từng hàng với <see cref="GameSettings"/> lúc chạy, giống menu trong trận (MangaMenu):
-/// 4 mục Điều khiển / Âm thanh / Đồ họa / Phím tắt, đổi phím, khôi phục mặc định.
+/// Trang Cài đặt dùng chung cho menu chính và menu tạm dừng trong trận.
+/// Giao diện là prefab Resources/UI/SettingsCanvas (tab, nút, khung, một hàng mẫu);
+/// danh sách cài đặt lấy từ <see cref="SettingsSchema"/>, hàng được nhân từ hàng mẫu mỗi lần đổi mục.
+/// Không dùng EventSystem: đọc chuột/bàn phím qua GameInput nên chạy cả khi Time.timeScale = 0.
+/// Gọi <see cref="Open"/> từ bất kỳ đâu; onClose chạy khi người chơi quay lại.
 /// </summary>
 public class SettingsMenu : MonoBehaviour
 {
-    public enum Kind { Slider, Toggle, Cycle, Key }
+    const string PrefabPath = "UI/SettingsCanvas";
+    const float RowsHeight = 800f, RowHeight = 72f, RowPitch = 80f;
 
-    [Serializable]
-    public class Row
+    static SettingsMenu instance;
+    static int escFrame = -1;
+
+    public static bool IsOpen { get { return instance != null && instance.gameObject.activeSelf; } }
+    public static bool EscConsumedThisFrame { get { return escFrame == Time.frameCount; } }
+
+    public static void Open(Action onClose)
     {
-        public string id;
-        public Kind kind;
-        public int tab;
-        public float step;
-        public int keyAction;
-        public Slider slider;
-        public Toggle toggle;
-        public Text value;
-        public Button prev, next, keyButton;
+        if (instance == null)
+        {
+            var prefab = Resources.Load<GameObject>(PrefabPath);
+            if (prefab == null) { Debug.LogError("[Settings] Thiếu prefab Resources/" + PrefabPath); return; }
+            var go = Instantiate(prefab);
+            go.name = prefab.name;
+            instance = go.GetComponent<SettingsMenu>();
+        }
+        instance.Show(onClose);
     }
 
-    [SerializeField] Button[] tabButtons = null;
-    [SerializeField] GameObject[] tabActive = null;
-    [SerializeField] GameObject[] panels = null;
-    [SerializeField] Row[] rows = null;
-    [SerializeField] Button resetButton = null;
+    [SerializeField] SettingsButton[] tabButtons = null;
+    [SerializeField] SettingsButton resetButton = null;
+    [SerializeField] SettingsButton backButton = null;
+    [SerializeField] RectTransform rowsRoot = null;
+    [SerializeField] SettingsRow rowTemplate = null;
+    [SerializeField] Text note = null;
 
-    static readonly int[] FpsOptions = GameSettings.FpsOptions;
-
-    int tab;
-    Row capturing;
-    int escFrame = -1;
-    bool refreshing;
-    bool wired;
-
-    public bool EscConsumedThisFrame { get { return escFrame == Time.frameCount; } }
-
-    public void Setup(Button[] tabs, GameObject[] active, GameObject[] tabPanels, Row[] allRows, Button reset)
+    class Entry
     {
-        tabButtons = tabs; tabActive = active; panels = tabPanels; rows = allRows; resetButton = reset;
+        public RectTransform rt, dragZone;
+        public Action<Vector2> onClick, onDrag;
+        public Action<int> onAdjust;
+        public Action<bool> onFocus;
+        public Action refresh;
     }
 
-    void Wire()
+    readonly List<Entry> tabEntries = new List<Entry>();
+    readonly List<Entry> rowEntries = new List<Entry>();
+    readonly List<Entry> items = new List<Entry>();
+    Entry resetEntry, backEntry, dragging, capturing;
+    int captureAction;
+    int sel, tab;
+    Vector2 lastMouse;
+    Action onClose;
+    bool built;
+
+    // Font manga là font hệ thống tạo lúc chạy nên không lưu được trong prefab: gán lại cho mọi chữ (kể cả hàng mẫu đang tắt).
+    void Awake()
     {
-        if (wired) return;
-        wired = true;
+        var font = MangaStyle.Font;
+        foreach (var t in GetComponentsInChildren<Text>(true)) t.font = font;
+    }
+
+    // ---------- Mở / đóng ----------
+    void Show(Action close)
+    {
+        onClose = close;
+        gameObject.SetActive(false);
+        gameObject.SetActive(true); // tắt rồi bật để chạy lại hiệu ứng trượt vào
+        if (!built) BuildStatic();
+        BuildRows(tab);
+        sel = 0;
+        dragging = capturing = null;
+        lastMouse = GameInput.MousePosition;
+        ApplyFocus();
+    }
+
+    void Close()
+    {
+        GameSettings.Save();
+        MangaSfx.Back();
+        gameObject.SetActive(false);
+        var cb = onClose;
+        onClose = null;
+        if (cb != null) cb();
+    }
+
+    void OnDestroy()
+    {
+        if (instance == this) instance = null;
+    }
+
+    void BuildStatic()
+    {
+        built = true;
+        rowTemplate.gameObject.SetActive(false);
         for (int i = 0; i < tabButtons.Length; i++)
         {
             int index = i;
-            tabButtons[i].onClick.AddListener(() => { MangaSfx.Click(); ShowTab(index); });
-        }
-        resetButton.onClick.AddListener(() => { MangaSfx.Click(); GameSettings.ResetSection(tab); RefreshAll(); });
-
-        foreach (var row in rows)
-        {
-            var r = row;
-            switch (r.kind)
+            var b = tabButtons[i];
+            b.label.text = SettingsSchema.TabNames[i];
+            tabEntries.Add(new Entry
             {
-                case Kind.Slider:
-                    r.slider.onValueChanged.AddListener(v =>
+                rt = b.Rect,
+                onClick = p => BuildRows(index),
+                onFocus = f => b.Focus(f, tab == index)
+            });
+        }
+        resetEntry = ButtonEntry(resetButton, () => { GameSettings.ResetSection(tab); BuildRows(tab); });
+        backEntry = ButtonEntry(backButton, Close);
+    }
+
+    static Entry ButtonEntry(SettingsButton b, Action click)
+    {
+        return new Entry { rt = b.Rect, onClick = p => click(), onFocus = f => b.Focus(f, false) };
+    }
+
+    // ---------- Dựng hàng ----------
+    void BuildRows(int t)
+    {
+        tab = t;
+        capturing = null;
+        for (int i = rowsRoot.childCount - 1; i >= 0; i--)
+        {
+            var c = rowsRoot.GetChild(i).gameObject;
+            if (c != rowTemplate.gameObject && c != note.gameObject) Destroy(c);
+        }
+        rowEntries.Clear();
+
+        // Khung hàng cao 800: tối đa 80/hàng, nhiều hàng thì tự ép khoảng cách cho vừa khung (hàng cao 72, chừa lề 12).
+        var defs = SettingsSchema.Tab(t);
+        float pitch = Mathf.Min(RowPitch, (RowsHeight - 2f * 12f - RowHeight) / Mathf.Max(1, defs.Count - 1));
+        float top = defs.Count * RowPitch > RowsHeight - 2f * 12f ? RowsHeight * 0.5f - 12f - RowHeight * 0.5f : 330f;
+        int n = 0;
+        foreach (var def in defs)
+        {
+            var row = Instantiate(rowTemplate, rowsRoot);
+            row.gameObject.name = "Row_" + def.Id;
+            row.gameObject.SetActive(true);
+            var rt = (RectTransform)row.transform;
+            rt.anchoredPosition = new Vector2(0f, top - pitch * n);
+            var slide = row.GetComponent<MangaSlideIn>();
+            if (slide != null) slide.Init(new Vector2(70f, 0f), 0.03f * n, 1f, 0.3f);
+            row.label.text = def.Label;
+            rowEntries.Add(MakeEntry(row, def));
+            n++;
+        }
+
+        string text = SettingsSchema.TabNotes[Mathf.Clamp(t, 0, SettingsSchema.TabNotes.Length - 1)];
+        note.gameObject.SetActive(text != null);
+        if (text != null)
+        {
+            note.text = text;
+            note.rectTransform.anchoredPosition = new Vector2(0f, top - pitch * n - 60f);
+        }
+
+        items.Clear();
+        items.AddRange(tabEntries);
+        items.AddRange(rowEntries);
+        items.Add(resetEntry);
+        items.Add(backEntry);
+        if (sel >= items.Count) sel = items.Count - 1;
+        ApplyFocus();
+    }
+
+    Entry MakeEntry(SettingsRow row, SettingDef def)
+    {
+        var e = new Entry { rt = (RectTransform)row.transform };
+        e.onFocus = row.Focus;
+        row.ShowKind(def.Kind);
+
+        switch (def.Kind)
+        {
+            case SettingKind.Slider:
+                e.dragZone = row.sliderZone;
+                e.refresh = () =>
+                {
+                    float v = def.GetFloat();
+                    row.SetSlider(Mathf.InverseLerp(def.Min, def.Max, v), def.FormatFloat(v));
+                };
+                e.onDrag = sp =>
+                {
+                    Vector2 lp;
+                    RectTransformUtility.ScreenPointToLocalPointInRectangle(row.sliderTrack, sp, null, out lp);
+                    float tt = Mathf.InverseLerp(row.sliderTrack.rect.xMin, row.sliderTrack.rect.xMax, lp.x);
+                    float v = Mathf.Lerp(def.Min, def.Max, tt);
+                    if (def.Step > 0f) v = Mathf.Round(v / def.Step) * def.Step;
+                    def.Apply(Mathf.Clamp(v, def.Min, def.Max));
+                    e.refresh();
+                };
+                e.onAdjust = d =>
+                {
+                    float s = Mathf.Max(def.Step, (def.Max - def.Min) * 0.04f);
+                    def.Apply(Mathf.Clamp(def.GetFloat() + d * s, def.Min, def.Max));
+                    e.refresh();
+                };
+                break;
+
+            case SettingKind.Toggle:
+                e.refresh = () => row.SetToggle(def.GetBool());
+                e.onClick = p => { def.Apply(!def.GetBool()); e.refresh(); };
+                e.onAdjust = d => { def.Apply(d > 0); e.refresh(); };
+                break;
+
+            case SettingKind.Cycle:
+                e.refresh = () => row.cycleText.text = def.CurrentOption();
+                Action<int> stepBy = d =>
+                {
+                    int n = def.Options().Length;
+                    def.ApplyIndex(((def.GetIndex() + d) % n + n) % n);
+                    e.refresh();
+                };
+                e.onAdjust = d => stepBy(d);
+                e.onClick = p =>
+                {
+                    int dir = 1;
+                    if (!float.IsNaN(p.x))
                     {
-                        if (refreshing) return;
-                        if (r.step > 0f) v = Mathf.Round(v / r.step) * r.step;
-                        SetFloat(r.id, v);
-                        GameSettings.Commit();
-                        r.value.text = Format(r.id, v);
-                    });
-                    break;
-                case Kind.Toggle:
-                    r.toggle.onValueChanged.AddListener(on =>
-                    {
-                        if (refreshing) return;
-                        SetBool(r.id, on);
-                        GameSettings.Commit(r.id == "fullscreen");
-                        r.value.text = on ? "ON" : "OFF";
-                    });
-                    break;
-                case Kind.Cycle:
-                    r.prev.onClick.AddListener(() => Step(r, -1));
-                    r.next.onClick.AddListener(() => Step(r, 1));
-                    break;
-                case Kind.Key:
-                    r.keyButton.onClick.AddListener(() => { capturing = r; MangaSfx.Click(); RefreshRow(r); });
-                    break;
-            }
+                        Vector2 lp;
+                        RectTransformUtility.ScreenPointToLocalPointInRectangle(row.ctrl, p, null, out lp);
+                        dir = lp.x < 0f ? -1 : 1;
+                    }
+                    stepBy(dir);
+                };
+                break;
+
+            default:
+                e.refresh = () =>
+                {
+                    bool cap = capturing == e;
+                    row.SetKey(cap, cap ? "NHẤN PHÍM..." : GameSettings.KeyName(GameSettings.KeyOf(def.KeyAction)));
+                };
+                e.onClick = p =>
+                {
+                    capturing = e;
+                    captureAction = def.KeyAction;
+                    e.refresh();
+                };
+                break;
+        }
+        e.refresh();
+        return e;
+    }
+
+    // ---------- Điều khiển ----------
+    void ApplyFocus()
+    {
+        for (int i = 0; i < items.Count; i++)
+            if (items[i].onFocus != null) items[i].onFocus(i == sel);
+    }
+
+    void SetSel(int i)
+    {
+        if (i == sel || i < 0 || i >= items.Count) return;
+        sel = i;
+        ApplyFocus();
+        MangaSfx.Hover();
+    }
+
+    int HitTest(Vector2 mp)
+    {
+        for (int i = items.Count - 1; i >= 0; i--)
+        {
+            var it = items[i];
+            if (it.rt == null || !it.rt.gameObject.activeInHierarchy) continue;
+            if (RectTransformUtility.RectangleContainsScreenPoint(it.rt, mp, null)) return i;
+        }
+        return -1;
+    }
+
+    void Activate(Entry it, Vector2 mp)
+    {
+        if (it == null) return;
+        if (it.onDrag != null && it.dragZone != null && RectTransformUtility.RectangleContainsScreenPoint(it.dragZone, mp, null))
+        {
+            dragging = it;
+            it.onDrag(mp);
+            MangaSfx.Click();
+            return;
+        }
+        if (it.onClick != null)
+        {
+            MangaSfx.Click();
+            it.onClick(mp);
         }
     }
 
-    void OnEnable()
+    void Move(int dir)
     {
-        Wire();
-        capturing = null;
-        ShowTab(0);
+        if (items.Count == 0) return;
+        SetSel((sel + dir + items.Count) % items.Count);
+    }
+
+    void SwitchTab(int d)
+    {
+        BuildRows((tab + d + tabButtons.Length) % tabButtons.Length);
+        MangaSfx.Click();
     }
 
     void Update()
     {
-        if (capturing == null) return;
+        if (capturing != null) { UpdateCapture(); return; }
+
+        Vector2 mp = GameInput.MousePosition;
+        bool moved = (mp - lastMouse).sqrMagnitude > 1f;
+        lastMouse = mp;
+
+        if (dragging != null)
+        {
+            if (GameInput.GetMouseButton(0)) dragging.onDrag(mp);
+            else dragging = null;
+            return;
+        }
+
+        if (moved)
+        {
+            int h = HitTest(mp);
+            if (h >= 0) SetSel(h);
+        }
+        if (GameInput.GetMouseButtonDown(0))
+        {
+            int h = HitTest(mp);
+            if (h >= 0)
+            {
+                SetSel(h);
+                Activate(items[h], mp);
+            }
+        }
+
+        if (GameInput.GetKeyDownRaw(KeyCode.UpArrow) || GameInput.GetKeyDownRaw(KeyCode.W)) Move(-1);
+        if (GameInput.GetKeyDownRaw(KeyCode.DownArrow) || GameInput.GetKeyDownRaw(KeyCode.S)) Move(1);
+
+        if (items.Count > 0 && sel < items.Count)
+        {
+            var cur = items[sel];
+            if (cur.onAdjust != null)
+            {
+                if (GameInput.GetKeyDownRaw(KeyCode.LeftArrow) || GameInput.GetKeyDownRaw(KeyCode.A)) { cur.onAdjust(-1); MangaSfx.Hover(); }
+                if (GameInput.GetKeyDownRaw(KeyCode.RightArrow) || GameInput.GetKeyDownRaw(KeyCode.D)) { cur.onAdjust(1); MangaSfx.Hover(); }
+            }
+            if (GameInput.GetKeyDownRaw(KeyCode.Return) || GameInput.GetKeyDownRaw(KeyCode.Space))
+                Activate(cur, new Vector2(float.NaN, float.NaN));
+        }
+
+        if (GameInput.GetKeyDownRaw(KeyCode.Q)) SwitchTab(-1);
+        if (GameInput.GetKeyDownRaw(KeyCode.E)) SwitchTab(1);
         if (GameInput.GetKeyDownRaw(KeyCode.Escape))
         {
             escFrame = Time.frameCount;
-            var r = capturing;
+            Close();
+        }
+    }
+
+    // Chờ bấm phím mới cho một hành động
+    void UpdateCapture()
+    {
+        if (GameInput.GetKeyDownRaw(KeyCode.Escape))
+        {
+            escFrame = Time.frameCount;
             capturing = null;
-            RefreshRow(r);
+            RefreshRows();
             MangaSfx.Back();
             return;
         }
         KeyCode k;
         if (GameInput.AnyKeyDown(out k))
         {
-            var r = capturing;
+            GameSettings.Rebind(captureAction, k);
             capturing = null;
-            GameSettings.Rebind(r.keyAction, k);
-            RefreshAll();
+            RefreshRows();
             MangaSfx.Click();
         }
     }
 
-    void ShowTab(int index)
+    void RefreshRows()
     {
-        tab = index;
-        capturing = null;
-        for (int i = 0; i < panels.Length; i++)
-        {
-            panels[i].SetActive(i == index);
-            tabActive[i].SetActive(i == index);
-        }
-        RefreshAll();
-    }
-
-    void RefreshAll()
-    {
-        refreshing = true;
-        foreach (var r in rows) RefreshRow(r);
-        refreshing = false;
-    }
-
-    void RefreshRow(Row r)
-    {
-        bool was = refreshing;
-        refreshing = true;
-        switch (r.kind)
-        {
-            case Kind.Slider:
-                float v = GetFloat(r.id);
-                r.slider.SetValueWithoutNotify(v);
-                r.value.text = Format(r.id, v);
-                break;
-            case Kind.Toggle:
-                bool on = GetBool(r.id);
-                r.toggle.SetIsOnWithoutNotify(on);
-                r.value.text = on ? "ON" : "OFF";
-                break;
-            case Kind.Cycle:
-                string[] o = Options(r.id);
-                r.value.text = o[Mathf.Clamp(GetIndex(r.id), 0, o.Length - 1)];
-                break;
-            case Kind.Key:
-                var label = r.keyButton.transform.Find("Label").GetComponent<Text>();
-                label.text = capturing == r ? "PRESS A KEY..." : GameSettings.KeyName(GameSettings.KeyOf(r.keyAction)).ToUpperInvariant();
-                break;
-        }
-        refreshing = was;
-    }
-
-    void Step(Row r, int dir)
-    {
-        int n = Options(r.id).Length;
-        SetIndex(r.id, ((GetIndex(r.id) + dir) % n + n) % n);
-        MangaSfx.Click();
-        RefreshRow(r);
-    }
-
-    // ---------- Nối với GameSettings ----------
-    static float GetFloat(string id)
-    {
-        switch (id)
-        {
-            case "sens": return GameSettings.MouseSens;
-            case "fov": return GameSettings.Fov;
-            case "master": return GameSettings.Master;
-            case "music": return GameSettings.Music;
-            default: return GameSettings.Sfx;
-        }
-    }
-
-    static void SetFloat(string id, float v)
-    {
-        switch (id)
-        {
-            case "sens": GameSettings.MouseSens = v; break;
-            case "fov": GameSettings.Fov = v; break;
-            case "master": GameSettings.Master = v; break;
-            case "music": GameSettings.Music = v; break;
-            default: GameSettings.Sfx = v; break;
-        }
-    }
-
-    static string Format(string id, float v)
-    {
-        switch (id)
-        {
-            case "sens": return "x" + v.ToString("0.00");
-            case "fov": return v.ToString("0") + "°";
-            default: return Mathf.RoundToInt(v * 100f) + "%";
-        }
-    }
-
-    static bool GetBool(string id)
-    {
-        switch (id)
-        {
-            case "invertY": return GameSettings.InvertY;
-            case "slowmo": return GameSettings.SlowMo;
-            case "smartAim": return GameSettings.SmartAim;
-            case "autoReel": return GameSettings.AutoReel;
-            case "autoRelease": return GameSettings.AutoRelease;
-            case "anchorLift": return GameSettings.AnchorLift;
-            case "fullscreen": return GameSettings.Fullscreen;
-            case "vsync": return GameSettings.VSync;
-            default: return GameSettings.ScreenShake;
-        }
-    }
-
-    static void SetBool(string id, bool v)
-    {
-        switch (id)
-        {
-            case "invertY": GameSettings.InvertY = v; break;
-            case "slowmo": GameSettings.SlowMo = v; break;
-            case "smartAim": GameSettings.SmartAim = v; break;
-            case "autoReel": GameSettings.AutoReel = v; break;
-            case "autoRelease": GameSettings.AutoRelease = v; break;
-            case "anchorLift": GameSettings.AnchorLift = v; break;
-            case "fullscreen": GameSettings.Fullscreen = v; break;
-            case "vsync": GameSettings.VSync = v; break;
-            default: GameSettings.ScreenShake = v; break;
-        }
-    }
-
-    static string[] Options(string id)
-    {
-        switch (id)
-        {
-            case "quality": return QualitySettings.names;
-            case "resolution":
-                var list = GameSettings.Resolutions();
-                var names = new string[list.Count];
-                for (int i = 0; i < names.Length; i++) names[i] = list[i].x + " x " + list[i].y;
-                return names;
-            default:
-                var f = new string[FpsOptions.Length];
-                for (int i = 0; i < f.Length; i++) f[i] = FpsOptions[i] == 0 ? "UNLIMITED" : FpsOptions[i].ToString();
-                return f;
-        }
-    }
-
-    static int GetIndex(string id)
-    {
-        switch (id)
-        {
-            case "quality": return GameSettings.Quality >= 0 ? GameSettings.Quality : QualitySettings.GetQualityLevel();
-            case "resolution": return GameSettings.ResolutionIndex();
-            default: return Mathf.Max(0, Array.IndexOf(FpsOptions, GameSettings.FpsLimit));
-        }
-    }
-
-    static void SetIndex(string id, int i)
-    {
-        switch (id)
-        {
-            case "quality": GameSettings.Quality = i; GameSettings.Commit(); break;
-            case "resolution":
-                var r = GameSettings.Resolutions()[i];
-                GameSettings.ResW = r.x; GameSettings.ResH = r.y;
-                GameSettings.Commit(true);
-                break;
-            default: GameSettings.FpsLimit = FpsOptions[i]; GameSettings.Commit(); break;
-        }
+        foreach (var e in rowEntries) if (e.refresh != null) e.refresh();
     }
 }

@@ -19,6 +19,9 @@ public static class GameSettings
     public static bool AutoReel = false;    // tự thu dây nhẹ khi nhìn về phía móc
     public static bool AutoRelease = false; // tự nhả dây khi vượt điểm neo
     public static bool AnchorLift = false;  // nâng điểm neo lên mái nhà
+    public static bool WatchPrologue = true;      // cutscene vào game: có / không
+    public static int TitanCutscene = 2;          // cutscene hoá titan: 0 = luôn xem, 1 = không xem, 2 = chỉ lần biến hình đầu mỗi trận
+    public static readonly string[] TitanCutsceneOptions = { "Luôn xem", "Không xem", "Chỉ lần đầu mỗi trận" };
 
     // ---------- Âm thanh ----------
     // Dùng chung với menu codex (GameVolumeSettings) để một thanh âm lượng duy nhất cho cả game
@@ -90,6 +93,8 @@ public static class GameSettings
         AutoReel = PlayerPrefs.GetInt(P + "autoReel", AutoReel ? 1 : 0) == 1;
         AutoRelease = PlayerPrefs.GetInt(P + "autoRelease", AutoRelease ? 1 : 0) == 1;
         AnchorLift = PlayerPrefs.GetInt(P + "anchorLift", AnchorLift ? 1 : 0) == 1;
+        WatchPrologue = PlayerPrefs.GetInt(P + "watchPrologue", WatchPrologue ? 1 : 0) == 1;
+        TitanCutscene = Mathf.Clamp(PlayerPrefs.GetInt(P + "titanCutscene", TitanCutscene), 0, 2);
 
         // Bản cũ lưu mặc định BẬT cho 4 trợ giúp ODM; ODM của codex chạy thủ công nên đưa về TẮT một lần.
         if (PlayerPrefs.GetInt(P + "ver", 1) < 2)
@@ -120,6 +125,8 @@ public static class GameSettings
         PlayerPrefs.SetInt(P + "autoReel", AutoReel ? 1 : 0);
         PlayerPrefs.SetInt(P + "autoRelease", AutoRelease ? 1 : 0);
         PlayerPrefs.SetInt(P + "anchorLift", AnchorLift ? 1 : 0);
+        PlayerPrefs.SetInt(P + "watchPrologue", WatchPrologue ? 1 : 0);
+        PlayerPrefs.SetInt(P + "titanCutscene", TitanCutscene);
 
         PlayerPrefs.SetInt(P + "quality", Quality);
         PlayerPrefs.SetInt(P + "fullscreen", Fullscreen ? 1 : 0);
@@ -194,6 +201,7 @@ public static class GameSettings
             case 0:
                 MouseSens = 1f; InvertY = false; Fov = 75f; SlowMo = true;
                 SmartAim = false; AutoReel = false; AutoRelease = false; AnchorLift = false;
+                WatchPrologue = true; TitanCutscene = 2;
                 Commit();
                 break;
             case 1:
