@@ -25,7 +25,9 @@ public class TitanForm : MonoBehaviour
     AudioSource sfxSource;
     [Tooltip("Sét bắt đầu từ giây này (tay vừa đưa lên miệng), chồng lên đoạn cắn tay chứ không chờ cắn xong.")]
     public float lightningStart = 0.4f;
-    float TransformTotal => transformSfx != null ? Mathf.Max(biteTime + 1f, transformSfx.length) : biteTime + lightningTime;
+    const float BaseVideoDelay = 0.6f; // độ trễ video gốc; videoDelay lớn hơn thì kéo dài biến hình thêm phần chênh, video giữ nguyên độ dài
+    float videoExtra; // giây kéo thêm khi có video (chốt ở BeginTransform)
+    float TransformTotal => (transformSfx != null ? Mathf.Max(biteTime + 1f, transformSfx.length) : biteTime + lightningTime) + videoExtra;
     float LightningTime => Mathf.Max(1f, TransformTotal - lightningStart);
     [Range(0f, 1f)] public float damageTakenMultiplier = 0.5f;
 
@@ -53,6 +55,14 @@ public class TitanForm : MonoBehaviour
     public float punchCooldown = 0.15f;
 
     public bool IsTitan => state == State.Transforming || state == State.Titan;
+    // Dev panel
+    public bool DevCanTransform => state == State.Human;
+    public float DevCooldownLeft => cooldownLeft;
+    public float DevTitanTimeLeft => state == State.Titan ? stateTimer : 0f;
+    public void DevResetCooldown() { cooldownLeft = 0f; }
+    public void DevRefillTitanTime() { if (state == State.Titan) stateTimer = titanTotal; }
+    public void DevForceTransform() { if (state == State.Human && !Cutscene.IsPlaying) { cooldownLeft = 0f; stamina.Set(stamina.Max); BeginTransform(); } }
+    public void DevRevert() { if (state == State.Titan) EndTransform(); }
     public bool IsTransforming => state == State.Transforming; // đang đứng hình biến hình: HUD ẩn các dấu trên thế giới
 
     enum State { Human, Transforming, Titan }
@@ -193,8 +203,11 @@ public class TitanForm : MonoBehaviour
     bool lightningStarted;
     bool videoPlayed;
     bool videoStarted;
+    [Tooltip("Tốc độ biến hình khi KHÔNG có video cutscene (cắn tay, sét, sfx đều nhanh lên bấy nhiêu lần). 1 = như cũ.")]
+    public float quickTransformSpeed = 3f;
+    float transformSpeed = 1f; // 1 khi có video; quickTransformSpeed khi không
     [Tooltip("Lần biến hình đầu của trận: sét chạy bấy nhiêu giây rồi mới phát transform_vfx.")]
-    public float videoDelay = 0.6f;
+    public float videoDelay = 1.5f;
     [Tooltip("Thời gian crossfade (giây) khi nhạc nền chuyển sang đoạn titan lúc video bắt đầu.")]
     public float videoMusicFade = 0.3f;
     TransformVideo transformVideo;
@@ -219,7 +232,7 @@ public class TitanForm : MonoBehaviour
         if (manager != null && manager.Current != GameManager.State.Playing) return;
 
         Time.timeScale = 0f; // chống việc thoát pause trả timeScale về 1 giữa chừng
-        stateTimer += Time.unscaledDeltaTime;
+        stateTimer += Time.unscaledDeltaTime * transformSpeed;
 
         // Đang bay thì vẫn trượt theo đà trong lúc đứng hình (chạy bằng đồng hồ thật), tắt dần để không khựng.
         if (slideVelocity.sqrMagnitude > 0.01f && controller != null && controller.enabled)
@@ -234,7 +247,7 @@ public class TitanForm : MonoBehaviour
         if (!lightningStarted && stateTimer >= lightningStart)
         {
             lightningStarted = true;
-            TransformLightning.Play(transform.position, LightningTime);
+            TransformLightning.Play(transform.position, LightningTime / transformSpeed);
         }
         // Lần biến hình đầu của trận: sét chạy videoDelay giây rồi mới phát video (video tự loá sáng tới hết).
         if (transformVideo != null && !videoStarted && stateTimer >= lightningStart + videoDelay)
@@ -296,6 +309,7 @@ public class TitanForm : MonoBehaviour
         }
         sfxSource.clip = transformSfx;
         sfxSource.volume = Mathf.Clamp01(GameSettings.Sfx);
+        sfxSource.pitch = transformSpeed; // nhanh lên thì sfx cũng nhanh theo để kết thúc cùng lúc
         sfxSource.Play();
     }
 
@@ -327,7 +341,11 @@ public class TitanForm : MonoBehaviour
         }
         // Viewmodel kiếm vẫn chạy trong đoạn đứng hình để diễn animation đưa tay lên miệng cắn; tắt khi hết biteTime.
         swordViewmodel = GetComponent<FirstPersonSwordViewmodel>();
-        if (swordViewmodel != null && swordViewmodel.enabled) swordViewmodel.PlayBite(biteTime);
+        // Tốc độ được chốt sau khi biết có phát video hay không (xem bên dưới), nên cắn tay chạy theo biteTime / tốc độ.
+        bool willPlayVideo = WantsVideo(GameSettings.TitanCutscene);
+        transformSpeed = willPlayVideo ? 1f : Mathf.Max(1f, quickTransformSpeed);
+        videoExtra = willPlayVideo ? Mathf.Max(0f, videoDelay - BaseVideoDelay) : 0f;
+        if (swordViewmodel != null && swordViewmodel.enabled) swordViewmodel.PlayBite(biteTime / transformSpeed);
         else swordViewmodel = null;
 
         // Phình capsule giữ nguyên vị trí bàn chân.

@@ -131543,7 +131543,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6331719079431500596, guid: b387f2c8130aab94faf73d03588fd59b, type: 3}
       propertyPath: videoDelay
-      value: 0.6
+      value: 1.5
       objectReference: {fileID: 0}
     - target: {fileID: 7348825875733388449, guid: b387f2c8130aab94faf73d03588fd59b, type: 3}
       propertyPath: backgroundMusicLoopEnd

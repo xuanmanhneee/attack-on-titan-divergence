@@ -228,21 +228,21 @@ public class TransformLightning : MonoBehaviour
         float dt = Time.unscaledDeltaTime;
         time += dt;
         float p = Mathf.Clamp01(time / total);
-        float k = Mathf.Lerp(0.15f, 1f, Mathf.Pow(p, 1.4f)); // có sẵn từ đầu, dồn dập dần về cuối
+        float k = Mathf.Lerp(0.3f, 1f, Mathf.Pow(p, 1.2f)); // có sẵn khá nhiều từ đầu, dồn dập dần về cuối
 
         if (time < total && time >= nextSpawn)
         {
-            int count = 1 + (int)(k * 4f);
+            int count = 2 + (int)(k * 7f);
             for (int i = 0; i < count; i++) SpawnRadialBolt(k);
-            spike = Mathf.Max(spike, Mathf.Lerp(0.05f, 0.3f, k));
-            nextSpawn = time + Mathf.Lerp(0.2f, 0.025f, k) * Random.Range(0.7f, 1.3f);
+            spike = Mathf.Max(spike, Mathf.Lerp(0.1f, 0.4f, k));
+            nextSpawn = time + Mathf.Lerp(0.1f, 0.015f, k) * Random.Range(0.7f, 1.3f);
         }
 
         // Sét đánh từ trên trời xuống: to hơn, thưa hơn, dồn dần.
         if (time < total && time >= nextSky)
         {
             SpawnSkyBolt(k);
-            nextSky = time + Mathf.Lerp(0.9f, 0.22f, k) * Random.Range(0.7f, 1.4f);
+            nextSky = time + Mathf.Lerp(0.45f, 0.14f, k) * Random.Range(0.7f, 1.4f);
         }
         impact = Mathf.Max(0f, impact - dt * 4f);
 

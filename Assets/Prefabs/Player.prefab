@@ -660,6 +660,8 @@ MonoBehaviour:
     slashCost: 4
     transformCost: 75
     transformMinStamina: 160
+    revertCost: 25
+    revertMinStamina: 60
     healRate: 3
     staminaPerHealth: 1
     healMinStamina: 15
@@ -730,6 +732,7 @@ MonoBehaviour:
   cooldown: 30
   biteTime: 2
   lightningTime: 2.2
+  lightningStart: 0.4
   damageTakenMultiplier: 0.5
   walkSpeed: 12
   runSpeed: 20
@@ -765,6 +768,11 @@ MonoBehaviour:
   guardSpread: 20
   legSwingAngle: 28
   kneeBendAngle: 35
+  quickTransformSpeed: 3
+  videoDelay: 1.5
+  videoMusicFade: 0.3
+  slideDrag: 1.2
+  maxCarriedSpeed: 25
 --- !u!114 &5471922815479307165
 MonoBehaviour:
   m_ObjectHideFlags: 0
