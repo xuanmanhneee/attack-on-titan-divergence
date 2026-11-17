@@ -55,11 +55,12 @@ public class BackgroundMusicPlayer : MonoBehaviour
     }
 
     // fade: số giây crossfade. Chỉ chuyển khi đang ở đoạn thường.
-    public void SetTitan(bool on, float fade = 1.5f)
+    // restart: true = luôn nhảy về đầu đoạn titan (loopEnd) kể cả khi đang ở đoạn titan rồi (ghi đè); dùng cho lúc hoá titan.
+    public void SetTitan(bool on, float fade = 1.5f, bool restart = false)
     {
         if (!started) StartPlaying();
         if (!started) return;
-        if (on && mode == Mode.Normal)
+        if (on && (mode == Mode.Normal || restart))
         {
             mode = Mode.Titan;
             float start = Mathf.Min(loopEnd, clip.length - 1f);

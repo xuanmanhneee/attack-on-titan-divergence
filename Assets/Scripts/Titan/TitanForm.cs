@@ -63,14 +63,6 @@ public class TitanForm : MonoBehaviour
     public void DevRefillTitanTime() { if (state == State.Titan) stateTimer = titanTotal; }
     public void DevForceTransform() { if (state == State.Human && !Cutscene.IsPlaying) { cooldownLeft = 0f; stamina.Set(stamina.Max); BeginTransform(); } }
     public void DevRevert() { if (state == State.Titan) EndTransform(); }
-    // Dev panel
-    public bool DevCanTransform => state == State.Human;
-    public float DevCooldownLeft => cooldownLeft;
-    public float DevTitanTimeLeft => state == State.Titan ? stateTimer : 0f;
-    public void DevResetCooldown() { cooldownLeft = 0f; }
-    public void DevRefillTitanTime() { if (state == State.Titan) stateTimer = titanTotal; }
-    public void DevForceTransform() { if (state == State.Human && !Cutscene.IsPlaying) { cooldownLeft = 0f; stamina.Set(stamina.Max); BeginTransform(); } }
-    public void DevRevert() { if (state == State.Titan) EndTransform(); }
     public bool IsTransforming => state == State.Transforming; // đang đứng hình biến hình: HUD ẩn các dấu trên thế giới
 
     enum State { Human, Transforming, Titan }
@@ -99,6 +91,7 @@ public class TitanForm : MonoBehaviour
     // Giá trị gốc để khôi phục
     float oldHeight, oldRadius, oldStep;
     Vector3 oldCenter, oldCamLocal;
+    float oldNear;
     internal float eyeLocalY;
     static readonly string[] ViewmodelNames = { "ODM_Viewmodel" }; // viewmodel kiếm tự quản: dùng lại làm tay cắn
     readonly System.Collections.Generic.List<GameObject> hiddenViewmodels = new System.Collections.Generic.List<GameObject>();
@@ -199,7 +192,21 @@ public class TitanForm : MonoBehaviour
                 TitanLook();
                 TitanMove(dt);
                 punch.Update(dt);
-                if (GameInput.GetKeyDown(transformKey) || stateTimer <= 0f) EndTransform();
+                if (revertTimer >= 0f)
+                {
+                    // Sét chạy revertLightning giây rồi mới trả về người (EndTransform bật loá sáng).
+                    revertTimer -= dt;
+                    if (revertTimer < 0f) EndTransform();
+                }
+                else if (GameInput.GetKeyDown(transformKey) || stateTimer <= 0f)
+                {
+                    if (revertLightning > 0.01f)
+                    {
+                        revertTimer = revertLightning;
+                        TransformLightning.Play(transform.position, revertLightning, false);
+                    }
+                    else EndTransform();
+                }
                 break;
         }
 
@@ -262,7 +269,7 @@ public class TitanForm : MonoBehaviour
         {
             videoStarted = true;
             // Nhạc nền sang đoạn titan (sau loopEnd) ngay lúc video bắt đầu; video loá sáng kín đúng mốc thân titan hiện ra (BodyAppearAt).
-            if (odm.Music != null) odm.Music.SetTitan(true, videoMusicFade);
+            if (odm.Music != null) odm.Music.SetTitan(true, videoMusicFade, true);
             float untilVideoEnd = LightningTime - videoDelay;
             transformVideo.Begin(untilVideoEnd, LightningTime * BodyAppearAt - videoDelay);
         }
@@ -372,6 +379,8 @@ public class TitanForm : MonoBehaviour
         controller.enabled = true;
 
         oldCamLocal = cam.localPosition;
+        var titanCam = cam.GetComponent<Camera>();
+        if (titanCam != null) { oldNear = titanCam.nearClipPlane; titanCam.nearClipPlane = Mathf.Max(oldNear, 0.3f); } // bán kính 1.3 nên không xuyên tường; near lớn tránh thấy mặt trong đầu
         eyeLocalY = formHeight * 0.5f - 0.9f; // dự phòng nếu model không tải được
 
         Titan.Lure(transform.position); // tiếng động lớn kéo titan quanh đó tới
@@ -409,8 +418,13 @@ public class TitanForm : MonoBehaviour
         Say("Hoá titan!");
     }
 
+    [Tooltip("Giây sét chạy trước khi trở về người (trước loá sáng); 0 = tắt.")]
+    public float revertLightning = 0.5f;
+    float revertTimer = -1f;
+
     void EndTransform()
     {
+        revertTimer = -1f;
         if (sfxSource != null && state == State.Transforming) sfxSource.Stop(); // bị ngắt giữa chừng thì cắt sfx
         Unfreeze(); // bị tắt giữa lúc đang đứng hình thì trả thời gian lại
         if (odm != null && odm.Music != null) { odm.Music.SetDuck(1f); odm.Music.SetTitan(false, 2f); }
@@ -424,7 +438,12 @@ public class TitanForm : MonoBehaviour
         transform.position = new Vector3(transform.position.x, feetY - oldCenter.y + oldHeight * 0.5f + 0.05f, transform.position.z);
         controller.enabled = true;
 
-        if (cam != null) cam.localPosition = oldCamLocal;
+        if (cam != null)
+        {
+            cam.localPosition = oldCamLocal;
+            var humanCam = cam.GetComponent<Camera>();
+            if (humanCam != null && oldNear > 0f) humanCam.nearClipPlane = oldNear;
+        }
         shake.Reset();
         visual.Destroy();
         punch.Reset();
@@ -526,7 +545,7 @@ public class TitanForm : MonoBehaviour
     {
         odm.Yaw += GameInput.GetAxis("Mouse X") * odm.mouseSensitivity;
         odm.Pitch -= GameInput.GetAxis("Mouse Y") * odm.mouseSensitivity;
-        odm.Pitch = Mathf.Clamp(odm.Pitch, -70f, 85f);
+        odm.Pitch = Mathf.Clamp(odm.Pitch, -70f, 40f); // Pitch dương = nhìn xuống; giới hạn 40° để camera không lọt vào model
         transform.rotation = Quaternion.Euler(0f, odm.Yaw, 0f);
         cam.localRotation = Quaternion.Euler(odm.Pitch + shake.Pitch, 0f, shake.Roll);
     }

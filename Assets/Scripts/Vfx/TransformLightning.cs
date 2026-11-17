@@ -12,14 +12,18 @@ using UnityEngine.Rendering.Universal;
 // TitanForm gọi TransformLightning.Play(...) khi hết đoạn cắn tay; totalTime = thời gian tới lúc trắng xoá hoàn toàn.
 public class TransformLightning : MonoBehaviour
 {
-    public static TransformLightning Play(Vector3 center, float totalTime)
+    // withWhite = false: chỉ sét (dùng lúc trở về người, loá sáng do TitanForm lo), không trắng xoá kín màn hình.
+    public static TransformLightning Play(Vector3 center, float totalTime, bool withWhite = true)
     {
         var go = new GameObject("TransformLightning");
         go.transform.position = center;
         var t = go.AddComponent<TransformLightning>();
-        t.total = Mathf.Max(0.8f, totalTime);
+        t.noWhite = !withWhite;
+        t.total = withWhite ? Mathf.Max(0.8f, totalTime) : Mathf.Max(0.2f, totalTime);
         return t;
     }
+
+    bool noWhite;
 
     public const float FullWhiteAt = 0.85f; // tỉ lệ đoạn sét mà màn hình trắng kín
     public static readonly Color WhiteColor = new Color(1f, 0.97f, 0.8f);
@@ -287,6 +291,7 @@ public class TransformLightning : MonoBehaviour
         // Chói sáng: từ 45% thời gian trắng dần, kín màn hình từ 85%; sau đó giữ chút rồi mờ khi thế giới chạy lại.
         float white = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.45f, FullWhiteAt, p)); // kín từ FullWhiteAt tới hết (TitanForm hiện thân titan lúc này)
         if (time > total) white = Mathf.Clamp01(1.3f - (time - total) * 0.9f);
+        if (noWhite) white = 0f;
         spike = Mathf.Max(0f, spike - dt * 3f);
         float flash = Mathf.Max(white, spike, impact * 0.6f);
         if (flash > 0.01f && GameHud.Current != null) GameHud.Current.Flash(WhiteColor, flash);

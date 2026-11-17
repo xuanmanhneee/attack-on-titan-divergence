@@ -131546,6 +131546,10 @@ PrefabInstance:
       value: 1.5
       objectReference: {fileID: 0}
     - target: {fileID: 7348825875733388449, guid: b387f2c8130aab94faf73d03588fd59b, type: 3}
+      propertyPath: devMode
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7348825875733388449, guid: b387f2c8130aab94faf73d03588fd59b, type: 3}
       propertyPath: backgroundMusicLoopEnd
       value: 145
       objectReference: {fileID: 0}
