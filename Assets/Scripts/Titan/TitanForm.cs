@@ -63,6 +63,14 @@ public class TitanForm : MonoBehaviour
     public void DevRefillTitanTime() { if (state == State.Titan) stateTimer = titanTotal; }
     public void DevForceTransform() { if (state == State.Human && !Cutscene.IsPlaying) { cooldownLeft = 0f; stamina.Set(stamina.Max); BeginTransform(); } }
     public void DevRevert() { if (state == State.Titan) EndTransform(); }
+    // Dev panel
+    public bool DevCanTransform => state == State.Human;
+    public float DevCooldownLeft => cooldownLeft;
+    public float DevTitanTimeLeft => state == State.Titan ? stateTimer : 0f;
+    public void DevResetCooldown() { cooldownLeft = 0f; }
+    public void DevRefillTitanTime() { if (state == State.Titan) stateTimer = titanTotal; }
+    public void DevForceTransform() { if (state == State.Human && !Cutscene.IsPlaying) { cooldownLeft = 0f; stamina.Set(stamina.Max); BeginTransform(); } }
+    public void DevRevert() { if (state == State.Titan) EndTransform(); }
     public bool IsTransforming => state == State.Transforming; // đang đứng hình biến hình: HUD ẩn các dấu trên thế giới
 
     enum State { Human, Transforming, Titan }

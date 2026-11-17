@@ -101,6 +101,10 @@ public class ODMController : MonoBehaviour
     public bool groundHookYank = false;
     public float groundHookYankSpeed = 10f;
 
+    [Header("Dev")]
+    [Tooltip("Bật thì F1 mở được Dev Panel (UI/DevPanel.cs)")]
+    public bool devMode = false;
+
     [Header("Gas")]
     public float gasForce = 26f;
     public float steerRate = 55f;
@@ -270,6 +274,8 @@ public class ODMController : MonoBehaviour
                                             0f, controller.height - 0.05f);
         controller.minMoveDistance = 0f;
         cam = cameraTransform.GetComponent<Camera>();
+        // Capsule bán kính 0.35 nhưng near clip 0.3 + FOV rộng: góc mặt phẳng near lọt qua tường -> nhìn xuyên.
+        cam.nearClipPlane = 0.08f;
         Cursor.lockState = CursorLockMode.Locked;
 
         yaw = transform.eulerAngles.y;
