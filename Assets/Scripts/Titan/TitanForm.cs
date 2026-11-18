@@ -204,6 +204,7 @@ public class TitanForm : MonoBehaviour
                     {
                         revertTimer = revertLightning;
                         TransformLightning.Play(transform.position, revertLightning, false);
+                        PlayTransformSfx();
                     }
                     else EndTransform();
                 }
@@ -425,7 +426,7 @@ public class TitanForm : MonoBehaviour
     void EndTransform()
     {
         revertTimer = -1f;
-        if (sfxSource != null && state == State.Transforming) sfxSource.Stop(); // bị ngắt giữa chừng thì cắt sfx
+        if (sfxSource != null) sfxSource.Stop(); // cắt sfx khi biến hình / hoàn nguyên kết thúc
         Unfreeze(); // bị tắt giữa lúc đang đứng hình thì trả thời gian lại
         if (odm != null && odm.Music != null) { odm.Music.SetDuck(1f); odm.Music.SetTitan(false, 2f); }
         float feetY = transform.position.y - formHeight * 0.5f;
