@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Playables;
 
 // Thân model titan của người chơi khi hoá titan: dựng model, animation, camera đặt ở mắt, bước chân/tư thế thủ.
 // Tách từ TitanForm. Không phải component: TitanForm tạo và gọi trực tiếp; cấu hình vẫn nằm ở các field public của TitanForm.
@@ -127,6 +128,90 @@ class TitanFormVisual
             if (fallback == null && c.humanMotion) fallback = c;
         }
         return fallback;
+    }
+
+    // Tách thân titan khỏi người chơi, để lại xác nằm tại chỗ (có collider để đứng lên được). Trả về điểm gáy trên lưng.
+    // Tư thế nằm lấy từ khung cuối của clip "chết" (f.dyingClipPath); không có clip thì xoay úp 90 độ.
+    public bool LeaveCorpse(out Vector3 napeTop)
+    {
+        napeTop = default;
+        if (bodyRoot == null) return false;
+        var body = bodyRoot;
+        Vector3 pivot = body.position;
+        float groundY = pivot.y;
+        Quaternion yaw = body.rotation;
+        Transform head = headBone;
+
+        // Gốc xác không xoay (chỉ có hướng yaw ở bước cuối) để đo hộp AABB khít.
+        var root = new GameObject("TitanCorpse").transform;
+        root.position = pivot;
+        body.rotation = Quaternion.identity;
+        body.SetParent(root, true);
+
+        foreach (var mb in body.GetComponentsInChildren<MonoBehaviour>()) mb.enabled = false;
+        if (punchAnim != null) Object.DestroyImmediate(punchAnim); // huỷ graph đang điều khiển Animator
+        punchAnim = null;
+        if (head != null) head.localScale = Vector3.one;           // đầu đã thu nhỏ cho camera
+        var rs = body.GetComponentsInChildren<Renderer>();
+        foreach (var r in rs) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+
+        var animator = body.GetComponentInChildren<Animator>();
+        AnimationClip dying = animator != null && !string.IsNullOrEmpty(f.dyingClipPath) ? FindClip(f.dyingClipPath, "") : null;
+        if (dying != null)
+        {
+            // Phát thẳng tới khung cuối rồi đóng băng (màn hình đang trắng nên không thấy cú ngã).
+            var graph = UnityEngine.Playables.PlayableGraph.Create("TitanCorpsePose");
+            var output = UnityEngine.Animations.AnimationPlayableOutput.Create(graph, "Anim", animator);
+            var cp = UnityEngine.Animations.AnimationClipPlayable.Create(graph, dying);
+            cp.SetApplyFootIK(false);
+            cp.SetSpeed(0);
+            cp.SetTime(dying.length);
+            output.SetSourcePlayable(cp);
+            animator.applyRootMotion = false;
+            animator.enabled = true;
+            graph.Evaluate(0f);
+            graph.Destroy();
+            animator.enabled = false;
+        }
+        else
+        {
+            if (animator != null) animator.enabled = false;
+            body.rotation = Quaternion.AngleAxis(90f, Vector3.right); // ngã úp về phía trước quanh chân
+        }
+
+        // Nâng cho nằm đúng mặt đất, rồi gắn hộp va chạm theo thân.
+        // Hộp bao của model hơi rộng hơn thân thật nên xác bị lơ lửng: hạ thêm corpseSink (tỉ lệ chiều cao).
+        Bounds b = TitanBuilder.ExactBounds(rs);
+        float lift = groundY - b.min.y - f.formHeight * f.corpseSink;
+        root.position += Vector3.up * lift;
+        b.center += Vector3.up * lift;
+        var col = new GameObject("Collider").AddComponent<BoxCollider>();
+        col.transform.SetParent(root, false);
+        col.transform.localPosition = b.center - root.position;
+        col.size = b.size * 0.8f;
+        Vector3 headPos = head != null ? head.position + Vector3.up * lift : b.center;
+
+        // Quay cả xác về hướng người chơi đang nhìn (quanh chân).
+        Vector3 rootPos = root.position;
+        root.rotation = yaw;
+        headPos = rootPos + yaw * (headPos - rootPos);
+        Physics.SyncTransforms();
+
+        root.gameObject.AddComponent<TitanCorpse>().size = f.formHeight;
+
+        // Gáy: điểm đầu/cổ, rọi xuống hộp để lấy mặt lưng.
+        napeTop = headPos;
+        var ray = new Ray(headPos + Vector3.up * f.formHeight, Vector3.down);
+        if (col.Raycast(ray, out RaycastHit hit, f.formHeight * 2f)) napeTop = hit.point;
+
+        bodyRoot = null;
+        holder = null;
+        proc = null;
+        headBone = null;
+        legBones = null;
+        armBones = null;
+        walkAmount = 0f;
+        return true;
     }
 
     public void Destroy()

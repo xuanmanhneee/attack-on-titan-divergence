@@ -737,11 +737,11 @@ MonoBehaviour:
   walkSpeed: 12
   runSpeed: 20
   acceleration: 40
-  jumpSpeed: 18
+  jumpSpeed: 26
   gravity: -80
-  stepShake: 0.16
-  landShakeMin: 0.35
-  landShakeScale: 1
+  stepShake: 0.4
+  landShakeMin: 0.65
+  landShakeScale: 1.8
   shakeDecay: 2.6
   punchDamage: 45
   heavyMultiplier: 2

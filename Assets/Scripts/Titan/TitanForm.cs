@@ -35,13 +35,13 @@ public class TitanForm : MonoBehaviour
     public float walkSpeed = 12f;
     public float runSpeed = 20f;
     public float acceleration = 40f;
-    // Titan 10m nên trọng lực phải mạnh hơn người nhiều thì mới thấy "nặng" (độ cao nhảy ~ jumpSpeed^2 / 2g ≈ 2m).
-    public float jumpSpeed = 18f;
+    // Titan 10m nên trọng lực phải mạnh hơn người nhiều thì mới thấy "nặng" (độ cao nhảy ~ jumpSpeed^2 / 2g ≈ 4m).
+    public float jumpSpeed = 26f;
     public float gravity = -80f;
     [Header("Rung màn hình")]
-    public float stepShake = 0.16f;       // rung mỗi bước chân khi chạy (0..1)
-    public float landShakeMin = 0.35f;    // rung tiếp đất nhẹ nhất
-    public float landShakeScale = 1f;     // nhân thêm theo tốc độ rơi
+    public float stepShake = 0.4f;       // rung mỗi bước chân khi chạy (0..1)
+    public float landShakeMin = 0.65f;    // rung tiếp đất nhẹ nhất
+    public float landShakeScale = 1.8f;     // nhân thêm theo tốc độ rơi
     public float shakeDecay = 2.6f;       // giảm mỗi giây
 
     [Header("Đấm")]
@@ -115,7 +115,11 @@ public class TitanForm : MonoBehaviour
     public float comboAnimSpeed = 1f;     // tốc độ phát chuỗi đấm liên hoàn (chuột phải)
 
     [Header("Animation chạy (clip Humanoid lặp, trong Resources)")]
-    public string runClipPath = "Titans/AttackTitanRigged/AttackTitanTreadmillRunning";
+    [Tooltip("Hạ xác xuống đất thêm bao nhiêu (tỉ lệ chiều cao titan); tăng nếu xác còn lơ lửng.")]
+    public float corpseSink = 0.06f;
+    [Tooltip("Clip ngã/chết (Humanoid) dùng làm tư thế xác titan để lại khi hoá lại thành người; rỗng = xoay úp 90 độ.")]
+    public string dyingClipPath ="Titans/AttackTitanRigged/AttackTitanDying";
+    public string runClipPath ="Titans/AttackTitanRigged/AttackTitanTreadmillRunning";
     public string runClipName = "Running";
     public float runAnimSpeed = 1f;       // tốc độ phát clip khi chạy bằng runSpeed (Shift)
     public float minRunAnimSpeed = 0.6f;  // tốc độ phát tối thiểu khi đi chậm
@@ -438,13 +442,21 @@ public class TitanForm : MonoBehaviour
         Unfreeze(); // bị tắt giữa lúc đang đứng hình thì trả thời gian lại
         if (odm != null && odm.Music != null) { odm.Music.SetDuck(1f); odm.Music.SetTitan(false, 2f); }
         float feetY = transform.position.y - formHeight * 0.5f;
+        Vector3 feetXZ = transform.position;
+
+        // Để lại xác titan nằm úp, người đứng trên gáy; không có model thì đứng tại chỗ như cũ.
+        if (state == State.Titan && visual.LeaveCorpse(out Vector3 napeTop))
+        {
+            feetY = napeTop.y;
+            feetXZ = new Vector3(napeTop.x, 0f, napeTop.z);
+        }
 
         controller.enabled = false;
         controller.height = oldHeight;
         controller.radius = oldRadius;
         controller.center = oldCenter;
         controller.stepOffset = oldStep;
-        transform.position = new Vector3(transform.position.x, feetY - oldCenter.y + oldHeight * 0.5f + 0.05f, transform.position.z);
+        transform.position = new Vector3(feetXZ.x, feetY - oldCenter.y + oldHeight * 0.5f + 0.05f, feetXZ.z);
         controller.enabled = true;
 
         if (cam != null)
