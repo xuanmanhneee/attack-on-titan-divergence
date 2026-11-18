@@ -72,6 +72,8 @@ public class GameHud : MonoBehaviour
     float hurtFlash;
     float lastHp = -1f;
     bool visible;
+    Sprite titanFillSprite;
+    static Sprite balanceDotSprite;
 
     class Item
     {
@@ -143,6 +145,7 @@ public class GameHud : MonoBehaviour
     {
         Current = this;
         if (titanBarRoot != null) titanBarRoot.SetActive(false);
+        if (titanBarFillImage != null) titanFillSprite = titanBarFillImage.sprite;
         napes = new Pool { template = napeTemplate };
         titanBars = new Pool { template = titanBarTemplate };
         missionMarks = new Pool { template = missionTemplate };
@@ -163,9 +166,44 @@ public class GameHud : MonoBehaviour
     {
         if (titanBarRoot == null) return;
         if (!titanBarRoot.activeSelf) titanBarRoot.SetActive(true);
+        titanBarFill.anchorMin = Vector2.zero;
+        titanBarFill.anchoredPosition = Vector2.zero;
+        titanBarFill.sizeDelta = Vector2.zero;
+        titanBarFillImage.sprite = titanFillSprite;
         SetFill(titanBarFill, fill);
         titanBarFillImage.color = color;
         titanBarText.text = text;
+    }
+
+    public void SetBalanceBar(float balance, string text)
+    {
+        if (titanBarRoot == null) return;
+        if (!titanBarRoot.activeSelf) titanBarRoot.SetActive(true);
+        float x = Mathf.InverseLerp(-1f, 1f, Mathf.Clamp(balance, -1f, 1f));
+        titanBarFill.anchorMin = titanBarFill.anchorMax = new Vector2(x, 0.5f);
+        titanBarFill.anchoredPosition = Vector2.zero;
+        titanBarFill.sizeDelta = new Vector2(18f, 18f);
+        titanBarFillImage.sprite = BalanceDot();
+        titanBarFillImage.color = Mathf.Abs(balance) < 0.75f ? Ivory : Danger;
+        titanBarText.text = text;
+    }
+
+    static Sprite BalanceDot()
+    {
+        if (balanceDotSprite != null) return balanceDotSprite;
+        const int size = 32;
+        var texture = new Texture2D(size, size, TextureFormat.RGBA32, false) { name = "BalanceDot" };
+        var pixels = new Color32[size * size];
+        float radius = size * 0.46f;
+        Vector2 center = Vector2.one * (size - 1) * 0.5f;
+        for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+                pixels[y * size + x] = Vector2.Distance(new Vector2(x, y), center) <= radius
+                    ? new Color32(255, 255, 255, 255) : new Color32(255, 255, 255, 0);
+        texture.SetPixels32(pixels);
+        texture.Apply();
+        balanceDotSprite = Sprite.Create(texture, new Rect(0f, 0f, size, size), Vector2.one * 0.5f, 100f);
+        return balanceDotSprite;
     }
 
     public void HideTitanBar()

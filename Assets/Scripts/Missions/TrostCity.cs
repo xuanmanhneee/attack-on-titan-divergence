@@ -8,6 +8,8 @@ public class TrostMap
     public Vector3 playerStart;
     public Vector3 gate;        // tâm lỗ hổng trên tường
     public Vector3 sealPoint;   // điểm cần tới để chặn lỗ hổng
+    public Vector3 rockStart;   // điểm bắt đầu phân đoạn bê đá
+    public GameObject rockPrefab;
     public readonly List<Vector3> depots = new List<Vector3>();
     public readonly List<Vector3> intersections = new List<Vector3>();
     public int buildingLayer;
@@ -181,6 +183,9 @@ public static class TrostCity
         float gateY = map.GroundY(origin.x, wallZ, fb);
         map.gate = new Vector3(origin.x, gateY, wallZ);
         map.sealPoint = new Vector3(origin.x, map.GroundY(origin.x, wallZ - 18f, fb), wallZ - 18f);
+        Vector3 inward = (map.sealPoint - map.gate).normalized;
+        map.rockStart = map.gate + inward * 45f;
+        map.rockStart.y = map.GroundAt(map.rockStart);
         map.halfWidth = totalW / 2f;
         map.length = len;
 

@@ -1,14 +1,15 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 // Nhiệm vụ "Trận Trost" (3 giai đoạn):
 //  1) Dọn titan đã lọt vào khu phố.
 //  2) Titan tràn qua lỗ hổng trên tường (có một Pure Titan khổng lồ).
-//  3) Tới cổng, trụ lại trong vùng cổng đủ lâu để chặn lỗ hổng trong khi titan tiếp tục kéo tới.
+//  3) Hoá titan, nhấc đá và giữ thăng bằng trên đường tới lỗ hổng.
 // Gas không tự hồi: phải chạy tới điểm tiếp tế (cột sáng xanh) để nạp gas và kiếm.
 public class TrostMission : MonoBehaviour
 {
-    public enum Phase { Clear, Reinforce, Seal, Done }
+    public enum Phase { Clear, Reinforce, Approach, Carry, Done }
 
     public struct Marker { public Vector3 pos; public string label; public Color color; }
 
@@ -19,10 +20,20 @@ public class TrostMission : MonoBehaviour
     [Header("Số lượng và thời gian")]
     public int clearTitans = 6;
     public int reinforceTitans = 6;
-    public float sealSeconds = 15f;
-    public float sealRadius = 28f;
     public float phaseDelay = 4f;
     public float minSpawnDistance = 90f;
+
+    [Header("Bê đá")]
+    public float pickupRadius = 12f;
+    public float gateRadius = 12f;
+    public float rockDiameter = 11f;
+    public float balanceForce = 1.25f;
+    public float driftAcceleration = 0.7f;
+    public float movingDrift = 0.8f;
+    public float stoppedDrift = 0.35f;
+    public float stoppedRecovery = 0.38f;
+    public float failGrace = 0.5f;
+    public float Balance { get; private set; }
 
     [Header("Tiếp tế")]
     public float depotStock = 600f;
@@ -34,15 +45,24 @@ public class TrostMission : MonoBehaviour
     PlayerCombat combat;
     GameManager gm;
     TrostMap map;
+    TitanForm form;
 
     Health playerHealth;
     float refillSfxTimer;
     public float depotHealRate = 15f;
     float delayTimer;
     bool waiting;
-    float sealProgress;
-    float respawnTimer;
     bool announcedDepot;
+    GameObject rock;
+    SphereCollider rockCollider;
+    float balanceVelocity;
+    float driftTarget;
+    float driftTimer;
+    float outOfBalanceTime;
+    Vector3 carryStart;
+    bool resetting;
+    bool finishing;
+    bool rockDropped;
 
     class Depot { public Vector3 pos; public float stock; }
     readonly List<Depot> depots = new List<Depot>();
@@ -50,10 +70,12 @@ public class TrostMission : MonoBehaviour
     public void Init(GameManager manager, ODMController player, PlayerCombat pc, TrostMap trostMap)
     {
         gm = manager; odm = player; combat = pc; map = trostMap;
+        form = odm.GetComponent<TitanForm>();
         depots.Clear();
         foreach (var p in map.depots) depots.Add(new Depot { pos = p, stock = depotStock });
 
         SubscribeTitanEvents();
+        CreateRock();
         SpawnClearWave();
         gm.Say("Trost: titan đã lọt vào khu phố! Gas cạn thì chạy tới cột sáng xanh để tiếp tế.");
     }
@@ -72,6 +94,7 @@ public class TrostMission : MonoBehaviour
         if (gm == null) gm = FindAnyObjectByType<GameManager>();
         if (odm == null) odm = FindAnyObjectByType<ODMController>();
         if (odm != null && combat == null) combat = odm.GetComponent<PlayerCombat>();
+        if (odm != null && form == null) form = odm.GetComponent<TitanForm>();
 
         if (map == null && odm != null)
         {
@@ -87,7 +110,7 @@ public class TrostMission : MonoBehaviour
             }
         }
 
-        return gm != null && odm != null && combat != null && map != null;
+        return gm != null && odm != null && combat != null && form != null && map != null;
     }
 
     // ================= SINH TITAN =================
@@ -173,11 +196,15 @@ public class TrostMission : MonoBehaviour
             case Phase.Reinforce:
                 ObjectiveText = "2/3  Hạ gục đợt titan tràn qua cổng (còn " + Titan.All.Count + ")";
                 if (waiting) { delayTimer -= dt; if (delayTimer <= 0f) { waiting = false; SpawnReinforcements(); } }
-                else if (Titan.All.Count == 0) Advance(Phase.Seal, "Tới cổng và chặn lỗ hổng!");
+                else if (Titan.All.Count == 0) Advance(Phase.Approach, "Hoá Titan và tới tảng đá!");
                 break;
 
-            case Phase.Seal:
-                UpdateSeal(dt);
+            case Phase.Approach:
+                UpdateApproach();
+                break;
+
+            case Phase.Carry:
+                UpdateCarry(dt);
                 break;
         }
 
@@ -190,32 +217,157 @@ public class TrostMission : MonoBehaviour
         waiting = true;
         delayTimer = phaseDelay;
         gm.Say(message);
-        if (next == Phase.Seal) { waiting = false; respawnTimer = 6f; }
+        if (next == Phase.Approach)
+        {
+            waiting = false;
+            form.PrepareCarryMission();
+        }
     }
 
-    void UpdateSeal(float dt)
+    void UpdateApproach()
     {
-        Vector3 d = odm.transform.position - map.sealPoint; d.y = 0f;
-        bool inside = d.magnitude <= sealRadius;
-
-        sealProgress = inside ? sealProgress + dt : Mathf.Max(0f, sealProgress - dt * 0.5f);
-        ObjectiveText = inside
-            ? "3/3  Giữ vững vùng cổng: " + sealProgress.ToString("F0") + "/" + sealSeconds.ToString("F0") + " giây"
-            : "3/3  Tới cổng (" + Mathf.RoundToInt(d.magnitude) + " m) rồi trụ lại " + sealSeconds.ToString("F0") + " giây";
-
-        respawnTimer -= dt;
-        if (respawnTimer <= 0f && Titan.All.Count < 5)
+        form.PrepareCarryMission();
+        Vector3 d = odm.transform.position - map.rockStart;
+        d.y = 0f;
+        ObjectiveText = "3/3  Hoá Titan và tới tảng đá (" + Mathf.RoundToInt(d.magnitude) + " m)";
+        if (form.IsTitan && d.magnitude <= pickupRadius && form.BeginCarry(map.gate))
         {
-            respawnTimer = 10f;
-            for (int i = 0; i < 2; i++) Spawn(GatePoint(), TitanModels.PickRandom(), Random.Range(10f, 15f));
+            Current = Phase.Carry;
+            carryStart = odm.transform.position;
+            carryStart.y = map.GroundAt(carryStart);
+            Balance = balanceVelocity = outOfBalanceTime = 0f;
+            PickNewDrift();
+            rockCollider.enabled = false;
+            gm.Say("Giữ W để tiến, dùng A/D để giữ thăng bằng!");
+        }
+    }
+
+    void UpdateCarry(float dt)
+    {
+        if (resetting || finishing) return;
+
+        bool moving = form.CarryForwardHeld;
+        driftTimer -= dt;
+        if (driftTimer <= 0f) PickNewDrift();
+        float target = driftTarget * (moving ? movingDrift : stoppedDrift);
+        balanceVelocity = Mathf.MoveTowards(balanceVelocity, target, driftAcceleration * dt);
+        float steer = (GameInput.GetKey(KeyCode.D) || GameInput.GetKey(KeyCode.RightArrow) ? 1f : 0f)
+                    - (GameInput.GetKey(KeyCode.A) || GameInput.GetKey(KeyCode.LeftArrow) ? 1f : 0f);
+        balanceVelocity += steer * balanceForce * dt;
+        if (!moving)
+        {
+            balanceVelocity = Mathf.MoveTowards(balanceVelocity, 0f, driftAcceleration * dt);
+            Balance = Mathf.MoveTowards(Balance, 0f, stoppedRecovery * dt);
+        }
+        Balance = Mathf.Clamp(Balance + balanceVelocity * dt, -1f, 1f);
+        Debug.Assert(Balance >= -1f && Balance <= 1f, "Balance must stay in [-1, 1]");
+        form.SetCarryBalance(Balance);
+        UpdateCarriedRock();
+
+        outOfBalanceTime = Mathf.Abs(Balance) >= 0.999f ? outOfBalanceTime + dt : 0f;
+        if (outOfBalanceTime > failGrace) { StartCoroutine(ResetCarry()); return; }
+
+        Vector3 d = odm.transform.position - map.gate;
+        d.y = 0f;
+        ObjectiveText = "3/3  Bê đá tới cổng (" + Mathf.RoundToInt(d.magnitude) + " m)";
+        if (d.magnitude <= gateRadius) StartCoroutine(FinishCarry());
+    }
+
+    void PickNewDrift()
+    {
+        float sign = Random.value < 0.5f ? -1f : 1f;
+        driftTarget = sign * Random.Range(0.45f, 1f);
+        driftTimer = Random.Range(0.6f, 1.25f);
+    }
+
+    IEnumerator ResetCarry()
+    {
+        resetting = true;
+        rockDropped = true;
+        form.PauseCarry(true);
+        form.AddCarryImpact(1f);
+        GameAudio.Play(Sfx.Thud, rock.transform.position, 1f, 0.8f);
+        rock.transform.position = new Vector3(rock.transform.position.x, map.GroundAt(rock.transform.position) + rockDiameter * 0.5f, rock.transform.position.z);
+
+        const float fadeTime = 0.65f;
+        for (float t = 0f; t < fadeTime; t += Time.deltaTime)
+        {
+            if (GameHud.Current != null) GameHud.Current.Flash(Color.black, Mathf.Sin(t / fadeTime * Mathf.PI));
+            yield return null;
         }
 
-        if (sealProgress >= sealSeconds)
+        form.ResetCarryPosition(carryStart);
+        Balance = balanceVelocity = outOfBalanceTime = 0f;
+        form.SetCarryBalance(0f);
+        PickNewDrift();
+        rockDropped = false;
+        UpdateCarriedRock();
+        form.PauseCarry(false);
+        resetting = false;
+    }
+
+    IEnumerator FinishCarry()
+    {
+        finishing = true;
+        form.PauseCarry(true);
+        rock.transform.position = map.gate + Vector3.up * (rockDiameter * 0.5f);
+        rock.transform.rotation = Quaternion.identity;
+        rockCollider.enabled = true;
+        GameAudio.Play(Sfx.Thud, map.gate, 1f, 0.7f);
+        GameVfx.Burst(map.gate + Vector3.up, new Color(0.55f, 0.5f, 0.43f, 0.85f), 80, 12f, 1.2f, 1.5f);
+        form.AddCarryImpact(1f);
+        ObjectiveText = "Đã lấp lỗ hổng Trost!";
+        yield return new WaitForSeconds(0.65f);
+        form.EndCarry();
+        Current = Phase.Done;
+        gm.EndGame(true);
+    }
+
+    void UpdateCarriedRock()
+    {
+        if (rockDropped) return;
+        Transform t = odm.transform;
+        rock.transform.position = t.position + t.forward * (rockDiameter * 0.4f) + Vector3.up * (rockDiameter * 0.85f);
+        rock.transform.rotation = t.rotation * Quaternion.Euler(0f, 0f, -Balance * 5f);
+    }
+
+    void CreateRock()
+    {
+        rock = new GameObject("MissionBoulder");
+        rock.transform.SetParent(map.root != null ? map.root.transform : null, true);
+        rock.transform.position = map.rockStart + Vector3.up * (rockDiameter * 0.5f);
+        GameObject visual;
+        if (map.rockPrefab != null)
         {
-            Current = Phase.Done;
-            ObjectiveText = "Đã chặn được lỗ hổng!";
-            gm.EndGame(true);
+            visual = Instantiate(map.rockPrefab, rock.transform);
+            visual.name = "RockVisual";
         }
+        else
+        {
+            visual = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            visual.name = "RockVisual_Fallback";
+            visual.transform.SetParent(rock.transform, false);
+            Destroy(visual.GetComponent<Collider>());
+            visual.transform.localScale = new Vector3(1f, 0.9f, 1.08f);
+            Renderer fallbackRenderer = visual.GetComponent<Renderer>();
+            fallbackRenderer.material.color = new Color(0.38f, 0.35f, 0.33f);
+        }
+
+        foreach (Transform child in visual.GetComponentsInChildren<Transform>(true)) child.gameObject.isStatic = false;
+        foreach (Collider childCollider in visual.GetComponentsInChildren<Collider>(true)) Destroy(childCollider);
+
+        Renderer[] renderers = visual.GetComponentsInChildren<Renderer>();
+        if (renderers.Length > 0)
+        {
+            Bounds bounds = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++) bounds.Encapsulate(renderers[i].bounds);
+            visual.transform.localScale *= rockDiameter / Mathf.Max(bounds.size.x, bounds.size.y, bounds.size.z);
+            bounds = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++) bounds.Encapsulate(renderers[i].bounds);
+            visual.transform.position += rock.transform.position - bounds.center;
+        }
+        rockCollider = rock.AddComponent<SphereCollider>();
+        rockCollider.radius = rockDiameter * 0.5f;
     }
 
     // ================= TIẾP TẾ =================
@@ -251,10 +403,13 @@ public class TrostMission : MonoBehaviour
         Markers.Clear();
         foreach (var dep in depots)
         {
+            if (Current == Phase.Carry) break;
             int pct = Mathf.RoundToInt(dep.stock / depotStock * 100f);
             Markers.Add(new Marker { pos = dep.pos, label = "TIẾP TẾ " + pct + "%", color = new Color(0.3f, 1f, 0.6f) });
         }
-        if (Current == Phase.Seal)
-            Markers.Add(new Marker { pos = map.sealPoint, label = "CỔNG", color = new Color(1f, 0.6f, 0.15f) });
+        if (Current == Phase.Approach)
+            Markers.Add(new Marker { pos = map.rockStart, label = "TẢNG ĐÁ", color = new Color(1f, 0.72f, 0.2f) });
+        else if (Current == Phase.Carry)
+            Markers.Add(new Marker { pos = map.gate, label = "CỔNG", color = new Color(1f, 0.6f, 0.15f) });
     }
 }

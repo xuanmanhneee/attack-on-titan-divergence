@@ -57995,6 +57995,7 @@ MonoBehaviour:
   playerStart: {fileID: 1341253706}
   gate: {fileID: 1541708187}
   sealPoint: {fileID: 1993591876}
+  rockPrefab: {fileID: 178873758778006785, guid: 0d3784e80d2c3074bb909d9cdd536402, type: 3}
   depots:
   - {fileID: 552719329}
   intersections:

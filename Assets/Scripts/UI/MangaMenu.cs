@@ -477,7 +477,7 @@ public class MangaMenu : MonoBehaviour
         var objText = TextAt(obj.transform,
             "<color=" + RedHex + ">1</color>  Dọn sạch titan trong khu phố\n\n" +
             "<color=" + RedHex + ">2</color>  Hạ đợt titan tràn qua cổng\n\n" +
-            "<color=" + RedHex + ">3</color>  Tới cổng, trụ lại để chặn lỗ hổng",
+            "<color=" + RedHex + ">3</color>  Hoá Titan, bê đá tới lấp cổng",
             30, Ink, TextAnchor.UpperLeft, new Vector2(0f, -35f), new Vector2(600f, 250f), true);
         objText.lineSpacing = 1.0f;
 

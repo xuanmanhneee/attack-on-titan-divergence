@@ -55,6 +55,8 @@ public class TitanForm : MonoBehaviour
     public float punchCooldown = 0.15f;
 
     public bool IsTitan => state == State.Transforming || state == State.Titan;
+    public bool IsCarryingRock { get; private set; }
+    public bool CarryForwardHeld { get; private set; }
     // Dev panel
     public bool DevCanTransform => state == State.Human;
     public float DevCooldownLeft => cooldownLeft;
@@ -187,6 +189,12 @@ public class TitanForm : MonoBehaviour
                 break;
 
             case State.Titan:
+                if (IsCarryingRock)
+                {
+                    CarryMove(dt);
+                    break;
+                }
+
                 stateTimer -= dt;
                 stamina.Set(titanStamina * Mathf.Clamp01(stateTimer / titanTotal)); // thể lực tụt dần theo thời gian titan còn lại
                 TitanLook();
@@ -542,6 +550,104 @@ public class TitanForm : MonoBehaviour
     }
 
     // ================= ĐIỀU KHIỂN TITAN =================
+    Vector3 carryTarget;
+    float carryBalance;
+    bool carryPaused;
+    public float carrySpeed = 1.8f;
+    public float carryStepShake = 1f;
+    public float carryStepVolume = 1f;
+
+    public void PrepareCarryMission()
+    {
+        cooldownLeft = 0f;
+        if (stamina != null) stamina.Set(stamina.Max);
+        if (state == State.Titan) stateTimer = titanTotal;
+    }
+
+    public bool BeginCarry(Vector3 target)
+    {
+        if (state != State.Titan) return false;
+        carryTarget = target;
+        carryBalance = 0f;
+        carryPaused = false;
+        CarryForwardHeld = false;
+        IsCarryingRock = true;
+        punch.Reset();
+        velocity = Vector3.zero;
+        return true;
+    }
+
+    public void SetCarryBalance(float value) { carryBalance = Mathf.Clamp(value, -1f, 1f); }
+    public void PauseCarry(bool paused) { carryPaused = paused; }
+    public void AddCarryImpact(float amount) { shake.Add(amount); }
+
+    public void ResetCarryPosition(Vector3 groundPosition)
+    {
+        if (!IsCarryingRock || controller == null) return;
+        controller.enabled = false;
+        transform.position = groundPosition + Vector3.up * (formHeight * 0.5f + 0.05f);
+        controller.enabled = true;
+        velocity = Vector3.zero;
+        carryBalance = 0f;
+    }
+
+    public void EndCarry()
+    {
+        IsCarryingRock = false;
+        CarryForwardHeld = false;
+        carryPaused = false;
+        velocity = Vector3.zero;
+        if (GameHud.Current != null) GameHud.Current.HideTitanBar();
+    }
+
+    void CarryMove(float dt)
+    {
+        Vector3 toTarget = carryTarget - transform.position;
+        toTarget.y = 0f;
+        if (toTarget.sqrMagnitude > 0.01f)
+        {
+            Quaternion wanted = Quaternion.LookRotation(toTarget);
+            transform.rotation = Quaternion.RotateTowards(transform.rotation, wanted, 120f * dt);
+            odm.Yaw = transform.eulerAngles.y;
+        }
+
+        CarryForwardHeld = !carryPaused && (GameInput.GetKey(KeyCode.W) || GameInput.GetKey(KeyCode.UpArrow));
+        Vector3 flat = new Vector3(velocity.x, 0f, velocity.z);
+        flat = Vector3.MoveTowards(flat, CarryForwardHeld ? transform.forward * carrySpeed : Vector3.zero, 4f * dt);
+        velocity.x = flat.x;
+        velocity.z = flat.z;
+
+        bool grounded = controller.isGrounded;
+        if (grounded && velocity.y < 0f) velocity.y = -2f;
+        velocity.y += gravity * dt;
+        controller.Move(velocity * dt);
+
+        float moveAmount = grounded ? flat.magnitude / carrySpeed : 0f;
+        float prevStep = Mathf.Floor(bobPhase / Mathf.PI);
+        bobPhase += flat.magnitude * dt * 0.87f;
+        if (grounded && Mathf.Floor(bobPhase / Mathf.PI) != prevStep && moveAmount > 0.2f)
+        {
+            shake.Add(carryStepShake);
+            Vector3 foot = transform.position + Vector3.down * (formHeight * 0.5f);
+            GameAudio.Play(Sfx.Thud, foot, carryStepVolume, 0.6f);
+            GameAudio.Play(Sfx.Footstep, foot, carryStepVolume, 0.5f);
+        }
+        shake.Update(dt);
+        CameraShake.SetLocalY(cam, eyeLocalY + Mathf.Abs(Mathf.Sin(bobPhase)) * 0.35f * moveAmount + shake.Y);
+        cam.localRotation = Quaternion.Euler(shake.Pitch, 0f, -carryBalance * 5f + shake.Roll);
+        visual.walkAmount = Mathf.MoveTowards(visual.walkAmount, moveAmount, dt * 3f);
+        if (visual.punchAnim != null)
+        {
+            visual.punchAnim.Locomotion = moveAmount;
+            visual.punchAnim.RunSpeed = Mathf.Max(minRunAnimSpeed, moveAmount) * runAnimSpeed;
+        }
+        if (visual.proc != null)
+        {
+            visual.proc.walkPhase = bobPhase;
+            visual.proc.moveAmount = moveAmount;
+        }
+    }
+
     void TitanLook()
     {
         odm.Yaw += GameInput.GetAxis("Mouse X") * odm.mouseSensitivity;
@@ -623,7 +729,9 @@ public class TitanForm : MonoBehaviour
 
         if (flash > 0f) hud.Flash(new Color(1f, 0.95f, 0.7f), flash);
 
-        if (state == State.Titan)
+        if (IsCarryingRock)
+            hud.SetBalanceBar(carryBalance, "W/↑: tiến    A/D hoặc ←/→: giữ thăng bằng");
+        else if (state == State.Titan)
             hud.SetTitanBar(Mathf.Clamp01(stateTimer / titanTotal),
                 "TITAN  " + Mathf.CeilToInt(stateTimer) + "s   (G: trở lại người)", new Color(0.95f, 0.45f, 0.15f, 0.95f));
         else if (state == State.Human && cooldownLeft > 0f)

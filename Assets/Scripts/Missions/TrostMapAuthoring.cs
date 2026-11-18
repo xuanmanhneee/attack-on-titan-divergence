@@ -9,6 +9,7 @@ public class TrostMapAuthoring : MonoBehaviour
     public Transform playerStart;
     public Transform gate;
     public Transform sealPoint;
+    public GameObject rockPrefab;
     public Transform[] depots;
     public Transform[] intersections;
     public int buildingLayer = 3;
@@ -25,6 +26,7 @@ public class TrostMapAuthoring : MonoBehaviour
             playerStart = playerStart != null ? playerStart.position : fallbackPlayerStart,
             gate = gate != null ? gate.position : transform.position,
             sealPoint = sealPoint != null ? sealPoint.position : transform.position,
+            rockPrefab = rockPrefab,
             buildingLayer = buildingLayer,
             groundY = groundY,
             floorRect = floorRect
@@ -32,6 +34,11 @@ public class TrostMapAuthoring : MonoBehaviour
 
         AddPositions(map.depots, depots);
         AddPositions(map.intersections, intersections);
+        Vector3 inward = map.sealPoint - map.gate;
+        inward.y = 0f;
+        inward = inward.sqrMagnitude > 0.01f ? inward.normalized : Vector3.back;
+        map.rockStart = map.gate + inward * 45f;
+        map.rockStart.y = map.GroundAt(map.rockStart);
         return map;
     }
 
