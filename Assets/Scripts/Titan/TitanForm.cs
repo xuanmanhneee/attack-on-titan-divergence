@@ -203,7 +203,7 @@ public class TitanForm : MonoBehaviour
                     if (revertLightning > 0.01f)
                     {
                         revertTimer = revertLightning;
-                        TransformLightning.Play(transform.position, revertLightning, false);
+                        TransformLightning.Play(transform.position, revertLightning); // có loá trắng: màn hình kín trắng trước khi đổi tay/thân
                         PlayTransformSfx();
                     }
                     else EndTransform();
@@ -420,7 +420,7 @@ public class TitanForm : MonoBehaviour
     }
 
     [Tooltip("Giây sét chạy trước khi trở về người (trước loá sáng); 0 = tắt.")]
-    public float revertLightning = 0.5f;
+    public float revertLightning = 0.9f;
     float revertTimer = -1f;
 
     void EndTransform()
